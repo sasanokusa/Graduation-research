@@ -154,3 +154,5 @@ python agent.py
 - DB の初期データは `db/init.sql` で投入され、`docker compose down -v` 後の再起動で再生成される
 - MySQL の状態を完全に戻すには named volume を削除する必要があるため、完全リセットには `down -v` が必要である
 - 現在の `agent.py` は安全のため修正範囲を `nginx/nginx.conf` に限定している
+
+今後も完成し次第フェーズのアップデートを予定している
