@@ -1,0 +1,49 @@
+scenarios:
+  a:
+    name: "A"
+    description: "Nginx reverse proxy points to the wrong backend port and returns 502."
+    allowed_files:
+      - "nginx/nginx.conf"
+    allowed_actions:
+      - "edit_file"
+      - "run_config_test"
+      - "restart_compose_service"
+      - "run_health_check"
+    success_checks:
+      - "nginx_running"
+      - "healthz_200"
+      - "api_items_200"
+    failure_conditions:
+      - "nginx_config_invalid"
+      - "http_502_persists"
+  b:
+    name: "B"
+    description: "The app container cannot start because a required dependency was removed."
+    allowed_files:
+      - "app/requirements.txt"
+    allowed_actions:
+      - "edit_file"
+      - "rebuild_compose_service"
+      - "run_config_test"
+      - "run_health_check"
+    success_checks:
+      - "app_running"
+      - "healthz_200"
+    failure_conditions:
+      - "app_startup_failure_persists"
+      - "module_import_failure_persists"
+  c:
+    name: "C"
+    description: "The app-side DB password is incorrect and database queries fail."
+    allowed_files:
+      - "app/app.env"
+    allowed_actions:
+      - "edit_file"
+      - "rebuild_compose_service"
+      - "run_health_check"
+    success_checks:
+      - "app_running"
+      - "api_items_200"
+    failure_conditions:
+      - "database_auth_failure_persists"
+      - "api_items_unavailable"

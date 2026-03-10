@@ -4,6 +4,25 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+wait_for_http_failure() {
+  local path="$1"
+  local attempts="${2:-10}"
+  local sleep_seconds="${3:-2}"
+  local url="http://localhost:8080${path}"
+  local attempt
+
+  for attempt in $(seq 1 "${attempts}"); do
+    if ! curl -fsS --max-time 3 "${url}" >/dev/null 2>&1; then
+      echo "[break] confirmed failure at ${path} on attempt ${attempt}/${attempts}"
+      return 0
+    fi
+    sleep "${sleep_seconds}"
+  done
+
+  echo "[break] warning: ${path} still responded successfully after ${attempts} attempts" >&2
+  return 1
+}
+
 restore_targets() {
   cp "${ROOT_DIR}/nginx/nginx.conf.base" "${ROOT_DIR}/nginx/nginx.conf"
   cp "${ROOT_DIR}/app/requirements.txt.base" "${ROOT_DIR}/app/requirements.txt"
@@ -24,8 +43,10 @@ apply_b() {
 
 apply_c() {
   echo "[break] pattern C: change the app-side DB password env var and recreate app"
-  perl -0pi -e 's/^DB_PASSWORD=.*/DB_PASSWORD=wrongpassword/' "${ROOT_DIR}/app/app.env"
+  perl -0pi -e 's/^DB_PASSWORD=.*/DB_PASSWORD=wrongpassword/m' "${ROOT_DIR}/app/app.env"
   docker compose up -d --force-recreate app
+  echo "[break] waiting for app-side env change to surface via /api/items"
+  wait_for_http_failure "/api/items"
 }
 
 pick_pattern() {
