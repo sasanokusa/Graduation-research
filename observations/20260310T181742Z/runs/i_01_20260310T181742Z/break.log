@@ -1,0 +1,11 @@
+[break] pattern I: inject a masked two-stage env failure (port drift + DB password drift)
+ Container target-db Running 
+ Container target-app Recreate 
+ Container target-app Recreated 
+ Container target-db Waiting 
+ Container target-db Healthy 
+ Container target-app Starting 
+ Container target-app Started 
+[break] waiting for the first-stage upstream failure to surface
+[break] confirmed failure at /healthz on attempt 1/10
+[break] injected failure pattern I

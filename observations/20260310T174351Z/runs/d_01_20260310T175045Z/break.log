@@ -1,0 +1,10 @@
+[break] pattern D: change the API query to a non-existent table name
+ Container target-db Running 
+ Container target-app Recreate 
+ Container target-app Recreated 
+ Container target-db Waiting 
+ Container target-db Healthy 
+ Container target-app Starting 
+ Container target-app Started 
+[break] confirmed failure at /api/items on attempt 1/10
+[break] injected failure pattern D

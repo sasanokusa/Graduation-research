@@ -8,12 +8,12 @@ import yaml
 from langgraph.graph import END, START, StateGraph
 
 from agents.mock_worker import mock_worker_node
-from agents.sensor import sensor_node
+from agents.sensor import additional_observation_node, sensor_node
 from agents.worker import worker_node
-from core.scenario_context import build_worker_visible_context, get_worker_context_mode_name
 from core.executor import execute_plan, rollback_files
 from core.policies import RESULTS_DIR, SCENARIO_DEFINITIONS_PATH
 from core.prompts import PROMPT_REGISTRY, get_prompt_spec
+from core.scenario_context import build_worker_visible_context, get_worker_context_mode_name
 from core.state import SingleAgentState
 from core.triage import build_triage_result
 from core.verifier import run_postcheck, run_precheck
@@ -28,15 +28,7 @@ def _section(title: str) -> None:
 
 def load_scenario_definitions() -> dict[str, dict]:
     definitions = yaml.safe_load(SCENARIO_DEFINITIONS_PATH.read_text())
-    scenarios = definitions.get("scenarios", {})
-    return scenarios
-
-
-def load_scenario_definition(scenario_name: str) -> dict:
-    scenarios = load_scenario_definitions()
-    if scenario_name not in scenarios:
-        raise ValueError(f"unknown scenario: {scenario_name}")
-    return scenarios[scenario_name]
+    return definitions.get("scenarios", {})
 
 
 def triage_node(state: SingleAgentState) -> SingleAgentState:
@@ -50,56 +42,81 @@ def triage_node(state: SingleAgentState) -> SingleAgentState:
         state["observation"],
         state["prompt_mode"],
     )
+    triage_snapshot = {
+        "iteration": len(state.get("triage_iterations", [])) + 1,
+        "additional_observation_used": state["additional_observation_used"],
+        "detected_fault_class": triage["detected_fault_class"],
+        "detection_confidence": triage["detection_confidence"],
+        "detection_evidence": triage["detection_evidence"],
+        "suspected_domains": triage["suspected_domains"],
+        "candidate_scope": triage["candidate_scope"],
+        "missing_evidence": triage["missing_evidence"],
+        "recommended_next_observations": triage["recommended_next_observations"],
+        "ambiguity_level": triage["ambiguity_level"],
+        "triage_summary": triage["triage_summary"],
+    }
     _section("🧭 [PHASE 2] TRIAGE")
-    print(json.dumps(
-        {
-            "scenario_source": triage["scenario_source"],
-            "detected_fault_class": triage["suspected_fault_class"],
-            "detection_confidence": triage["confidence"],
-            "detection_evidence": triage["evidence"],
-            "proposed_scope": triage["proposed_scope"],
-            "alternative_candidates": triage["alternatives"],
-        },
-        ensure_ascii=False,
-        indent=2,
-    ))
+    print(
+        json.dumps(
+            {
+                "scenario_source": triage["scenario_source"],
+                "suspected_domains": triage["suspected_domains"],
+                "candidate_scope": triage["candidate_scope"],
+                "missing_evidence": triage["missing_evidence"],
+                "recommended_next_observations": triage["recommended_next_observations"],
+                "ambiguity_level": triage["ambiguity_level"],
+                "triage_summary": triage["triage_summary"],
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
     print()
     return {
         **state,
         "scenario": triage["scenario"],
         "scenario_definition": triage["scenario_definition"],
         "internal_scenario_id": triage["internal_scenario_id"],
-        "detected_fault_class": triage["suspected_fault_class"],
-        "detected_scenario": triage["suspected_fault_class"],
-        "detection_confidence": triage["confidence"],
-        "detection_evidence": triage["evidence"],
+        "detected_fault_class": triage["detected_fault_class"],
+        "detection_confidence": triage["detection_confidence"],
+        "detection_evidence": triage["detection_evidence"],
+        "suspected_domains": triage["suspected_domains"],
+        "candidate_scope": triage["candidate_scope"],
+        "missing_evidence": triage["missing_evidence"],
+        "recommended_next_observations": triage["recommended_next_observations"],
+        "ambiguity_level": triage["ambiguity_level"],
+        "triage_summary": triage["triage_summary"],
+        "triage_iterations": [*state.get("triage_iterations", []), triage_snapshot],
         "scenario_source": triage["scenario_source"],
-        "triage_policy": triage["proposed_scope"],
-        "proposed_scope": triage["proposed_scope"],
-        "alternative_candidates": triage["alternatives"],
+        "planner_input_scope": triage["candidate_scope"],
         "initial_postcheck_result": triage["initial_postcheck_result"],
         "worker_context_mode": get_worker_context_mode_name(state["prompt_mode"]),
         "worker_visible_context": worker_visible_context,
     }
 
 
+def additional_observation_gate(state: SingleAgentState) -> Literal["healthy", "observe", "plan"]:
+    if state["initial_postcheck_result"].get("ok"):
+        return "healthy"
+    if state["recommended_next_observations"] and not state["additional_observation_used"]:
+        return "observe"
+    return "plan"
+
+
 def already_healthy_node(state: SingleAgentState) -> SingleAgentState:
     _section("✅ [PHASE 3] SKIP WORKER")
-    print("Scenario success checks are already satisfied. Skipping planning and execution.")
+    print("Generic service-continuity checks are already satisfied. Skipping planning and execution.")
     print()
     return {
         **state,
-        "planner_output_raw": '{"summary":"scenario already healthy; no recovery action required","actions":[]}',
-        "planner_summary": "scenario already healthy; no recovery action required",
+        "planner_error_type": "none",
+        "planner_retry_count": 0,
+        "planner_timeout_seconds": 0,
+        "planner_output_raw": '{"summary":"service continuity already restored; no recovery action required","actions":[]}',
+        "planner_summary": "service continuity already restored; no recovery action required",
         "verifier_postcheck_result": state["initial_postcheck_result"],
         "final_status": "success",
     }
-
-
-def should_plan(state: SingleAgentState) -> Literal["plan", "healthy"]:
-    if state["initial_postcheck_result"].get("ok"):
-        return "healthy"
-    return "plan"
 
 
 def precheck_node(state: SingleAgentState) -> SingleAgentState:
@@ -111,7 +128,8 @@ def precheck_node(state: SingleAgentState) -> SingleAgentState:
         plan,
         state["scenario_definition"],
         state["observation"],
-        scope_policy=state["proposed_scope"],
+        scope_policy=state["candidate_scope"],
+        planner_error_type=state["planner_error_type"],
     )
     planner_errors = state["verifier_precheck_result"].get("planner_errors", [])
     if planner_errors:
@@ -220,16 +238,32 @@ def save_result(state: SingleAgentState) -> str:
         "requested_scenario": state["requested_scenario"],
         "scenario_source": state["scenario_source"],
         "internal_scenario_id": state["internal_scenario_id"],
+        "internal_scenario_role": "evaluator_only",
         "detected_fault_class": state["detected_fault_class"],
-        "detected_scenario": state["detected_scenario"],
         "detection_confidence": state["detection_confidence"],
         "detection_evidence": state["detection_evidence"],
-        "triage_policy": state["triage_policy"],
-        "proposed_scope": state["proposed_scope"],
-        "alternative_candidates": state["alternative_candidates"],
+        "triage_summary": state["triage_summary"],
+        "triage_iterations": state["triage_iterations"],
+        "suspected_domains": state["suspected_domains"],
+        "candidate_scope": state["candidate_scope"],
+        "missing_evidence": state["missing_evidence"],
+        "recommended_next_observations": state["recommended_next_observations"],
+        "ambiguity_level": state["ambiguity_level"],
+        "additional_observation_used": state["additional_observation_used"],
+        "planner_input_scope": state["planner_input_scope"],
         "worker_mode": state["worker_mode"],
         "prompt_mode": state["prompt_mode"],
         "system_prompt_name": state["system_prompt_name"],
+        "planner_error_type": state["planner_error_type"],
+        "planner_error_stage": state["planner_error_stage"],
+        "planner_retry_count": state["planner_retry_count"],
+        "planner_timeout_seconds": state["planner_timeout_seconds"],
+        "planner_attempts": state["planner_attempts"],
+        "planner_transport_failure": state["planner_transport_failure"],
+        "planner_reasoning_failure": state["planner_reasoning_failure"],
+        "planner_fallback_used": state["planner_fallback_used"],
+        "planner_fallback_reason": state["planner_fallback_reason"],
+        "planner_fallback_type": state["planner_fallback_type"],
         "worker_context_mode": state["worker_context_mode"],
         "worker_visible_context": state["worker_visible_context"],
         "worker_visible_file_snippets": state["worker_visible_context"].get("observation", {}).get(
@@ -241,7 +275,16 @@ def save_result(state: SingleAgentState) -> str:
         "worker_visible_http_error_evidence": state["worker_visible_context"]
         .get("observation", {})
         .get("http_error_evidence", {}),
+        "current_state_evidence": state["observation"].get("current_state_evidence", []),
+        "historical_evidence": state["observation"].get("historical_evidence", []),
+        "triage_before_additional_observation": state["triage_iterations"][0] if state["triage_iterations"] else {},
+        "triage_after_additional_observation": (
+            state["triage_iterations"][-1]
+            if state["additional_observation_used"] and state["triage_iterations"]
+            else {}
+        ),
         "observed_symptoms": state["observed_symptoms"],
+        "observation_additional": state["observation"].get("additional_observation", {}),
         "initial_postcheck_result": state["initial_postcheck_result"],
         "worker_raw_output": state["planner_output_raw"],
         "normalized_actions": state["normalized_actions"],
@@ -283,6 +326,7 @@ def build_app(worker_mode: str):
     builder = StateGraph(SingleAgentState)
     builder.add_node("sensor_node", sensor_node)
     builder.add_node("triage_node", triage_node)
+    builder.add_node("additional_observation_node", additional_observation_node)
     builder.add_node("already_healthy_node", already_healthy_node)
     builder.add_node(
         "worker_node",
@@ -296,9 +340,10 @@ def build_app(worker_mode: str):
     builder.add_edge("sensor_node", "triage_node")
     builder.add_conditional_edges(
         "triage_node",
-        should_plan,
-        {"plan": "worker_node", "healthy": "already_healthy_node"},
+        additional_observation_gate,
+        {"healthy": "already_healthy_node", "observe": "additional_observation_node", "plan": "worker_node"},
     )
+    builder.add_edge("additional_observation_node", "triage_node")
     builder.add_edge("already_healthy_node", END)
     builder.add_edge("worker_node", "precheck_node")
     builder.add_conditional_edges(
@@ -320,9 +365,9 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run the safe single-agent recovery baseline.")
     parser.add_argument(
         "--scenario",
-        choices=["auto", "a", "b", "c"],
+        choices=["auto", "a", "b", "c", "d", "e", "f", "g", "h", "i", "k", "l"],
         default="auto",
-        help="Scenario key defined in scenarios/definitions.yaml, or auto for rule-based triage.",
+        help="Internal benchmark scenario for forced-mode debugging, or auto for open-world triage.",
     )
     parser.add_argument(
         "--worker",
@@ -350,17 +395,32 @@ def main(argv: list[str] | None = None) -> int:
         "worker_visible_context": {},
         "internal_scenario_id": "",
         "detected_fault_class": "unknown",
-        "detected_scenario": "unknown",
         "detection_confidence": 0.0,
         "detection_evidence": [],
-        "triage_policy": {},
-        "proposed_scope": {},
-        "alternative_candidates": [],
-        "scenario": args.scenario,
+        "suspected_domains": [],
+        "candidate_scope": {},
+        "missing_evidence": [],
+        "recommended_next_observations": [],
+        "ambiguity_level": "high",
+        "triage_summary": "",
+        "triage_iterations": [],
+        "scenario": args.scenario if args.scenario != "auto" else "unknown",
         "scenario_definition": {},
         "observation": {},
         "observed_symptoms": [],
         "initial_postcheck_result": {},
+        "additional_observation_used": False,
+        "planner_input_scope": {},
+        "planner_error_type": "none",
+        "planner_error_stage": "none",
+        "planner_retry_count": 0,
+        "planner_timeout_seconds": 0,
+        "planner_attempts": [],
+        "planner_transport_failure": False,
+        "planner_reasoning_failure": False,
+        "planner_fallback_used": False,
+        "planner_fallback_reason": "",
+        "planner_fallback_type": "",
         "planner_output_raw": "",
         "planner_summary": "",
         "normalized_actions": [],

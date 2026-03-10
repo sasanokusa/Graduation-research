@@ -1,0 +1,9 @@
+[break] pattern B: remove uvicorn from requirements and recreate app
+ Container target-db Running 
+ Container target-app Recreate 
+ Container target-app Recreated 
+ Container target-db Waiting 
+ Container target-db Healthy 
+ Container target-app Starting 
+ Container target-app Started 
+[break] injected failure pattern B

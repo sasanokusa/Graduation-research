@@ -20,8 +20,8 @@ def _build_mock_plan(state: SingleAgentState) -> dict:
                     "type": "edit_file",
                     "path": "nginx/nginx.conf",
                     "operation": "replace_text",
-                    "old_text": "server app:8001;",
-                    "new_text": "server app:8000;",
+                    "old_text": "server app:8001 resolve;",
+                    "new_text": "server app:8000 resolve;",
                 },
                 {
                     "type": "restart_compose_service",
@@ -61,6 +61,138 @@ def _build_mock_plan(state: SingleAgentState) -> dict:
                 },
             ],
         }
+    if state["scenario"] == "d":
+        return {
+            "summary": "Restore the broken items table reference and rebuild the app service.",
+            "actions": [
+                {
+                    "type": "edit_file",
+                    "path": "app/main.py",
+                    "operation": "replace_text",
+                    "old_text": 'cursor.execute("SELECT id, name, description FROM itemz ORDER BY id")',
+                    "new_text": 'cursor.execute("SELECT id, name, description FROM items ORDER BY id")',
+                },
+                {
+                    "type": "rebuild_compose_service",
+                    "service": "app",
+                },
+            ],
+        }
+    if state["scenario"] == "e":
+        return {
+            "summary": "Restore the app listen port to the baseline value and rebuild the app service.",
+            "actions": [
+                {
+                    "type": "edit_file",
+                    "path": "app/app.env",
+                    "operation": "restore_from_base",
+                },
+                {
+                    "type": "rebuild_compose_service",
+                    "service": "app",
+                },
+            ],
+        }
+    if state["scenario"] == "f":
+        return {
+            "summary": "Restore the missing description column reference and rebuild the app service.",
+            "actions": [
+                {
+                    "type": "edit_file",
+                    "path": "app/main.py",
+                    "operation": "replace_text",
+                    "old_text": 'cursor.execute("SELECT id, name, details FROM items ORDER BY id")',
+                    "new_text": 'cursor.execute("SELECT id, name, description FROM items ORDER BY id")',
+                },
+                {
+                    "type": "rebuild_compose_service",
+                    "service": "app",
+                },
+            ],
+        }
+    if state["scenario"] == "g":
+        return {
+            "summary": "Restore the broken health query and rebuild the app service.",
+            "actions": [
+                {
+                    "type": "edit_file",
+                    "path": "app/main.py",
+                    "operation": "replace_text",
+                    "old_text": 'cursor.execute("SELECT missing FROM health_checks")',
+                    "new_text": 'cursor.execute("SELECT 1 AS ok")',
+                },
+                {
+                    "type": "rebuild_compose_service",
+                    "service": "app",
+                },
+            ],
+        }
+    if state["scenario"] == "h":
+        return {
+            "summary": "Restore the nginx upstream host name and restart nginx.",
+            "actions": [
+                {
+                    "type": "edit_file",
+                    "path": "nginx/nginx.conf",
+                    "operation": "replace_text",
+                    "old_text": "server backend:8000 resolve;",
+                    "new_text": "server app:8000 resolve;",
+                },
+                {
+                    "type": "restart_compose_service",
+                    "service": "nginx",
+                },
+            ],
+        }
+    if state["scenario"] == "i":
+        return {
+            "summary": "Apply the smallest visible first-stage env fix by restoring the app listen port and rebuilding app.",
+            "actions": [
+                {
+                    "type": "edit_file",
+                    "path": "app/app.env",
+                    "operation": "replace_text",
+                    "old_text": "APP_PORT=9000",
+                    "new_text": "APP_PORT=8000",
+                },
+                {
+                    "type": "rebuild_compose_service",
+                    "service": "app",
+                },
+            ],
+        }
+    if state["scenario"] == "k":
+        return {
+            "summary": "Restore app/main.py from base and rebuild the app service.",
+            "actions": [
+                {
+                    "type": "edit_file",
+                    "path": "app/main.py",
+                    "operation": "restore_from_base",
+                },
+                {
+                    "type": "rebuild_compose_service",
+                    "service": "app",
+                },
+            ],
+        }
+    if state["scenario"] == "l":
+        return {
+            "summary": "Restore the current app query bug and rebuild the app service instead of touching nginx.",
+            "actions": [
+                {
+                    "type": "edit_file",
+                    "path": "app/main.py",
+                    "operation": "replace_text",
+                    "old_text": 'cursor.execute("SELECT id, name, description FROM itemz ORDER BY id")',
+                    "new_text": 'cursor.execute("SELECT id, name, description FROM items ORDER BY id")',
+                },
+                {
+                    "type": "rebuild_compose_service",
+                    "service": "app",
+                },
+            ],
+        }
 
     return {
         "summary": f"No mock plan is implemented for scenario {state['scenario']}.",
@@ -80,6 +212,9 @@ def mock_worker_node(state: SingleAgentState) -> SingleAgentState:
     print()
     return {
         **state,
+        "planner_error_type": "none",
+        "planner_retry_count": 0,
+        "planner_timeout_seconds": 0,
         "planner_output_raw": raw_output,
         "planner_summary": plan["summary"],
         "normalized_actions": plan["actions"],

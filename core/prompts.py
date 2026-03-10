@@ -21,6 +21,7 @@ COMMON_SYSTEM_PROMPT = (
     "rebuild_compose_service uses service; run_config_test uses target; run_health_check uses check_name. "
     "For edit_file, operation must be replace_text or restore_from_base. "
     "If operation is replace_text, old_text and new_text must be top-level fields. "
+    "Treat triage domains as hypotheses, not ground truth labels. "
     "Reason only from the observation payload, including logs, health-check results, and relevant file snippets. "
     "Do not invent unseen file contents. "
     "For replace_text, old_text must be an exact contiguous substring already present in the observation payload. "
@@ -31,6 +32,10 @@ COMMON_SYSTEM_PROMPT = (
     "Do not propose restart-only plans when the observation already shows a specific editable fault. "
     "Only include restart_compose_service after a state-changing edit when the edited file affects a running service configuration or startup behavior. "
     "If you edit a startup-time setting that is read when a container starts, such as an application env file, prefer rebuild_compose_service over restart_compose_service so the new value is actually applied. "
+    "If the current evidence remains ambiguous after the provided observation, return an empty action list instead of guessing. "
+    "If current-state evidence conflicts with older log noise, prioritize the current state and avoid unnecessary edits to currently healthy services. "
+    "The same identifier can appear at different reference layers, such as an nginx upstream group name versus a backend host or Docker service name. "
+    "Distinguish those layers before editing. "
     "Do not include run_health_check actions for scenario success checks; the verifier performs those checks automatically. "
     "If a config test is relevant, include it before restarting an affected service. "
     "Do not use repository-wide search/replace, wildcard edits, rm, sudo, chmod, chown, find, or grep|xargs edits. "
@@ -39,7 +44,7 @@ COMMON_SYSTEM_PROMPT = (
 SYSTEM_PROMPT_HINTED = (
     COMMON_SYSTEM_PROMPT
     + "Common recoverable faults in this environment include configuration mismatches, dependency/startup issues, "
-    "and application-to-database connection mismatches. "
+    "application-to-database connection mismatches, local code/query regressions, and partial endpoint failures. "
     "When logs and snippets point to one of these classes, prefer the smallest direct repair visible in the evidence "
     "rather than generic restart attempts. "
     "If you are unsure, return an empty action list with a short summary."
@@ -54,12 +59,12 @@ SYSTEM_PROMPT_BLIND = (
 PROMPT_REGISTRY: dict[PromptMode, PromptSpec] = {
     "blind": {
         "mode": "blind",
-        "name": "single_agent_blind_v3",
+        "name": "single_agent_blind_v7",
         "system_prompt": SYSTEM_PROMPT_BLIND,
     },
     "hinted": {
         "mode": "hinted",
-        "name": "single_agent_hinted_v3",
+        "name": "single_agent_hinted_v7",
         "system_prompt": SYSTEM_PROMPT_HINTED,
     },
 }

@@ -7,6 +7,7 @@ RESULTS_DIR = ROOT_DIR / "results"
 
 ALLOWED_EDIT_FILES: dict[str, str] = {
     "nginx/nginx.conf": "nginx/nginx.conf.base",
+    "app/main.py": "app/main.py.base",
     "app/requirements.txt": "app/requirements.txt.base",
     "app/app.env": "app/app.env.base",
 }

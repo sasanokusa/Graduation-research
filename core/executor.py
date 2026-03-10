@@ -91,6 +91,8 @@ def execute_plan(plan: dict[str, Any], run_id: str) -> dict[str, Any]:
                 action_results.append({"action": action, "ok": ok, "detail": command_result})
                 if not ok:
                     raise RuntimeError("docker compose restart failed")
+                if action["service"] in {"nginx", "app"}:
+                    readiness_wait_requested = True
             elif action_type == "rebuild_compose_service":
                 command_result = run_fixed_command(
                     ["docker", "compose", "up", "-d", "--force-recreate", action["service"]]
@@ -99,7 +101,7 @@ def execute_plan(plan: dict[str, Any], run_id: str) -> dict[str, Any]:
                 action_results.append({"action": action, "ok": ok, "detail": command_result})
                 if not ok:
                     raise RuntimeError("docker compose up --force-recreate failed")
-                if action["service"] == "app":
+                if action["service"] in {"nginx", "app"}:
                     readiness_wait_requested = True
             elif action_type == "run_config_test":
                 if action["target"] == "compose":

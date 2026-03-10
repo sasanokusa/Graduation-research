@@ -1,8 +1,11 @@
 events {}
 
 http {
+  resolver 127.0.0.11 ipv6=off;
+
   upstream backend {
-    server app:8000;
+    zone backend 64k;
+    server app:8000 resolve;
   }
 
   server {

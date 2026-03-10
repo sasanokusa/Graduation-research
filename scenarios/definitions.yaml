@@ -47,3 +47,145 @@ scenarios:
     failure_conditions:
       - "database_auth_failure_persists"
       - "api_items_unavailable"
+  d:
+    name: "D"
+    description: "The app code queries a non-existent table, so only /api/items fails."
+    allowed_files:
+      - "app/main.py"
+    allowed_actions:
+      - "edit_file"
+      - "rebuild_compose_service"
+      - "run_health_check"
+    success_checks:
+      - "app_running"
+      - "healthz_200"
+      - "api_items_200"
+    failure_conditions:
+      - "query_table_not_found_persists"
+      - "api_items_unavailable"
+  e:
+    name: "E"
+    description: "The app listens on a different port than nginx expects, creating competing repair choices."
+    allowed_files:
+      - "app/main.py"
+      - "app/app.env"
+      - "nginx/nginx.conf"
+    allowed_actions:
+      - "edit_file"
+      - "rebuild_compose_service"
+      - "restart_compose_service"
+      - "run_config_test"
+      - "run_health_check"
+    success_checks:
+      - "app_running"
+      - "nginx_running"
+      - "healthz_200"
+      - "api_items_200"
+    failure_conditions:
+      - "backend_port_drift_persists"
+      - "upstream_unreachable"
+  f:
+    name: "F"
+    description: "The app code queries a non-existent column, so only /api/items fails."
+    allowed_files:
+      - "app/main.py"
+    allowed_actions:
+      - "edit_file"
+      - "rebuild_compose_service"
+      - "run_health_check"
+    success_checks:
+      - "app_running"
+      - "healthz_200"
+      - "api_items_200"
+    failure_conditions:
+      - "query_column_not_found_persists"
+      - "api_items_unavailable"
+  g:
+    name: "G"
+    description: "Only the health endpoint is broken while the main API path continues to serve items."
+    allowed_files:
+      - "app/main.py"
+    allowed_actions:
+      - "edit_file"
+      - "rebuild_compose_service"
+      - "run_health_check"
+    success_checks:
+      - "app_running"
+      - "healthz_200"
+      - "api_items_200"
+    failure_conditions:
+      - "health_endpoint_failure_persists"
+      - "healthz_unavailable"
+  h:
+    name: "H"
+    description: "Nginx points to an invalid upstream host name and returns 502."
+    allowed_files:
+      - "nginx/nginx.conf"
+    allowed_actions:
+      - "edit_file"
+      - "run_config_test"
+      - "restart_compose_service"
+      - "run_health_check"
+    success_checks:
+      - "nginx_running"
+      - "healthz_200"
+      - "api_items_200"
+    failure_conditions:
+      - "upstream_host_resolution_failure_persists"
+      - "http_502_persists"
+  i:
+    name: "I"
+    description: "A masked two-stage env failure combines app port drift with a wrong DB password."
+    allowed_files:
+      - "app/app.env"
+      - "nginx/nginx.conf"
+    allowed_actions:
+      - "edit_file"
+      - "rebuild_compose_service"
+      - "restart_compose_service"
+      - "run_config_test"
+      - "run_health_check"
+    success_checks:
+      - "app_running"
+      - "nginx_running"
+      - "healthz_200"
+      - "api_items_200"
+    failure_conditions:
+      - "masked_second_stage_failure_persists"
+      - "database_auth_failure_surfaces_after_partial_repair"
+  k:
+    name: "K"
+    description: "The API returns a generic internal error while the real root cause is only visible via extra observation."
+    allowed_files:
+      - "app/main.py"
+      - "app/app.env"
+    allowed_actions:
+      - "edit_file"
+      - "rebuild_compose_service"
+      - "run_health_check"
+    success_checks:
+      - "app_running"
+      - "healthz_200"
+      - "api_items_200"
+    failure_conditions:
+      - "opaque_api_500_persists"
+      - "additional_observation_still_insufficient"
+  l:
+    name: "L"
+    description: "Stale nginx upstream failures remain in the logs while the current fault is an app/query bug."
+    allowed_files:
+      - "app/main.py"
+      - "nginx/nginx.conf"
+    allowed_actions:
+      - "edit_file"
+      - "rebuild_compose_service"
+      - "restart_compose_service"
+      - "run_config_test"
+      - "run_health_check"
+    success_checks:
+      - "app_running"
+      - "healthz_200"
+      - "api_items_200"
+    failure_conditions:
+      - "stale_proxy_noise_misleads_repair"
+      - "current_query_failure_persists"

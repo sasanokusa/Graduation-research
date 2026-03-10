@@ -186,12 +186,13 @@ def expand_execution_actions(
     expanded_actions: list[dict[str, Any]] = []
     auto_appended_actions: list[dict[str, Any]] = []
     errors: list[str] = []
+    app_recreate_edit_paths = {"app/app.env", "app/main.py", "app/requirements.txt"}
     has_explicit_nginx_test = any(
         action.get("type") == "run_config_test" and action.get("target") == "nginx"
         for action in normalized_actions
     )
-    has_app_env_edit = any(
-        action.get("type") == "edit_file" and action.get("path") == "app/app.env"
+    has_app_recreate_edit = any(
+        action.get("type") == "edit_file" and action.get("path") in app_recreate_edit_paths
         for action in normalized_actions
     )
     has_explicit_app_rebuild = any(
@@ -201,7 +202,7 @@ def expand_execution_actions(
 
     for index, action in enumerate(normalized_actions):
         if (
-            has_app_env_edit
+            has_app_recreate_edit
             and action.get("type") == "restart_compose_service"
             and action.get("service") == "app"
             and not has_explicit_app_rebuild
@@ -215,7 +216,7 @@ def expand_execution_actions(
                 "type": "rebuild_compose_service",
                 "service": "app",
                 "auto_generated": True,
-                "reason": "app/app.env changes require recreate semantics; upgraded restart to rebuild",
+                "reason": "app startup-time file changes require recreate semantics; upgraded restart to rebuild",
             }
             normalized_auto_action, action_errors = normalize_action(
                 raw_auto_action,
@@ -253,7 +254,7 @@ def expand_execution_actions(
                 auto_appended_actions.append(normalized_auto_action)
         if (
             action.get("type") == "edit_file"
-            and action.get("path") == "app/app.env"
+            and action.get("path") in app_recreate_edit_paths
             and not has_explicit_app_rebuild
             and not any(
                 candidate.get("type") == "rebuild_compose_service" and candidate.get("service") == "app"
@@ -264,7 +265,7 @@ def expand_execution_actions(
                 "type": "rebuild_compose_service",
                 "service": "app",
                 "auto_generated": True,
-                "reason": "app/app.env changes are startup-time settings and require app recreate",
+                "reason": "app code/env/dependency changes require app recreate to take effect",
             }
             normalized_auto_action, action_errors = normalize_action(
                 raw_auto_action,

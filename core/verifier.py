@@ -92,6 +92,7 @@ def run_precheck(
     scenario_definition: dict[str, Any],
     observation: dict[str, Any] | None = None,
     scope_policy: dict[str, Any] | None = None,
+    planner_error_type: str = "none",
 ) -> dict[str, Any]:
     action_validation_errors: list[str] = []
     scope_validation_errors: list[str] = []
@@ -99,13 +100,25 @@ def run_precheck(
     warnings: list[str] = []
     checks: dict[str, Any] = {}
     scope_policy = scope_policy or {}
-    allowed_files = set(scope_policy.get("editable_files", scenario_definition.get("allowed_files", [])))
+    allowed_files = set(scope_policy.get("files", scope_policy.get("editable_files", scenario_definition.get("allowed_files", []))))
+    allowed_services = set(scope_policy.get("services", []))
     allowed_actions = set(scope_policy.get("allowed_actions", scenario_definition.get("allowed_actions", [])))
     original_actions = plan.get("actions", [])
     actions, auto_appended_actions, auto_errors = expand_execution_actions(original_actions)
     action_validation_errors.extend(auto_errors)
 
-    if not actions:
+    if not actions and planner_error_type in {
+        "api_key_missing",
+        "planner_timeout",
+        "planner_transport_error",
+        "planner_invocation_error",
+    }:
+        action_validation_errors.append(
+            f"planner invocation failed before executable actions were produced: {planner_error_type}"
+        )
+    elif not actions and planner_error_type == "planner_parse_error":
+        action_validation_errors.append("planner output could not be normalized into executable actions")
+    elif not actions:
         action_validation_errors.append("planner returned no executable actions")
 
     config_result = compose_config_check()
@@ -147,31 +160,24 @@ def run_precheck(
                 action_validation_errors.append(
                     f"action[{index}] changes too many lines in {path}: {changed_lines} > {MAX_CHANGED_LINES}"
                 )
+        elif action_type in {"restart_compose_service", "rebuild_compose_service"}:
+            service = action.get("service", "")
+            if allowed_services and service not in allowed_services and not action.get("auto_generated"):
+                scope_validation_errors.append(
+                    f"action[{index}] targets service outside the triage scope: {service}"
+                )
         elif action_type == "show_file":
             if action["path"] not in allowed_files:
                 action_validation_errors.append(f"action[{index}] shows disallowed file: {action['path']}")
         elif action_type == "run_health_check":
             if not action.get("check_name"):
                 action_validation_errors.append(f"action[{index}] is missing required field: check_name")
-
-    observation = observation or {}
-    nginx_snippet = observation.get("file_snippets", {}).get("nginx/nginx.conf", "")
-    saw_nginx_edit = any(
-        action.get("type") == "edit_file" and action.get("path") == "nginx/nginx.conf"
-        for action in actions
-    )
-    saw_nginx_restart = any(
-        action.get("type") == "restart_compose_service" and action.get("service") == "nginx"
-        for action in actions
-    )
-    if scenario_definition.get("name") == "A" and "server app:8001;" in nginx_snippet and not saw_nginx_edit:
-        action_validation_errors.append(
-            "scenario A requires edit_file for nginx/nginx.conf when the snippet shows server app:8001;"
-        )
-    if scenario_definition.get("name") == "A" and saw_nginx_restart and not saw_nginx_edit:
-        action_validation_errors.append(
-            "scenario A does not allow restart_compose_service for nginx without a preceding edit_file"
-        )
+        elif action_type == "run_config_test":
+            target = action.get("target", "")
+            if target == "nginx" and allowed_services and "nginx" not in allowed_services and not action.get("auto_generated"):
+                scope_validation_errors.append(
+                    f"action[{index}] targets config test outside the triage scope: {target}"
+                )
 
     combined_errors = action_validation_errors + scope_validation_errors + success_check_validation_errors
 
@@ -186,9 +192,12 @@ def run_precheck(
         "scope_validation_errors": scope_validation_errors,
         "success_check_validation_errors": success_check_validation_errors,
         "validated_scope": {
+            "files": sorted(allowed_files),
             "editable_files": sorted(allowed_files),
+            "services": sorted(allowed_services),
             "allowed_actions": sorted(allowed_actions),
         },
+        "planner_error_type": planner_error_type,
         "normalized_input_actions": original_actions,
         "auto_appended_actions": auto_appended_actions,
         "precheck_input_actions": actions,

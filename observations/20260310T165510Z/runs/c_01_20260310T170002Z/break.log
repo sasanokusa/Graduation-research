@@ -1,0 +1,11 @@
+[break] pattern C: change the app-side DB password env var and recreate app
+ Container target-db Running 
+ Container target-app Recreate 
+ Container target-app Recreated 
+ Container target-db Waiting 
+ Container target-db Healthy 
+ Container target-app Starting 
+ Container target-app Started 
+[break] waiting for app-side env change to surface via /api/items
+[break] confirmed failure at /api/items on attempt 1/10
+[break] injected failure pattern C

@@ -1,0 +1,5 @@
+[break] pattern A: rewrite nginx upstream port to an incorrect value
+ Container target-nginx Restarting 
+ Container target-nginx Started 
+[break] confirmed failure at /healthz on attempt 1/10
+[break] injected failure pattern A

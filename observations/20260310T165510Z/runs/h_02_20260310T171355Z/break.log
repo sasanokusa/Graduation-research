@@ -1,0 +1,5 @@
+[break] pattern H: change the nginx upstream host name to an invalid service name
+ Container target-nginx Restarting 
+ Container target-nginx Started 
+[break] confirmed failure at /healthz on attempt 1/10
+[break] injected failure pattern H

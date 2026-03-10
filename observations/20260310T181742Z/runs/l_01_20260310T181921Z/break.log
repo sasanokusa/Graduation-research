@@ -1,0 +1,14 @@
+[break] pattern L: seed stale nginx upstream failures, then leave an app/query bug as the current fault
+ Container target-nginx Restarting 
+ Container target-nginx Started 
+ Container target-nginx Restarting 
+ Container target-nginx Started 
+ Container target-db Running 
+ Container target-app Recreate 
+ Container target-app Recreated 
+ Container target-db Waiting 
+ Container target-db Healthy 
+ Container target-app Starting 
+ Container target-app Started 
+[break] confirmed split state: /healthz success and /api/items failure on attempt 4/10
+[break] injected failure pattern L
