@@ -2,12 +2,15 @@ from typing import Any, TypedDict
 
 
 class SingleAgentState(TypedDict):
+    execution_mode: str
     requested_scenario: str
     scenario_source: str
     worker_mode: str
     prompt_mode: str
     system_prompt_name: str
+    system_prompt_hash: str
     worker_context_mode: str
+    worker_context_mode_hash: str
     worker_visible_context: dict[str, Any]
     internal_scenario_id: str
     detected_fault_class: str
@@ -22,6 +25,7 @@ class SingleAgentState(TypedDict):
     triage_iterations: list[dict[str, Any]]
     scenario: str
     scenario_definition: dict[str, Any]
+    internal_scenario_definition: dict[str, Any]
     observation: dict[str, Any]
     observed_symptoms: list[str]
     initial_postcheck_result: dict[str, Any]
@@ -39,6 +43,8 @@ class SingleAgentState(TypedDict):
     planner_fallback_type: str
     planner_output_raw: str
     planner_summary: str
+    planner_provider: str
+    planner_model: str
     normalized_actions: list[dict[str, Any]]
     proposed_actions: list[dict[str, Any]]
     auto_appended_actions: list[dict[str, Any]]
@@ -48,6 +54,25 @@ class SingleAgentState(TypedDict):
     verifier_postcheck_result: dict[str, Any]
     rollback_result: dict[str, Any]
     rollback_used: bool
+    restore_from_base_used: bool
+    restore_from_base_blocked: bool
+    restore_from_base_block_reason: str
+    minimal_patch_used: bool
+    planner_turn: int
+    planner_history: list[dict[str, Any]]
+    reviewer_history: list[dict[str, Any]]
+    review_feedback: str
+    review_decision: str
+    reviewer_output_raw: str
+    reviewer_recommended_scope: dict[str, Any]
+    reviewer_recommended_next_observations: list[str]
+    reviewer_provider: str
+    reviewer_model: str
+    replan_count: int
+    agent_role_trace: list[str]
+    role_model_trace: list[dict[str, str]]
+    last_turn_success: bool
+    multi_agent_stop_reason: str
     final_status: str
     result_path: str
     start_time: float

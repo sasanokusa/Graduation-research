@@ -1,4 +1,5 @@
 import argparse
+import hashlib
 import json
 import time
 from datetime import datetime, timezone
@@ -10,7 +11,8 @@ from langgraph.graph import END, START, StateGraph
 from agents.mock_worker import mock_worker_node
 from agents.sensor import additional_observation_node, sensor_node
 from agents.worker import worker_node
-from core.executor import execute_plan, rollback_files
+from core.evaluator_mapping import resolve_internal_scenario
+from core.executor import execute_plan, rollback_with_refresh
 from core.policies import RESULTS_DIR, SCENARIO_DEFINITIONS_PATH
 from core.prompts import PROMPT_REGISTRY, get_prompt_spec
 from core.scenario_context import build_worker_visible_context, get_worker_context_mode_name
@@ -32,9 +34,11 @@ def load_scenario_definitions() -> dict[str, dict]:
 
 
 def triage_node(state: SingleAgentState) -> SingleAgentState:
-    triage = build_triage_result(
+    scenario_definitions = load_scenario_definitions()
+    triage = build_triage_result(state["observation"])
+    evaluator_mapping = resolve_internal_scenario(
         requested_scenario=state["requested_scenario"],
-        scenario_definitions=load_scenario_definitions(),
+        scenario_definitions=scenario_definitions,
         observation=state["observation"],
     )
     worker_visible_context = build_worker_visible_context(
@@ -42,6 +46,9 @@ def triage_node(state: SingleAgentState) -> SingleAgentState:
         state["observation"],
         state["prompt_mode"],
     )
+    worker_context_mode_hash = hashlib.sha256(
+        json.dumps(worker_visible_context, ensure_ascii=False, sort_keys=True).encode("utf-8")
+    ).hexdigest()[:16]
     triage_snapshot = {
         "iteration": len(state.get("triage_iterations", [])) + 1,
         "additional_observation_used": state["additional_observation_used"],
@@ -59,7 +66,7 @@ def triage_node(state: SingleAgentState) -> SingleAgentState:
     print(
         json.dumps(
             {
-                "scenario_source": triage["scenario_source"],
+                "scenario_source": evaluator_mapping["scenario_source"],
                 "suspected_domains": triage["suspected_domains"],
                 "candidate_scope": triage["candidate_scope"],
                 "missing_evidence": triage["missing_evidence"],
@@ -74,9 +81,10 @@ def triage_node(state: SingleAgentState) -> SingleAgentState:
     print()
     return {
         **state,
-        "scenario": triage["scenario"],
-        "scenario_definition": triage["scenario_definition"],
-        "internal_scenario_id": triage["internal_scenario_id"],
+        "scenario": evaluator_mapping["scenario"],
+        "scenario_definition": evaluator_mapping["scenario_definition"],
+        "internal_scenario_definition": evaluator_mapping["internal_scenario_definition"],
+        "internal_scenario_id": evaluator_mapping["internal_scenario_id"],
         "detected_fault_class": triage["detected_fault_class"],
         "detection_confidence": triage["detection_confidence"],
         "detection_evidence": triage["detection_evidence"],
@@ -87,10 +95,11 @@ def triage_node(state: SingleAgentState) -> SingleAgentState:
         "ambiguity_level": triage["ambiguity_level"],
         "triage_summary": triage["triage_summary"],
         "triage_iterations": [*state.get("triage_iterations", []), triage_snapshot],
-        "scenario_source": triage["scenario_source"],
+        "scenario_source": evaluator_mapping["scenario_source"],
         "planner_input_scope": triage["candidate_scope"],
         "initial_postcheck_result": triage["initial_postcheck_result"],
         "worker_context_mode": get_worker_context_mode_name(state["prompt_mode"]),
+        "worker_context_mode_hash": worker_context_mode_hash,
         "worker_visible_context": worker_visible_context,
     }
 
@@ -127,7 +136,8 @@ def precheck_node(state: SingleAgentState) -> SingleAgentState:
     precheck = run_precheck(
         plan,
         state["scenario_definition"],
-        state["observation"],
+        internal_scenario_definition=state["internal_scenario_definition"],
+        observation=state["observation"],
         scope_policy=state["candidate_scope"],
         planner_error_type=state["planner_error_type"],
     )
@@ -147,6 +157,10 @@ def precheck_node(state: SingleAgentState) -> SingleAgentState:
             "verifier_precheck_result": precheck,
             "auto_appended_actions": precheck.get("auto_appended_actions", []),
             "precheck_input_actions": precheck.get("precheck_input_actions", []),
+            "restore_from_base_used": precheck.get("restore_from_base_used", False),
+            "restore_from_base_blocked": precheck.get("restore_from_base_blocked", False),
+            "restore_from_base_block_reason": precheck.get("restore_from_base_block_reason", ""),
+            "minimal_patch_used": precheck.get("minimal_patch_used", False),
             "final_status": "failure",
         }
 
@@ -155,6 +169,10 @@ def precheck_node(state: SingleAgentState) -> SingleAgentState:
         "verifier_precheck_result": precheck,
         "auto_appended_actions": precheck.get("auto_appended_actions", []),
         "precheck_input_actions": precheck.get("precheck_input_actions", []),
+        "restore_from_base_used": precheck.get("restore_from_base_used", False),
+        "restore_from_base_blocked": precheck.get("restore_from_base_blocked", False),
+        "restore_from_base_block_reason": precheck.get("restore_from_base_block_reason", ""),
+        "minimal_patch_used": precheck.get("minimal_patch_used", False),
     }
 
 
@@ -216,14 +234,25 @@ def should_rollback(state: SingleAgentState) -> Literal["rollback", "end"]:
 
 
 def rollback_node(state: SingleAgentState) -> SingleAgentState:
-    rollback_result = rollback_files(state["execution_result"].get("backups", {}))
+    rollback_result = rollback_with_refresh(
+        state["execution_result"].get("backups", {}),
+        run_id=f"rollback_{state['scenario']}",
+    )
+    rollback_postcheck_result = run_postcheck(
+        state["scenario_definition"],
+        readiness_wait_used=bool(rollback_result.get("readiness_wait_requested")),
+    )
+    rollback_result = {**rollback_result, "rollback_postcheck_result": rollback_postcheck_result}
     _section("↩️ [PHASE 7] ROLLBACK")
     print(json.dumps(rollback_result, ensure_ascii=False, indent=2))
+    print()
+    print(json.dumps(rollback_postcheck_result, ensure_ascii=False, indent=2))
     print()
     return {
         **state,
         "rollback_result": rollback_result,
         "rollback_used": True,
+        "verifier_postcheck_result": rollback_postcheck_result,
     }
 
 
@@ -234,6 +263,7 @@ def save_result(state: SingleAgentState) -> str:
     elapsed_seconds = round(time.time() - state["start_time"], 3)
     payload = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
+        "execution_mode": state.get("execution_mode", "single_agent"),
         "scenario": state["scenario"],
         "requested_scenario": state["requested_scenario"],
         "scenario_source": state["scenario_source"],
@@ -254,17 +284,22 @@ def save_result(state: SingleAgentState) -> str:
         "worker_mode": state["worker_mode"],
         "prompt_mode": state["prompt_mode"],
         "system_prompt_name": state["system_prompt_name"],
+        "system_prompt_hash": state["system_prompt_hash"],
         "planner_error_type": state["planner_error_type"],
         "planner_error_stage": state["planner_error_stage"],
         "planner_retry_count": state["planner_retry_count"],
         "planner_timeout_seconds": state["planner_timeout_seconds"],
         "planner_attempts": state["planner_attempts"],
+        "planner_attempt_count": len(state["planner_attempts"]),
         "planner_transport_failure": state["planner_transport_failure"],
         "planner_reasoning_failure": state["planner_reasoning_failure"],
         "planner_fallback_used": state["planner_fallback_used"],
         "planner_fallback_reason": state["planner_fallback_reason"],
         "planner_fallback_type": state["planner_fallback_type"],
+        "planner_provider": state.get("planner_provider", ""),
+        "planner_model": state.get("planner_model", ""),
         "worker_context_mode": state["worker_context_mode"],
+        "worker_context_mode_hash": state["worker_context_mode_hash"],
         "worker_visible_context": state["worker_visible_context"],
         "worker_visible_file_snippets": state["worker_visible_context"].get("observation", {}).get(
             "file_snippets", {}
@@ -301,12 +336,45 @@ def save_result(state: SingleAgentState) -> str:
         "worker_normalization_errors": state["verifier_precheck_result"].get(
             "worker_normalization_errors", []
         ),
+        "restore_from_base_used": state["verifier_precheck_result"].get("restore_from_base_used", False),
+        "restore_from_base_blocked": state["verifier_precheck_result"].get("restore_from_base_blocked", False),
+        "restore_from_base_block_reason": state["verifier_precheck_result"].get(
+            "restore_from_base_block_reason", ""
+        ),
+        "minimal_patch_used": state["verifier_precheck_result"].get("minimal_patch_used", False),
+        "planner_turn": state.get("planner_turn", 1),
+        "planner_history": state.get("planner_history", []),
+        "reviewer_history": state.get("reviewer_history", []),
+        "review_feedback": state["review_feedback"],
+        "review_decision": state["review_decision"],
+        "reviewer_output_raw": state.get("reviewer_output_raw", ""),
+        "reviewer_recommended_scope": state.get("reviewer_recommended_scope", {}),
+        "reviewer_recommended_next_observations": state.get("reviewer_recommended_next_observations", []),
+        "reviewer_provider": state.get("reviewer_provider", ""),
+        "reviewer_model": state.get("reviewer_model", ""),
+        "replan_count": state["replan_count"],
+        "agent_role_trace": state["agent_role_trace"],
+        "role_model_trace": state.get("role_model_trace", []),
+        "last_turn_success": state.get("last_turn_success", False),
+        "final_turn_success": state.get("last_turn_success", state["final_status"] == "success"),
+        "multi_agent_stop_reason": state.get("multi_agent_stop_reason", ""),
+        "blocked_actions_reason": state["verifier_precheck_result"].get("blocked_actions_reason", []),
         "proposed_actions": state["normalized_actions"],
         "action_results": state["execution_result"].get("action_results", []),
+        "rollback_actions": state["rollback_result"].get("rollback_actions", []),
+        "rollback_action_results": state["rollback_result"].get("rollback_action_results", []),
+        "rollback_postcheck_result": state["rollback_result"].get("rollback_postcheck_result", {}),
         "readiness_wait_used": state["verifier_postcheck_result"].get("readiness_wait_used", False),
         "readiness_attempts": state["verifier_postcheck_result"].get("readiness_attempts", 0),
         "first_success_time_seconds": state["verifier_postcheck_result"].get(
             "first_success_time_seconds"
+        ),
+        "postcheck_retry_attempts": state["verifier_postcheck_result"].get("postcheck_retry_attempts", 0),
+        "postcheck_first_success_time_seconds": state["verifier_postcheck_result"].get(
+            "postcheck_first_success_time_seconds"
+        ),
+        "postcheck_used_retry_window": state["verifier_postcheck_result"].get(
+            "postcheck_used_retry_window", False
         ),
         "verifier_precheck_result": state["verifier_precheck_result"],
         "execution_result": state["execution_result"],
@@ -365,7 +433,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run the safe single-agent recovery baseline.")
     parser.add_argument(
         "--scenario",
-        choices=["auto", "a", "b", "c", "d", "e", "f", "g", "h", "i", "k", "l"],
+        choices=["auto", "a", "b", "c", "d", "e", "f", "g", "h", "i", "i2", "k", "l", "m", "n", "o"],
         default="auto",
         help="Internal benchmark scenario for forced-mode debugging, or auto for open-world triage.",
     )
@@ -384,14 +452,18 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     prompt_spec = get_prompt_spec(args.prompt_mode)
+    system_prompt_hash = hashlib.sha256(prompt_spec["system_prompt"].encode("utf-8")).hexdigest()[:16]
     app = build_app(args.worker)
     state: SingleAgentState = {
+        "execution_mode": "single_agent",
         "requested_scenario": args.scenario,
         "scenario_source": "forced" if args.scenario != "auto" else "auto",
         "worker_mode": args.worker,
         "prompt_mode": args.prompt_mode,
         "system_prompt_name": prompt_spec["name"],
+        "system_prompt_hash": system_prompt_hash,
         "worker_context_mode": "",
+        "worker_context_mode_hash": "",
         "worker_visible_context": {},
         "internal_scenario_id": "",
         "detected_fault_class": "unknown",
@@ -406,6 +478,7 @@ def main(argv: list[str] | None = None) -> int:
         "triage_iterations": [],
         "scenario": args.scenario if args.scenario != "auto" else "unknown",
         "scenario_definition": {},
+        "internal_scenario_definition": {},
         "observation": {},
         "observed_symptoms": [],
         "initial_postcheck_result": {},
@@ -423,6 +496,8 @@ def main(argv: list[str] | None = None) -> int:
         "planner_fallback_type": "",
         "planner_output_raw": "",
         "planner_summary": "",
+        "planner_provider": "",
+        "planner_model": "",
         "normalized_actions": [],
         "proposed_actions": [],
         "auto_appended_actions": [],
@@ -432,6 +507,25 @@ def main(argv: list[str] | None = None) -> int:
         "verifier_postcheck_result": {},
         "rollback_result": {},
         "rollback_used": False,
+        "restore_from_base_used": False,
+        "restore_from_base_blocked": False,
+        "restore_from_base_block_reason": "",
+        "minimal_patch_used": False,
+        "planner_turn": 1,
+        "planner_history": [],
+        "reviewer_history": [],
+        "review_feedback": "",
+        "review_decision": "",
+        "reviewer_output_raw": "",
+        "reviewer_recommended_scope": {},
+        "reviewer_recommended_next_observations": [],
+        "reviewer_provider": "",
+        "reviewer_model": "",
+        "replan_count": 0,
+        "agent_role_trace": ["single_agent"],
+        "role_model_trace": [],
+        "last_turn_success": False,
+        "multi_agent_stop_reason": "",
         "final_status": "running",
         "result_path": "",
         "start_time": time.time(),

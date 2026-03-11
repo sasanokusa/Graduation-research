@@ -1,26 +1,6 @@
 from typing import Any
 
-from core.policies import resolve_repo_path
 from core.verifier import run_postcheck
-
-
-AUTO_EVALUATION_DEFINITION = {
-    "name": "AUTO_GENERIC",
-    "description": "Generic emergency recovery criteria for auto mode.",
-    "allowed_files": [],
-    "allowed_actions": [],
-    "success_checks": ["nginx_running", "app_running", "healthz_200", "api_items_200"],
-    "failure_conditions": ["service_continuity_not_restored"],
-}
-
-UNKNOWN_SCENARIO_DEFINITION = {
-    "name": "UNKNOWN",
-    "description": "No supported internal benchmark scenario was confidently inferred.",
-    "allowed_files": [],
-    "allowed_actions": [],
-    "success_checks": ["nginx_running", "app_running", "healthz_200", "api_items_200"],
-    "failure_conditions": ["unsupported_fault_class"],
-}
 
 DOMAIN_POLICY_MAP = {
     "reverse_proxy_or_upstream_mismatch": {
@@ -108,14 +88,6 @@ def _extract_app_port(observation: dict[str, Any]) -> str | None:
     return None
 
 
-def _hidden_benchmark_evidence() -> dict[str, str]:
-    return {
-        "app_env": resolve_repo_path("app/app.env").read_text(),
-        "app_main": resolve_repo_path("app/main.py").read_text(),
-        "nginx_conf": resolve_repo_path("nginx/nginx.conf").read_text(),
-    }
-
-
 def _score_domain(
     domains: dict[str, dict[str, Any]],
     domain: str,
@@ -126,99 +98,6 @@ def _score_domain(
     candidate["confidence"] = max(candidate["confidence"], confidence)
     if evidence not in candidate["evidence"]:
         candidate["evidence"].append(evidence)
-
-
-def _rank_internal_scenarios(observation: dict[str, Any]) -> list[dict[str, Any]]:
-    file_snippets = observation.get("file_snippets", {})
-    suspicious_patterns = observation.get("suspicious_patterns", {})
-    http_error_evidence = observation.get("http_error_evidence", {})
-    health_checks = observation.get("health_checks", {})
-
-    nginx_snippet = str(file_snippets.get("nginx/nginx.conf", ""))
-    app_main_snippet = str(file_snippets.get("app/main.py", ""))
-    app_env_snippet = str(file_snippets.get("app/app.env", ""))
-    app_patterns = suspicious_patterns.get("app", [])
-    nginx_patterns = suspicious_patterns.get("nginx", [])
-    http_evidence_text = "\n".join(str(value) for value in http_error_evidence.values())
-    healthz = health_checks.get("healthz", {})
-    api_items = health_checks.get("api_items", {})
-    app_port = _extract_app_port(observation)
-
-    candidates = {
-        key: {"scenario": key, "confidence": 0.0, "evidence": []}
-        for key in ["a", "b", "c", "d", "e", "f", "g", "h", "i", "k", "l"]
-    }
-    hidden = _hidden_benchmark_evidence()
-    current_state_evidence = observation.get("current_state_evidence", [])
-    historical_evidence = observation.get("historical_evidence", [])
-
-    if "server app:8001" in nginx_snippet:
-        _score_domain(candidates, "a", 0.95, "nginx config snippet shows an upstream/backend port mismatch")
-    if any(pattern in nginx_patterns for pattern in ["connect() failed", "502 Bad Gateway"]) and healthz.get("status") != 200:
-        _score_domain(candidates, "a", 0.8, "nginx logs indicate upstream connection failure")
-    if "server backend:8000" in nginx_snippet:
-        _score_domain(candidates, "h", 0.95, "nginx config snippet shows an invalid upstream host name")
-    if any(pattern in nginx_patterns for pattern in ["host not found in upstream", "could not be resolved"]):
-        _score_domain(candidates, "h", 0.95, "nginx logs indicate upstream name resolution failure")
-    if (
-        app_port == "9000"
-        and "server app:8000" in nginx_snippet
-        and any(pattern in nginx_patterns for pattern in ["connect() failed", "502 Bad Gateway"])
-    ):
-        _score_domain(candidates, "e", 0.9, "app listen port evidence disagrees with the nginx upstream port")
-    if "APP_PORT=9000" in app_env_snippet:
-        _score_domain(candidates, "e", 0.75, "editable app env snippet shows a non-default APP_PORT value")
-    if "Uvicorn running on http://0.0.0.0:9000" in str(observation.get("service_logs", {}).get("app", "")):
-        _score_domain(candidates, "e", 0.85, "app logs show the service listening on port 9000")
-    if any(
-        pattern in app_patterns
-        for pattern in ["ModuleNotFoundError", "No module named", "uvicorn: not found", "Error loading ASGI app"]
-    ):
-        _score_domain(candidates, "b", 0.95, "app logs indicate dependency or startup failure")
-    if _contains_any(http_evidence_text, ["Access denied", "using password: YES", "OperationalError"]):
-        _score_domain(candidates, "c", 0.95, "HTTP error evidence indicates database authentication failure")
-    if "DB_PASSWORD=" in app_env_snippet and candidates["c"]["confidence"] > 0:
-        _score_domain(candidates, "c", candidates["c"]["confidence"], "editable app env snippet exposes DB_PASSWORD")
-    if healthz.get("status") == 200 and api_items.get("status") != 200 and _contains_any(
-        http_evidence_text, ["itemz", "doesn't exist", "Table '"]
-    ):
-        _score_domain(candidates, "d", 0.9, "HTTP error evidence indicates a missing table in the items query")
-    if "FROM itemz ORDER BY id" in app_main_snippet:
-        _score_domain(candidates, "d", 0.95, "editable app code snippet shows the items query targeting itemz")
-    if healthz.get("status") == 200 and api_items.get("status") != 200 and _contains_any(
-        http_evidence_text, ["Unknown column", "details"]
-    ):
-        _score_domain(candidates, "f", 0.9, "HTTP error evidence indicates a missing column in the items query")
-    if "name, details FROM items" in app_main_snippet:
-        _score_domain(candidates, "f", 0.95, "editable app code snippet shows the items query targeting details")
-    if healthz.get("status") != 200 and api_items.get("status") == 200:
-        _score_domain(candidates, "g", 0.8, "only the health endpoint is failing while the main API still responds")
-    if "SELECT missing FROM health_checks" in app_main_snippet:
-        _score_domain(candidates, "g", 0.95, "editable app code snippet shows the broken health query")
-    if "APP_PORT=9000" in hidden["app_env"] and "DB_PASSWORD=wrongpassword" in hidden["app_env"]:
-        _score_domain(candidates, "i", 0.98, "hidden benchmark state shows both port drift and DB credential drift")
-    if "K_ITEMS_QUERY" in hidden["app_main"] and 'detail="internal error"' in hidden["app_main"]:
-        _score_domain(candidates, "k", 0.98, "hidden benchmark state shows an opaque API error wrapper around a broken query")
-    if (
-        "FROM itemz ORDER BY id" in hidden["app_main"]
-        and healthz.get("status") == 200
-        and api_items.get("status") != 200
-        and historical_evidence
-    ):
-        _score_domain(candidates, "l", 0.97, "current app/query failure coexists with stale upstream failure evidence")
-    if healthz.get("status") == 200 and api_items.get("status") != 200 and any(
-        "older upstream connection failures" in item for item in historical_evidence + current_state_evidence
-    ):
-        _score_domain(candidates, "l", 0.82, "current health checks contradict stale upstream errors in recent logs")
-
-    ranked = sorted(
-        (candidate for candidate in candidates.values() if candidate["confidence"] > 0),
-        key=lambda candidate: candidate["confidence"],
-        reverse=True,
-    )
-    if not ranked:
-        return [{"scenario": "unknown", "confidence": 0.0, "evidence": ["no internal benchmark match"]}]
-    return ranked
 
 
 def _rank_domains(observation: dict[str, Any]) -> list[dict[str, Any]]:
@@ -544,6 +423,16 @@ def _missing_evidence_and_next_steps(
         and "DB_PASSWORD=" not in str(file_snippets.get("app/app.env", ""))
     ):
         missing_evidence.append("additional downstream application failures may still be masked until upstream reachability is restored")
+    if top_domain in {
+        "reverse_proxy_or_upstream_mismatch",
+        "ambiguous_service_disagreement",
+        "app_startup_or_dependency_failure",
+        "database_auth_or_connectivity_issue",
+        "app_config_or_env_mismatch",
+    }:
+        missing_evidence.append(
+            "downstream application faults may remain masked until the current upstream, startup, or credential blocker is cleared"
+        )
 
     if top_domain == "unknown":
         missing_evidence.extend(
@@ -592,9 +481,6 @@ def _triage_summary(
 
 
 def build_triage_result(
-    *,
-    requested_scenario: str,
-    scenario_definitions: dict[str, dict[str, Any]],
     observation: dict[str, Any],
 ) -> dict[str, Any]:
     suspected_domains = _rank_domains(observation)
@@ -606,24 +492,14 @@ def build_triage_result(
     ambiguity_level = _ambiguity_level(suspected_domains)
     triage_summary = _triage_summary(suspected_domains, ambiguity_level, observation)
 
-    internal_ranking = _rank_internal_scenarios(observation)
-    inferred_internal_scenario_id = internal_ranking[0]["scenario"]
-    scenario_source = "forced" if requested_scenario != "auto" else "auto"
-    internal_scenario_id = requested_scenario if requested_scenario != "auto" else inferred_internal_scenario_id
-    scenario = internal_scenario_id if internal_scenario_id in scenario_definitions else "unknown"
-
-    if requested_scenario != "auto":
-        scenario_definition = scenario_definitions[requested_scenario]
-    else:
-        scenario_definition = AUTO_EVALUATION_DEFINITION
-
-    initial_postcheck_result = run_postcheck(scenario_definition)
+    initial_postcheck_result = run_postcheck(
+        {
+            "success_checks": ["nginx_running", "app_running", "healthz_200", "api_items_200"],
+            "failure_conditions": ["service_continuity_not_restored"],
+        }
+    )
 
     return {
-        "scenario": scenario,
-        "scenario_definition": scenario_definition,
-        "internal_scenario_id": internal_scenario_id,
-        "scenario_source": scenario_source,
         "suspected_domains": suspected_domains,
         "candidate_scope": candidate_scope,
         "missing_evidence": missing_evidence,

@@ -2,8 +2,8 @@ from typing import Any
 
 
 WORKER_CONTEXT_MODE_NAMES = {
-    "blind": "worker_visible_blind_v8",
-    "hinted": "worker_visible_hinted_v8",
+    "blind": "worker_visible_blind_v9",
+    "hinted": "worker_visible_hinted_v9",
 }
 
 
@@ -102,6 +102,9 @@ def build_worker_visible_context(
             "edit_operations": ["replace_text", "restore_from_base"],
             "no_repository_wide_edits": True,
             "no_shell_commands": True,
+            "restore_from_base_role": "last_resort",
+            "prefer_minimal_patch_for_code_files": ["app/main.py"],
+            "initial_code_restore_is_discouraged": True,
         },
     }
 

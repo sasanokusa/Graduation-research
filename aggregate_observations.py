@@ -41,8 +41,12 @@ EXPECTED_DOMAINS_BY_SCENARIO = {
     "g": {"healthcheck_only_failure"},
     "h": {"reverse_proxy_or_upstream_mismatch"},
     "i": {"ambiguous_service_disagreement", "app_config_or_env_mismatch", "database_auth_or_connectivity_issue"},
+    "i2": {"ambiguous_service_disagreement", "app_config_or_env_mismatch", "reverse_proxy_or_upstream_mismatch"},
     "k": {"query_or_code_bug", "schema_drift"},
     "l": {"query_or_code_bug"},
+    "m": {"reverse_proxy_or_upstream_mismatch"},
+    "n": {"app_startup_or_dependency_failure"},
+    "o": {"database_auth_or_connectivity_issue", "query_or_code_bug"},
 }
 
 
@@ -67,6 +71,10 @@ def parse_args() -> argparse.Namespace:
             "additional_obs_rate",
             "avg_planner_retries",
             "transport_failure_rate",
+            "rollback_recovery_rate",
+            "retry_assisted_recovery_count",
+            "fallback_recovery_count",
+            "minimal_patch_ratio",
             "domain_match_rate",
             "legacy_detection_match_rate",
         ],
@@ -187,6 +195,24 @@ def compute_metrics(rows: List[Dict[str, str]]) -> Dict[str, Any]:
 
     add_obs_true = sum(1 for r in rows if to_bool(r.get("additional_observation_used", "")))
     transport_failure_count = sum(1 for r in rows if to_bool(r.get("planner_transport_failure", "")))
+    rollback_used_count = sum(1 for r in rows if to_bool(r.get("rollback_used", "")))
+    rollback_recovered_count = sum(
+        1 for r in rows if to_bool(r.get("rollback_used", "")) and to_bool(r.get("rollback_postcheck_ok", ""))
+    )
+    retry_assisted_recovery_count = sum(
+        1
+        for r in rows
+        if normalize_text(r.get("final_status", "")) == "success"
+        and to_bool(r.get("postcheck_used_retry_window", ""))
+    )
+    fallback_recovery_count = sum(
+        1
+        for r in rows
+        if normalize_text(r.get("final_status", "")) == "success"
+        and to_bool(r.get("planner_fallback_used", ""))
+    )
+    minimal_patch_count = sum(1 for r in rows if to_bool(r.get("minimal_patch_used", "")))
+    restore_used_count = sum(1 for r in rows if to_bool(r.get("restore_from_base_used", "")))
     domain_match = sum(
         1
         for r in rows
@@ -216,6 +242,14 @@ def compute_metrics(rows: List[Dict[str, str]]) -> Dict[str, Any]:
         "avg_planner_retries": statistics.mean(planner_retry_values) if planner_retry_values else None,
         "transport_failure_count": transport_failure_count,
         "transport_failure_rate": (transport_failure_count / runs * 100.0) if runs else 0.0,
+        "rollback_recovery_rate": (rollback_recovered_count / rollback_used_count * 100.0)
+        if rollback_used_count
+        else 0.0,
+        "retry_assisted_recovery_count": retry_assisted_recovery_count,
+        "fallback_recovery_count": fallback_recovery_count,
+        "minimal_patch_ratio": (minimal_patch_count / max(1, restore_used_count))
+        if minimal_patch_count or restore_used_count
+        else 0.0,
         "domain_match": domain_match,
         "domain_match_rate": (domain_match / runs * 100.0) if runs else 0.0,
         "legacy_detection_match": legacy_detection_match,
@@ -302,6 +336,10 @@ def main() -> None:
                 fmt_num(m["additional_obs_rate"]),
                 fmt_num(m["avg_planner_retries"]),
                 fmt_num(m["transport_failure_rate"]),
+                fmt_num(m["rollback_recovery_rate"]),
+                fmt_num(m["retry_assisted_recovery_count"], 0),
+                fmt_num(m["fallback_recovery_count"], 0),
+                fmt_num(m["minimal_patch_ratio"]),
                 fmt_num(m["domain_match"], 0),
                 fmt_num(m["domain_match_rate"]),
                 fmt_num(m["legacy_detection_match"], 0),
@@ -320,6 +358,10 @@ def main() -> None:
         "add_obs_rate(%)",
         "avg_planner_retries",
         "transport_failure_rate(%)",
+        "rollback_recovery_rate(%)",
+        "retry_assisted_recovery_count",
+        "fallback_recovery_count",
+        "minimal_patch_ratio",
         "domain_match",
         "domain_match_rate(%)",
         "legacy_detect_match",
@@ -349,6 +391,10 @@ def main() -> None:
                     fmt_num(overall["additional_obs_rate"]),
                     fmt_num(overall["avg_planner_retries"]),
                     fmt_num(overall["transport_failure_rate"]),
+                    fmt_num(overall["rollback_recovery_rate"]),
+                    fmt_num(overall["retry_assisted_recovery_count"], 0),
+                    fmt_num(overall["fallback_recovery_count"], 0),
+                    fmt_num(overall["minimal_patch_ratio"]),
                     fmt_num(overall["domain_match"], 0),
                     fmt_num(overall["domain_match_rate"]),
                     fmt_num(overall["legacy_detection_match"], 0),

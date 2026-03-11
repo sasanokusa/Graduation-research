@@ -175,6 +175,62 @@ def _http_error_evidence(healthz: dict, api_items: dict) -> dict[str, str]:
     return evidence
 
 
+def _has_upstream_blocker(service_logs: dict[str, str], healthz: dict[str, Any], api_items: dict[str, Any]) -> bool:
+    nginx_log = service_logs.get("nginx", "")
+    return (
+        healthz.get("status") in {502, 503, 504}
+        or api_items.get("status") in {502, 503, 504}
+        or any(
+            marker in nginx_log
+            for marker in ["connect() failed", "host not found in upstream", "could not be resolved", "no live upstreams"]
+        )
+    )
+
+
+def _has_startup_blocker(service_logs: dict[str, str]) -> bool:
+    app_log = service_logs.get("app", "")
+    return any(
+        marker in app_log
+        for marker in ["ModuleNotFoundError", "No module named", "uvicorn: not found", "Error loading ASGI app"]
+    )
+
+
+def _has_db_auth_blocker(service_logs: dict[str, str], healthz: dict[str, Any], api_items: dict[str, Any]) -> bool:
+    combined_text = "\n".join(
+        [
+            service_logs.get("app", ""),
+            str(healthz.get("body", "")),
+            str(api_items.get("body", "")),
+        ]
+    )
+    return any(
+        marker in combined_text
+        for marker in ["Access denied", "using password: YES", "database error", "OperationalError"]
+    )
+
+
+def _should_mask_app_main_query_snippet(
+    service_logs: dict[str, str],
+    healthz: dict[str, Any],
+    api_items: dict[str, Any],
+) -> bool:
+    if _has_startup_blocker(service_logs):
+        return True
+    if _has_upstream_blocker(service_logs, healthz, api_items) and healthz.get("status") != 200:
+        return True
+    if _has_db_auth_blocker(service_logs, healthz, api_items) and api_items.get("status") != 200:
+        return True
+    return False
+
+
+def _masked_app_main_snippet() -> str:
+    return _extract_relevant_snippet(
+        "app/main.py",
+        ['@app.get("/api/items")', "def list_items():", '@app.get("/healthz")', "def healthz():"],
+        context=0,
+    )
+
+
 def _collect_suspicious_patterns(
     service_logs: dict[str, str],
     healthz: dict,
@@ -275,6 +331,8 @@ def _app_env_needles(service_logs: dict[str, str], healthz: dict[str, Any], api_
 def _app_main_needles(service_logs: dict[str, str], healthz: dict[str, Any], api_items: dict[str, Any]) -> list[str]:
     app_log = service_logs.get("app", "")
     api_body = str(api_items.get("body", ""))
+    if _should_mask_app_main_query_snippet(service_logs, healthz, api_items):
+        return ['@app.get("/api/items")', "def list_items():", '@app.get("/healthz")', "def healthz():"]
     if healthz.get("status") == 200 and api_items.get("status") != 200 and "internal error" in api_body:
         return ['@app.get("/api/items")', "def list_items():", "cursor.execute(K_ITEMS_QUERY)"]
     if "opaque_items_failure" in app_log:
@@ -331,6 +389,12 @@ def _build_temporal_evidence(
         historical_evidence.append(
             "recent nginx logs still contain older no-live-upstreams errors that do not match the current healthy /healthz state"
         )
+    if any(marker in app_excerpt for marker in ["Access denied", "Unknown column", "doesn't exist", "database error"]) and any(
+        marker in nginx_log for marker in ["connect() failed", "host not found in upstream", "could not be resolved", "no live upstreams"]
+    ):
+        historical_evidence.append(
+            "recent nginx logs still contain older upstream failures, but the stronger current evidence is now application-side"
+        )
 
     return current_state_evidence, historical_evidence
 
@@ -373,13 +437,18 @@ def _base_file_snippets(
     healthz: dict[str, Any],
     api_items: dict[str, Any],
 ) -> dict[str, str]:
-    return {
-        "nginx/nginx.conf": _extract_nginx_reference_snippet(),
-        "app/main.py": _extract_relevant_snippet(
+    app_main_snippet = (
+        _masked_app_main_snippet()
+        if _should_mask_app_main_query_snippet(service_logs, healthz, api_items)
+        else _extract_relevant_snippet(
             "app/main.py",
             _app_main_needles(service_logs, healthz, api_items),
             context=1,
-        ),
+        )
+    )
+    return {
+        "nginx/nginx.conf": _extract_nginx_reference_snippet(),
+        "app/main.py": app_main_snippet,
         "app/requirements.txt": _extract_relevant_snippet(
             "app/requirements.txt",
             "uvicorn[standard]==",
@@ -450,12 +519,19 @@ def _build_observation(
     }
 
 
-def _narrower_snippet(path_value: str) -> str:
+def _narrower_snippet(
+    path_value: str,
+    service_logs: dict[str, str],
+    healthz: dict[str, Any],
+    api_items: dict[str, Any],
+) -> str:
     needle_map = {
         "nginx/nginx.conf": ["upstream backend", "server app:8001", "server backend:8000", "server app:8000", "proxy_pass http://backend", "location /"],
         "app/main.py": ["itemz", "details", "SELECT missing FROM health_checks", "cursor.execute(", "K_ITEMS_QUERY"],
         "app/app.env": ["APP_PORT=", "DB_PASSWORD="],
     }
+    if path_value == "app/main.py" and _should_mask_app_main_query_snippet(service_logs, healthz, api_items):
+        return _masked_app_main_snippet()
     return _extract_relevant_snippet(path_value, needle_map[path_value], context=3 if path_value == "app/main.py" else 1)
 
 
@@ -502,17 +578,26 @@ def additional_observation_node(state: SingleAgentState) -> SingleAgentState:
             collected["nginx_log_excerpt"] = excerpt
 
     if "extract narrower relevant snippet from app/main.py" in requested:
-        snippet = _narrower_snippet("app/main.py")
+        healthz = observation.get("health_checks", {}).get("healthz", {})
+        api_items = observation.get("health_checks", {}).get("api_items", {})
+        service_logs = observation.get("service_logs", {})
+        snippet = _narrower_snippet("app/main.py", service_logs, healthz, api_items)
         observation["file_snippets"]["app/main.py"] = snippet
         collected["app/main.py"] = snippet
 
     if "extract narrower relevant snippet from app/app.env" in requested:
-        snippet = _narrower_snippet("app/app.env")
+        healthz = observation.get("health_checks", {}).get("healthz", {})
+        api_items = observation.get("health_checks", {}).get("api_items", {})
+        service_logs = observation.get("service_logs", {})
+        snippet = _narrower_snippet("app/app.env", service_logs, healthz, api_items)
         observation["file_snippets"]["app/app.env"] = snippet
         collected["app/app.env"] = snippet
 
     if "extract narrower relevant snippet from nginx/nginx.conf" in requested:
-        snippet = _narrower_snippet("nginx/nginx.conf")
+        healthz = observation.get("health_checks", {}).get("healthz", {})
+        api_items = observation.get("health_checks", {}).get("api_items", {})
+        service_logs = observation.get("service_logs", {})
+        snippet = _narrower_snippet("nginx/nginx.conf", service_logs, healthz, api_items)
         observation["file_snippets"]["nginx/nginx.conf"] = snippet
         collected["nginx/nginx.conf"] = snippet
 

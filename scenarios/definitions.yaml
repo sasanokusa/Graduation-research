@@ -153,6 +153,58 @@ scenarios:
     failure_conditions:
       - "masked_second_stage_failure_persists"
       - "database_auth_failure_surfaces_after_partial_repair"
+  i2:
+    name: "I2"
+    description: "App port drift masks a downstream query bug until upstream reachability is restored."
+    allowed_files:
+      - "app/app.env"
+      - "app/main.py"
+      - "nginx/nginx.conf"
+    allowed_actions:
+      - "edit_file"
+      - "rebuild_compose_service"
+      - "restart_compose_service"
+      - "run_config_test"
+      - "run_health_check"
+    success_checks:
+      - "app_running"
+      - "nginx_running"
+      - "healthz_200"
+      - "api_items_200"
+    failure_conditions:
+      - "masked_query_bug_persists_after_port_repair"
+      - "partial_repair_stops_before_api_recovery"
+    restore_policy:
+      disallow_initial_restore_for:
+        - "app/main.py"
+      allow_restore_only_after_failed_patch_for:
+        - "app/main.py"
+  m:
+    name: "M"
+    description: "A three-layer cascade exposes nginx host mismatch, then DB auth failure, then a query bug."
+    allowed_files:
+      - "nginx/nginx.conf"
+      - "app/app.env"
+      - "app/main.py"
+    allowed_actions:
+      - "edit_file"
+      - "rebuild_compose_service"
+      - "restart_compose_service"
+      - "run_config_test"
+      - "run_health_check"
+    success_checks:
+      - "app_running"
+      - "nginx_running"
+      - "healthz_200"
+      - "api_items_200"
+    failure_conditions:
+      - "three_layer_masked_cascade_persists"
+      - "partial_repair_stops_before_full_recovery"
+    restore_policy:
+      disallow_initial_restore_for:
+        - "app/main.py"
+      allow_restore_only_after_failed_patch_for:
+        - "app/main.py"
   k:
     name: "K"
     description: "The API returns a generic internal error while the real root cause is only visible via extra observation."
@@ -189,3 +241,50 @@ scenarios:
     failure_conditions:
       - "stale_proxy_noise_misleads_repair"
       - "current_query_failure_persists"
+  n:
+    name: "N"
+    description: "A dependency failure masks a downstream query bug until the app can start again."
+    allowed_files:
+      - "app/requirements.txt"
+      - "app/main.py"
+    allowed_actions:
+      - "edit_file"
+      - "rebuild_compose_service"
+      - "run_health_check"
+    success_checks:
+      - "app_running"
+      - "healthz_200"
+      - "api_items_200"
+    failure_conditions:
+      - "dependency_failure_persists_after_partial_repair"
+      - "masked_query_bug_persists"
+    restore_policy:
+      disallow_initial_restore_for:
+        - "app/main.py"
+      allow_restore_only_after_failed_patch_for:
+        - "app/main.py"
+  o:
+    name: "O"
+    description: "Stale nginx evidence coexists with a DB-auth failure that masks a downstream query bug."
+    allowed_files:
+      - "nginx/nginx.conf"
+      - "app/app.env"
+      - "app/main.py"
+    allowed_actions:
+      - "edit_file"
+      - "rebuild_compose_service"
+      - "restart_compose_service"
+      - "run_config_test"
+      - "run_health_check"
+    success_checks:
+      - "app_running"
+      - "healthz_200"
+      - "api_items_200"
+    failure_conditions:
+      - "stale_evidence_misleads_cascade_repair"
+      - "masked_query_bug_persists_after_db_repair"
+    restore_policy:
+      disallow_initial_restore_for:
+        - "app/main.py"
+      allow_restore_only_after_failed_patch_for:
+        - "app/main.py"

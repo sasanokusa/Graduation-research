@@ -133,6 +133,15 @@ apply_i() {
   wait_for_http_failure "/healthz"
 }
 
+apply_i2() {
+  echo "[break] pattern I2: inject a masked two-stage failure (port drift + hidden query bug)"
+  perl -0pi -e 's/^APP_PORT=.*/APP_PORT=9000/m' "${ROOT_DIR}/app/app.env"
+  perl -0pi -e 's/FROM items ORDER BY id/FROM itemz ORDER BY id/' "${ROOT_DIR}/app/main.py"
+  docker compose up -d --force-recreate app
+  echo "[break] waiting for the first-stage upstream failure to surface"
+  wait_for_http_failure "/healthz"
+}
+
 apply_k() {
   echo "[break] pattern K: inject an opaque API 500 that requires extra observation"
   cp "${ROOT_DIR}/scenarios/fixtures/app_main_k.py" "${ROOT_DIR}/app/main.py"
@@ -159,6 +168,37 @@ apply_l() {
   perl -0pi -e 's/FROM items ORDER BY id/FROM itemz ORDER BY id/' "${ROOT_DIR}/app/main.py"
   docker compose up -d --force-recreate app
   wait_for_split_state "/healthz" "/api/items"
+}
+
+apply_m() {
+  echo "[break] pattern M: inject a three-layer masked cascade (nginx host mismatch + DB auth drift + hidden query bug)"
+  perl -0pi -e 's/server app:8000 resolve;/server backend:8000 resolve;/' "${ROOT_DIR}/nginx/nginx.conf"
+  perl -0pi -e 's/^DB_PASSWORD=.*/DB_PASSWORD=wrongpassword/m' "${ROOT_DIR}/app/app.env"
+  perl -0pi -e 's/FROM items ORDER BY id/FROM itemz ORDER BY id/' "${ROOT_DIR}/app/main.py"
+  docker compose up -d --force-recreate app
+  docker compose restart nginx
+  wait_for_http_failure "/healthz"
+}
+
+apply_n() {
+  echo "[break] pattern N: inject a startup failure that masks a downstream query bug"
+  grep -v '^uvicorn\[standard\]==' "${ROOT_DIR}/app/requirements.txt.base" > "${ROOT_DIR}/app/requirements.txt"
+  perl -0pi -e 's/FROM items ORDER BY id/FROM itemz ORDER BY id/' "${ROOT_DIR}/app/main.py"
+  docker compose up -d --force-recreate app
+  wait_for_http_failure "/healthz"
+}
+
+apply_o() {
+  echo "[break] pattern O: seed stale upstream failures, then leave a DB-auth failure masking a hidden query bug"
+  perl -0pi -e 's/server app:8000 resolve;/server app:8001 resolve;/' "${ROOT_DIR}/nginx/nginx.conf"
+  docker compose restart nginx
+  seed_stale_upstream_failure_logs
+  cp "${ROOT_DIR}/nginx/nginx.conf.base" "${ROOT_DIR}/nginx/nginx.conf"
+  docker compose restart nginx
+  perl -0pi -e 's/^DB_PASSWORD=.*/DB_PASSWORD=wrongpassword/m' "${ROOT_DIR}/app/app.env"
+  perl -0pi -e 's/FROM items ORDER BY id/FROM itemz ORDER BY id/' "${ROOT_DIR}/app/main.py"
+  docker compose up -d --force-recreate app
+  wait_for_http_failure "/healthz"
 }
 
 pick_pattern() {
@@ -190,14 +230,26 @@ pick_pattern() {
     i|I|pattern-i)
       echo "I"
       ;;
+    i2|I2|pattern-i2)
+      echo "I2"
+      ;;
     k|K|pattern-k)
       echo "K"
       ;;
     l|L|pattern-l)
       echo "L"
       ;;
+    m|M|pattern-m)
+      echo "M"
+      ;;
+    n|N|pattern-n)
+      echo "N"
+      ;;
+    o|O|pattern-o)
+      echo "O"
+      ;;
     random)
-      case $((RANDOM % 11)) in
+      case $((RANDOM % 15)) in
         0) echo "A" ;;
         1) echo "B" ;;
         2) echo "C" ;;
@@ -207,12 +259,16 @@ pick_pattern() {
         6) echo "G" ;;
         7) echo "H" ;;
         8) echo "I" ;;
-        9) echo "K" ;;
-        10) echo "L" ;;
+        9) echo "I2" ;;
+        10) echo "K" ;;
+        11) echo "L" ;;
+        12) echo "M" ;;
+        13) echo "N" ;;
+        14) echo "O" ;;
       esac
       ;;
     *)
-      echo "usage: ./break.sh [a|b|c|d|e|f|g|h|i|k|l|random]" >&2
+      echo "usage: ./break.sh [a|b|c|d|e|f|g|h|i|i2|k|l|m|n|o|random]" >&2
       exit 1
       ;;
   esac
@@ -234,8 +290,12 @@ main() {
     G) apply_g ;;
     H) apply_h ;;
     I) apply_i ;;
+    I2) apply_i2 ;;
     K) apply_k ;;
     L) apply_l ;;
+    M) apply_m ;;
+    N) apply_n ;;
+    O) apply_o ;;
   esac
 
   echo "[break] injected failure pattern ${pattern}"

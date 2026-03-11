@@ -180,6 +180,137 @@ def format_actions(actions: list[dict[str, Any]]) -> str:
     return json.dumps(actions, ensure_ascii=False, indent=2)
 
 
+def action_uses_restore_from_base(action: dict[str, Any]) -> bool:
+    return action.get("type") == "edit_file" and action.get("operation") == "restore_from_base"
+
+
+def action_uses_minimal_patch(action: dict[str, Any]) -> bool:
+    return action.get("type") == "edit_file" and action.get("operation") == "replace_text"
+
+
+def plan_uses_restore_from_base(actions: list[dict[str, Any]], path_value: str | None = None) -> bool:
+    for action in actions:
+        if not action_uses_restore_from_base(action):
+            continue
+        if path_value is None or action.get("path") == path_value:
+            return True
+    return False
+
+
+def plan_uses_minimal_patch(actions: list[dict[str, Any]], path_value: str | None = None) -> bool:
+    for action in actions:
+        if not action_uses_minimal_patch(action):
+            continue
+        if path_value is None or action.get("path") == path_value:
+            return True
+    return False
+
+
+def _normalize_auto_action(raw_auto_action: dict[str, Any], *, index_label: str) -> tuple[dict[str, Any] | None, list[str]]:
+    return normalize_action(raw_auto_action, index_label=index_label)
+
+
+def _maybe_upgrade_app_restart(
+    action: dict[str, Any],
+    *,
+    current_actions: list[dict[str, Any]],
+    has_app_recreate_edit: bool,
+    has_explicit_app_rebuild: bool,
+    index: int,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str], bool]:
+    if not (
+        has_app_recreate_edit
+        and action.get("type") == "restart_compose_service"
+        and action.get("service") == "app"
+        and not has_explicit_app_rebuild
+    ):
+        return [], [], [], False
+    if any(
+        candidate.get("type") == "rebuild_compose_service" and candidate.get("service") == "app"
+        for candidate in current_actions
+    ):
+        return [], [], [], True
+    raw_auto_action = {
+        "type": "rebuild_compose_service",
+        "service": "app",
+        "auto_generated": True,
+        "reason": "app startup-time file changes require recreate semantics; upgraded restart to rebuild",
+    }
+    normalized_auto_action, action_errors = _normalize_auto_action(
+        raw_auto_action,
+        index_label=f"auto_action[{index}]",
+    )
+    if action_errors:
+        return [], [], action_errors, True
+    if not normalized_auto_action:
+        return [], [], [], True
+    return [normalized_auto_action], [normalized_auto_action], [], True
+
+
+def _maybe_append_nginx_config_test(
+    action: dict[str, Any],
+    *,
+    has_explicit_nginx_test: bool,
+    index: int,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str]]:
+    if not (
+        action.get("type") == "edit_file"
+        and action.get("path") == "nginx/nginx.conf"
+        and not has_explicit_nginx_test
+    ):
+        return [], [], []
+    raw_auto_action = {
+        "type": "run_config_test",
+        "target": "nginx",
+        "auto_generated": True,
+        "reason": "validate nginx syntax immediately after nginx.conf edit",
+    }
+    normalized_auto_action, action_errors = _normalize_auto_action(
+        raw_auto_action,
+        index_label=f"auto_action[{index}]",
+    )
+    if action_errors:
+        return [], [], action_errors
+    if not normalized_auto_action:
+        return [], [], []
+    return [normalized_auto_action], [normalized_auto_action], []
+
+
+def _maybe_append_app_rebuild(
+    action: dict[str, Any],
+    *,
+    current_actions: list[dict[str, Any]],
+    has_explicit_app_rebuild: bool,
+    app_recreate_edit_paths: set[str],
+    index: int,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str]]:
+    if not (
+        action.get("type") == "edit_file"
+        and action.get("path") in app_recreate_edit_paths
+        and not has_explicit_app_rebuild
+        and not any(
+            candidate.get("type") == "rebuild_compose_service" and candidate.get("service") == "app"
+            for candidate in current_actions
+        )
+    ):
+        return [], [], []
+    raw_auto_action = {
+        "type": "rebuild_compose_service",
+        "service": "app",
+        "auto_generated": True,
+        "reason": "app code/env/dependency changes require app recreate to take effect",
+    }
+    normalized_auto_action, action_errors = _normalize_auto_action(
+        raw_auto_action,
+        index_label=f"auto_action[{index}]",
+    )
+    if action_errors:
+        return [], [], action_errors
+    if not normalized_auto_action:
+        return [], [], []
+    return [normalized_auto_action], [normalized_auto_action], []
+
+
 def expand_execution_actions(
     normalized_actions: list[dict[str, Any]],
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str]]:
@@ -201,81 +332,44 @@ def expand_execution_actions(
     )
 
     for index, action in enumerate(normalized_actions):
-        if (
-            has_app_recreate_edit
-            and action.get("type") == "restart_compose_service"
-            and action.get("service") == "app"
-            and not has_explicit_app_rebuild
-        ):
-            if any(
-                candidate.get("type") == "rebuild_compose_service" and candidate.get("service") == "app"
-                for candidate in expanded_actions
-            ):
-                continue
-            raw_auto_action = {
-                "type": "rebuild_compose_service",
-                "service": "app",
-                "auto_generated": True,
-                "reason": "app startup-time file changes require recreate semantics; upgraded restart to rebuild",
-            }
-            normalized_auto_action, action_errors = normalize_action(
-                raw_auto_action,
-                index_label=f"auto_action[{index}]",
-            )
-            if action_errors:
-                errors.extend(action_errors)
-                continue
-            if normalized_auto_action:
-                expanded_actions.append(normalized_auto_action)
-                auto_appended_actions.append(normalized_auto_action)
+        upgraded_actions, upgraded_auto_actions, upgrade_errors, was_upgraded = _maybe_upgrade_app_restart(
+            action,
+            current_actions=expanded_actions,
+            has_app_recreate_edit=has_app_recreate_edit,
+            has_explicit_app_rebuild=has_explicit_app_rebuild,
+            index=index,
+        )
+        if upgrade_errors:
+            errors.extend(upgrade_errors)
+            continue
+        if was_upgraded:
+            expanded_actions.extend(upgraded_actions)
+            auto_appended_actions.extend(upgraded_auto_actions)
             continue
 
         expanded_actions.append(action)
-        if (
-            action.get("type") == "edit_file"
-            and action.get("path") == "nginx/nginx.conf"
-            and not has_explicit_nginx_test
-        ):
-            raw_auto_action = {
-                "type": "run_config_test",
-                "target": "nginx",
-                "auto_generated": True,
-                "reason": "validate nginx syntax immediately after nginx.conf edit",
-            }
-            normalized_auto_action, action_errors = normalize_action(
-                raw_auto_action,
-                index_label=f"auto_action[{index}]",
-            )
-            if action_errors:
-                errors.extend(action_errors)
-                continue
-            if normalized_auto_action:
-                expanded_actions.append(normalized_auto_action)
-                auto_appended_actions.append(normalized_auto_action)
-        if (
-            action.get("type") == "edit_file"
-            and action.get("path") in app_recreate_edit_paths
-            and not has_explicit_app_rebuild
-            and not any(
-                candidate.get("type") == "rebuild_compose_service" and candidate.get("service") == "app"
-                for candidate in expanded_actions
-            )
-        ):
-            raw_auto_action = {
-                "type": "rebuild_compose_service",
-                "service": "app",
-                "auto_generated": True,
-                "reason": "app code/env/dependency changes require app recreate to take effect",
-            }
-            normalized_auto_action, action_errors = normalize_action(
-                raw_auto_action,
-                index_label=f"auto_action[{index}]",
-            )
-            if action_errors:
-                errors.extend(action_errors)
-                continue
-            if normalized_auto_action:
-                expanded_actions.append(normalized_auto_action)
-                auto_appended_actions.append(normalized_auto_action)
+        nginx_actions, nginx_auto_actions, nginx_errors = _maybe_append_nginx_config_test(
+            action,
+            has_explicit_nginx_test=has_explicit_nginx_test,
+            index=index,
+        )
+        if nginx_errors:
+            errors.extend(nginx_errors)
+            continue
+        expanded_actions.extend(nginx_actions)
+        auto_appended_actions.extend(nginx_auto_actions)
+
+        rebuild_actions, rebuild_auto_actions, rebuild_errors = _maybe_append_app_rebuild(
+            action,
+            current_actions=expanded_actions,
+            has_explicit_app_rebuild=has_explicit_app_rebuild,
+            app_recreate_edit_paths=app_recreate_edit_paths,
+            index=index,
+        )
+        if rebuild_errors:
+            errors.extend(rebuild_errors)
+            continue
+        expanded_actions.extend(rebuild_actions)
+        auto_appended_actions.extend(rebuild_auto_actions)
 
     return expanded_actions, auto_appended_actions, errors

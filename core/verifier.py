@@ -1,14 +1,27 @@
 import difflib
+import os
 import time
 from typing import Any
 
-from core.actions import expand_execution_actions
-from core.healthchecks import collect_service_logs, compose_config_check, docker_compose_ps, http_check
+from core.actions import (
+    action_uses_minimal_patch,
+    action_uses_restore_from_base,
+    expand_execution_actions,
+)
+from core.healthchecks import (
+    collect_service_logs,
+    compose_config_check,
+    docker_compose_ps,
+    http_check,
+    service_running,
+)
 from core.policies import (
     ALLOWED_EDIT_FILES,
     MAX_CHANGED_LINES,
     SUPPORTED_SUCCESS_CHECKS,
     get_base_file_for,
+    get_restore_policy,
+    is_code_file,
     resolve_repo_path,
 )
 
@@ -67,6 +80,16 @@ def _validate_success_checks(success_checks: list[str]) -> tuple[list[str], list
     return validated, errors
 
 
+def _env_int(name: str, default: int) -> int:
+    value = os.getenv(name, "").strip()
+    if not value:
+        return default
+    try:
+        return int(float(value))
+    except ValueError:
+        return default
+
+
 def _evaluate_success_check(
     check_id: str,
     *,
@@ -79,17 +102,18 @@ def _evaluate_success_check(
     if check_id == "api_items_200":
         return api_items.get("status") == 200
     if check_id == "app_running":
-        return _service_running(ps_snapshot, "app")
+        return service_running(ps_snapshot, "app")
     if check_id == "nginx_running":
-        return _service_running(ps_snapshot, "nginx")
+        return service_running(ps_snapshot, "nginx")
     if check_id == "db_running":
-        return _service_running(ps_snapshot, "db")
+        return service_running(ps_snapshot, "db")
     return False
 
 
 def run_precheck(
     plan: dict[str, Any],
     scenario_definition: dict[str, Any],
+    internal_scenario_definition: dict[str, Any] | None = None,
     observation: dict[str, Any] | None = None,
     scope_policy: dict[str, Any] | None = None,
     planner_error_type: str = "none",
@@ -99,7 +123,11 @@ def run_precheck(
     success_check_validation_errors: list[str] = []
     warnings: list[str] = []
     checks: dict[str, Any] = {}
+    restore_from_base_blocked = False
+    restore_from_base_block_reason = ""
+    blocked_actions_reason: list[str] = []
     scope_policy = scope_policy or {}
+    policy_definition = internal_scenario_definition or scenario_definition
     allowed_files = set(scope_policy.get("files", scope_policy.get("editable_files", scenario_definition.get("allowed_files", []))))
     allowed_services = set(scope_policy.get("services", []))
     allowed_actions = set(scope_policy.get("allowed_actions", scenario_definition.get("allowed_actions", [])))
@@ -129,6 +157,13 @@ def run_precheck(
     validated_success_checks, success_check_validation_errors = _validate_success_checks(
         scenario_definition.get("success_checks", [])
     )
+    restore_policy = get_restore_policy(policy_definition)
+    disallow_initial_restore_for = set(restore_policy.get("disallow_initial_restore_for", []))
+    allow_restore_only_after_failed_patch_for = set(
+        restore_policy.get("allow_restore_only_after_failed_patch_for", [])
+    )
+    restore_from_base_used = any(action_uses_restore_from_base(action) for action in actions)
+    minimal_patch_used = any(action_uses_minimal_patch(action) for action in actions)
 
     for index, action in enumerate(actions):
         action_type = action["type"]
@@ -146,6 +181,22 @@ def run_precheck(
                 action_validation_errors.append(
                     f"action[{index}] targets file outside the executor whitelist: {path}"
                 )
+                continue
+            if (
+                action.get("operation") == "restore_from_base"
+                and path in disallow_initial_restore_for
+                and path in allow_restore_only_after_failed_patch_for
+                and is_code_file(path)
+            ):
+                restore_from_base_blocked = True
+                restore_from_base_block_reason = (
+                    f"restore_from_base for {path} is reserved as a last resort in this hard scenario; "
+                    "initial single-turn code restores are blocked until a narrower patch attempt has failed"
+                )
+                action_validation_errors.append(
+                    f"action[{index}] restore_from_base for {path} is blocked by restore policy"
+                )
+                blocked_actions_reason.append(restore_from_base_block_reason)
                 continue
 
             simulated_text, simulation_errors = _simulate_edit(action)
@@ -167,8 +218,9 @@ def run_precheck(
                     f"action[{index}] targets service outside the triage scope: {service}"
                 )
         elif action_type == "show_file":
-            if action["path"] not in allowed_files:
-                action_validation_errors.append(f"action[{index}] shows disallowed file: {action['path']}")
+            action_validation_errors.append(
+                f"action[{index}] uses show_file, which is not executable in the single-turn runner"
+            )
         elif action_type == "run_health_check":
             if not action.get("check_name"):
                 action_validation_errors.append(f"action[{index}] is missing required field: check_name")
@@ -197,26 +249,16 @@ def run_precheck(
             "services": sorted(allowed_services),
             "allowed_actions": sorted(allowed_actions),
         },
+        "restore_from_base_used": restore_from_base_used,
+        "restore_from_base_blocked": restore_from_base_blocked,
+        "restore_from_base_block_reason": restore_from_base_block_reason,
+        "minimal_patch_used": minimal_patch_used,
+        "blocked_actions_reason": blocked_actions_reason,
         "planner_error_type": planner_error_type,
         "normalized_input_actions": original_actions,
         "auto_appended_actions": auto_appended_actions,
         "precheck_input_actions": actions,
     }
-
-
-def _service_running(ps_snapshot: dict[str, Any], service_name: str) -> bool:
-    services = ps_snapshot.get("services", [])
-    for service in services:
-        if service.get("Service") == service_name:
-            state = str(service.get("State", "")).lower()
-            return "running" in state
-
-    raw_stdout = ps_snapshot.get("raw", {}).get("stdout", "")
-    for line in raw_stdout.splitlines():
-        if service_name in line and ("running" in line.lower() or "up" in line.lower()):
-            return True
-    return False
-
 
 def _collect_postcheck_snapshot(scenario_definition: dict[str, Any]) -> dict[str, Any]:
     ps_snapshot = docker_compose_ps()
@@ -274,9 +316,12 @@ def run_postcheck(
     scenario_definition: dict[str, Any],
     *,
     readiness_wait_used: bool = False,
-    interval_seconds: int = 2,
-    max_wait_seconds: int = 30,
+    interval_seconds: int | None = None,
+    max_wait_seconds: int | None = None,
 ) -> dict[str, Any]:
+    retry_interval_seconds = interval_seconds or _env_int("POSTCHECK_RETRY_INTERVAL_SECONDS", 2)
+    retry_attempts = _env_int("POSTCHECK_RETRY_ATTEMPTS", 15)
+    retry_window_enabled = bool(readiness_wait_used)
     start_time = time.time()
     attempts = 0
     first_success_time_seconds: float | None = None
@@ -288,13 +333,19 @@ def run_postcheck(
         if latest_snapshot["ok"]:
             first_success_time_seconds = round(time.time() - start_time, 3)
             break
-        if not readiness_wait_used:
+        if not retry_window_enabled:
             break
-        if time.time() - start_time >= max_wait_seconds:
+        if attempts >= retry_attempts:
             break
-        time.sleep(interval_seconds)
+        if max_wait_seconds is not None and time.time() - start_time >= max_wait_seconds:
+            break
+        time.sleep(retry_interval_seconds)
 
     latest_snapshot["readiness_wait_used"] = readiness_wait_used
     latest_snapshot["readiness_attempts"] = attempts
     latest_snapshot["first_success_time_seconds"] = first_success_time_seconds
+    latest_snapshot["postcheck_used_retry_window"] = retry_window_enabled
+    latest_snapshot["postcheck_retry_attempts"] = attempts
+    latest_snapshot["postcheck_first_success_time_seconds"] = first_success_time_seconds
+    latest_snapshot["postcheck_retry_interval_seconds"] = retry_interval_seconds
     return latest_snapshot

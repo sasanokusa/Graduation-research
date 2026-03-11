@@ -27,7 +27,11 @@ COMMON_SYSTEM_PROMPT = (
     "For replace_text, old_text must be an exact contiguous substring already present in the observation payload. "
     "If the correct replacement text is not directly observable but the editable file has a registered base version, "
     "you may use edit_file with operation restore_from_base instead of guessing a secret or unseen value. "
+    "However, restore_from_base is a last resort, not a first choice. "
     "Prefer the smallest action sequence that can restore service continuity. "
+    "Prefer replace_text over restore_from_base whenever a directly visible local fault can be repaired with a small patch. "
+    "For code files such as app/main.py, avoid proposing restore_from_base in the initial plan when a direct local patch is visible. "
+    "If you do use restore_from_base, mention the reason briefly in summary. "
     "If an exact faulty line is visible in an allowed editable file, prioritize the minimal edit_file action before any restart action. "
     "Do not propose restart-only plans when the observation already shows a specific editable fault. "
     "Only include restart_compose_service after a state-changing edit when the edited file affects a running service configuration or startup behavior. "
@@ -59,12 +63,12 @@ SYSTEM_PROMPT_BLIND = (
 PROMPT_REGISTRY: dict[PromptMode, PromptSpec] = {
     "blind": {
         "mode": "blind",
-        "name": "single_agent_blind_v7",
+        "name": "single_agent_blind_v8",
         "system_prompt": SYSTEM_PROMPT_BLIND,
     },
     "hinted": {
         "mode": "hinted",
-        "name": "single_agent_hinted_v7",
+        "name": "single_agent_hinted_v8",
         "system_prompt": SYSTEM_PROMPT_HINTED,
     },
 }

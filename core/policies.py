@@ -31,6 +31,23 @@ SUPPORTED_SUCCESS_CHECKS = {
 ALLOWED_HEALTH_CHECKS = SUPPORTED_SUCCESS_CHECKS
 MAX_CHANGED_LINES = 20
 MAX_ACTIONS_PER_PLAN = 6
+CODE_FILES = {"app/main.py"}
+HARD_SCENARIO_IDS = {"i2", "m", "n", "o"}
+ROLLBACK_REFRESH_POLICY: dict[str, list[dict[str, str]]] = {
+    "nginx/nginx.conf": [
+        {"type": "run_config_test", "target": "nginx"},
+        {"type": "restart_compose_service", "service": "nginx"},
+    ],
+    "app/app.env": [
+        {"type": "rebuild_compose_service", "service": "app"},
+    ],
+    "app/main.py": [
+        {"type": "rebuild_compose_service", "service": "app"},
+    ],
+    "app/requirements.txt": [
+        {"type": "rebuild_compose_service", "service": "app"},
+    ],
+}
 
 
 def normalize_repo_path(path_value: str) -> str:
@@ -55,3 +72,33 @@ def resolve_repo_path(path_value: str) -> Path:
 def get_base_file_for(path_value: str) -> str | None:
     normalized = normalize_repo_path(path_value)
     return ALLOWED_EDIT_FILES.get(normalized)
+
+
+def is_code_file(path_value: str) -> bool:
+    return normalize_repo_path(path_value) in CODE_FILES
+
+
+def is_hard_scenario(scenario_id: str) -> bool:
+    return scenario_id in HARD_SCENARIO_IDS
+
+
+def get_restore_policy(scenario_definition: dict | None) -> dict[str, list[str]]:
+    if not scenario_definition:
+        return {}
+    restore_policy = scenario_definition.get("restore_policy", {})
+    if not isinstance(restore_policy, dict):
+        return {}
+    return restore_policy
+
+
+def rollback_actions_for_paths(paths: list[str]) -> list[dict[str, str]]:
+    planned: list[dict[str, str]] = []
+    seen: set[tuple[tuple[str, str], ...]] = set()
+    for path_value in paths:
+        for action in ROLLBACK_REFRESH_POLICY.get(normalize_repo_path(path_value), []):
+            signature = tuple(sorted(action.items()))
+            if signature in seen:
+                continue
+            planned.append(dict(action))
+            seen.add(signature)
+    return planned

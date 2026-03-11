@@ -17,19 +17,19 @@ set -euo pipefail
 # 前提:
 #   - カレントディレクトリがリポジトリルート
 #   - ./reset.sh, ./break.sh, agent.py, results/ が存在する
-#   - Python が使える
+#   - Python 3 系が使える
 #
 # 備考:
 #   - デフォルトでは auto mode で agent を実行
 #   - --scenario-mode forced を付けると各シナリオを明示指定して実行
 #   - observations/<timestamp>/ 以下に run ごとのログと summary.csv を保存
 
-SCENARIOS_DEFAULT=(a b c d e f g h i k l)
+SCENARIOS_DEFAULT=(a b c d e f g h i i2 k l m n o)
 
 WORKER="llm"
 PROMPT_MODE="blind"
 REPEAT=1
-PYTHON_BIN="python"
+PYTHON_BIN=""
 KEEP_FAILED_ENV=0
 SCENARIO_MODE="auto"   # auto | forced
 OBS_ROOT="observations"
@@ -46,7 +46,7 @@ usage() {
   --worker <llm|mock>         worker種別 (default: llm)
   --prompt-mode <mode>        prompt mode (default: blind)
   --repeat <N>                各シナリオの反復回数 (default: 1)
-  --python <path>             使用するPython実行ファイル (default: python)
+  --python <path>             使用するPython実行ファイル (default: auto-detect)
   --keep-failed-env           失敗時に reset せず環境を残す
   --scenario-mode <auto|forced>
                               auto:  agent.py に --scenario を渡さない
@@ -139,7 +139,7 @@ parse_args() {
       all)
         scenarios=("${SCENARIOS_DEFAULT[@]}")
         ;;
-      [a-z]|[a-z][a-z]*)
+      [a-z0-9]|[a-z][a-z0-9]*)
         scenarios+=("$1")
         ;;
       *)
@@ -172,7 +172,20 @@ require_prereqs() {
   need_file "./break.sh"
   need_file "./agent.py"
   [[ -d "./results" ]] || mkdir -p ./results
-  command -v "$PYTHON_BIN" >/dev/null 2>&1 || die "Python実行ファイルが見つかりません: $PYTHON_BIN"
+
+  if [[ -z "$PYTHON_BIN" ]]; then
+    if [[ -x "./.venv/bin/python" ]]; then
+      PYTHON_BIN="./.venv/bin/python"
+    elif command -v python >/dev/null 2>&1; then
+      PYTHON_BIN="python"
+    elif command -v python3 >/dev/null 2>&1; then
+      PYTHON_BIN="python3"
+    else
+      die "Python実行ファイルが見つかりません。--python で指定するか、python3 か ./.venv/bin/python を用意してください"
+    fi
+  fi
+
+  command -v "$PYTHON_BIN" >/dev/null 2>&1 || [[ -x "$PYTHON_BIN" ]] || die "Python実行ファイルが見つかりません: $PYTHON_BIN"
   command -v bash >/dev/null 2>&1 || die "bash が必要です"
 
   [[ "$SCENARIO_MODE" == "auto" || "$SCENARIO_MODE" == "forced" ]] || die "--scenario-mode は auto か forced を指定してください"
@@ -193,7 +206,7 @@ make_obs_dir() {
 
   SUMMARY_CSV="$OBS_DIR/summary.csv"
   cat > "$SUMMARY_CSV" <<'EOF'
-run_id,started_at_utc,scenario,repeat_index,worker,prompt_mode,scenario_mode,break_ok,agent_exit_code,final_status,detected_fault_class,elapsed_seconds,additional_observation_used,result_json,planner_error_type,planner_error_stage,planner_retry_count,planner_transport_failure,planner_reasoning_failure,planner_fallback_used,planner_fallback_type,precheck_ok,postcheck_ok,planner_summary,triage_summary
+run_id,started_at_utc,scenario,repeat_index,worker,prompt_mode,scenario_mode,break_ok,agent_exit_code,final_status,detected_fault_class,elapsed_seconds,additional_observation_used,result_json,planner_error_type,planner_error_stage,planner_retry_count,planner_attempt_count,planner_transport_failure,planner_reasoning_failure,planner_fallback_used,planner_fallback_type,restore_from_base_used,restore_from_base_blocked,minimal_patch_used,rollback_used,rollback_actions,rollback_postcheck_ok,postcheck_retry_attempts,postcheck_used_retry_window,system_prompt_hash,precheck_ok,postcheck_ok,planner_summary,triage_summary
 EOF
 }
 
@@ -263,10 +276,20 @@ append_summary_row() {
   local planner_error_type=""
   local planner_error_stage=""
   local planner_retry_count=""
+  local planner_attempt_count=""
   local planner_transport_failure=""
   local planner_reasoning_failure=""
   local planner_fallback_used=""
   local planner_fallback_type=""
+  local restore_from_base_used=""
+  local restore_from_base_blocked=""
+  local minimal_patch_used=""
+  local rollback_used=""
+  local rollback_actions=""
+  local rollback_postcheck_ok=""
+  local postcheck_retry_attempts=""
+  local postcheck_used_retry_window=""
+  local system_prompt_hash=""
   local precheck_ok=""
   local postcheck_ok=""
   local planner_summary=""
@@ -280,10 +303,20 @@ append_summary_row() {
     planner_error_type="$(json_field "$result_json" "planner_error_type")"
     planner_error_stage="$(json_field "$result_json" "planner_error_stage")"
     planner_retry_count="$(json_field "$result_json" "planner_retry_count")"
+    planner_attempt_count="$(json_field "$result_json" "planner_attempt_count")"
     planner_transport_failure="$(json_field "$result_json" "planner_transport_failure")"
     planner_reasoning_failure="$(json_field "$result_json" "planner_reasoning_failure")"
     planner_fallback_used="$(json_field "$result_json" "planner_fallback_used")"
     planner_fallback_type="$(json_field "$result_json" "planner_fallback_type")"
+    restore_from_base_used="$(json_field "$result_json" "restore_from_base_used")"
+    restore_from_base_blocked="$(json_field "$result_json" "restore_from_base_blocked")"
+    minimal_patch_used="$(json_field "$result_json" "minimal_patch_used")"
+    rollback_used="$(json_field "$result_json" "rollback_used")"
+    rollback_actions="$(json_field "$result_json" "rollback_actions")"
+    rollback_postcheck_ok="$(json_field "$result_json" "rollback_postcheck_result.ok")"
+    postcheck_retry_attempts="$(json_field "$result_json" "postcheck_retry_attempts")"
+    postcheck_used_retry_window="$(json_field "$result_json" "postcheck_used_retry_window")"
+    system_prompt_hash="$(json_field "$result_json" "system_prompt_hash")"
     precheck_ok="$(json_field "$result_json" "verifier_precheck_result.ok")"
     postcheck_ok="$(json_field "$result_json" "verifier_postcheck_result.ok")"
     planner_summary="$(json_field "$result_json" "planner_summary")"
@@ -308,10 +341,20 @@ append_summary_row() {
     escape_csv "$planner_error_type"; printf ","
     escape_csv "$planner_error_stage"; printf ","
     escape_csv "$planner_retry_count"; printf ","
+    escape_csv "$planner_attempt_count"; printf ","
     escape_csv "$planner_transport_failure"; printf ","
     escape_csv "$planner_reasoning_failure"; printf ","
     escape_csv "$planner_fallback_used"; printf ","
     escape_csv "$planner_fallback_type"; printf ","
+    escape_csv "$restore_from_base_used"; printf ","
+    escape_csv "$restore_from_base_blocked"; printf ","
+    escape_csv "$minimal_patch_used"; printf ","
+    escape_csv "$rollback_used"; printf ","
+    escape_csv "$rollback_actions"; printf ","
+    escape_csv "$rollback_postcheck_ok"; printf ","
+    escape_csv "$postcheck_retry_attempts"; printf ","
+    escape_csv "$postcheck_used_retry_window"; printf ","
+    escape_csv "$system_prompt_hash"; printf ","
     escape_csv "$precheck_ok"; printf ","
     escape_csv "$postcheck_ok"; printf ","
     escape_csv "$planner_summary"; printf ","

@@ -1,22 +1,14 @@
-import os
 import random
 import time
 from typing import Any
 
-from langchain_google_genai import ChatGoogleGenerativeAI
-
 from core.actions import format_actions, parse_plan_text
+from core.agent_factory import build_chat_model_binding
+from core.agent_roles import AgentRole
 from core.prompts import get_prompt_spec
 from core.state import SingleAgentState
 
 
-DEFAULT_GEMINI_MODEL = "gemini-3-flash-preview"
-DEFAULT_PLANNER_TIMEOUT_SECONDS = 75
-MODEL_MAX_RETRIES = 0
-DEFAULT_PLANNER_MAX_ATTEMPTS = 3
-DEFAULT_BACKOFF_BASE_SECONDS = 2.0
-DEFAULT_BACKOFF_CAP_SECONDS = 20.0
-DEFAULT_THINKING_LEVEL = "low"
 STRICT_FALLBACK_CONFIDENCE = 0.9
 
 
@@ -25,56 +17,6 @@ def _section(title: str) -> None:
     print(divider)
     print(title)
     print(divider)
-
-
-def _env_int(name: str, default: int) -> int:
-    value = os.getenv(name, "").strip()
-    if not value:
-        return default
-    try:
-        return int(float(value))
-    except ValueError:
-        return default
-
-
-def _env_float(name: str, default: float) -> float:
-    value = os.getenv(name, "").strip()
-    if not value:
-        return default
-    try:
-        return float(value)
-    except ValueError:
-        return default
-
-
-def _thinking_budget_from_level(level: str) -> int | None:
-    normalized = level.strip().lower()
-    if normalized in {"", "default", "auto"}:
-        return None
-    if normalized in {"off", "none", "minimal"}:
-        return 0
-    if normalized == "low":
-        return 256
-    if normalized == "medium":
-        return 1024
-    if normalized == "high":
-        return 2048
-    if normalized.isdigit():
-        return int(normalized)
-    return None
-
-
-def _planner_config() -> dict[str, Any]:
-    thinking_level = os.getenv("GEMINI_THINKING_LEVEL", DEFAULT_THINKING_LEVEL)
-    return {
-        "model_name": os.getenv("GEMINI_MODEL", DEFAULT_GEMINI_MODEL),
-        "timeout_seconds": _env_int("GEMINI_PLANNER_TIMEOUT_SECONDS", DEFAULT_PLANNER_TIMEOUT_SECONDS),
-        "max_attempts": _env_int("GEMINI_PLANNER_MAX_ATTEMPTS", DEFAULT_PLANNER_MAX_ATTEMPTS),
-        "backoff_base_seconds": _env_float("GEMINI_PLANNER_BACKOFF_BASE_SECONDS", DEFAULT_BACKOFF_BASE_SECONDS),
-        "backoff_cap_seconds": _env_float("GEMINI_PLANNER_BACKOFF_CAP_SECONDS", DEFAULT_BACKOFF_CAP_SECONDS),
-        "thinking_level": thinking_level,
-        "thinking_budget": _thinking_budget_from_level(thinking_level),
-    }
 
 
 def _classify_planner_exception(exc: Exception) -> tuple[str, bool, str]:
@@ -111,6 +53,20 @@ def _planner_backoff_seconds(attempt: int, base_seconds: float, cap_seconds: flo
     raw = min(cap_seconds, base_seconds * (2 ** max(0, attempt - 1)))
     jitter = random.uniform(0.75, 1.25)
     return round(raw * jitter, 3)
+
+
+def _append_role_trace(
+    role_model_trace: list[dict[str, str]],
+    *,
+    role: str,
+    provider: str,
+    model: str,
+) -> list[dict[str, str]]:
+    updated = list(role_model_trace)
+    entry = {"role": role, "provider": provider, "model": model}
+    if entry not in updated:
+        updated.append(entry)
+    return updated
 
 
 def _strict_fallback_plan(state: SingleAgentState, planner_error_type: str) -> dict[str, Any] | None:
@@ -235,11 +191,15 @@ def _runtime_guidance(state: SingleAgentState) -> str:
         "- Prefer current_state_evidence over historical_evidence when they conflict. Older log noise is not sufficient reason to edit a service that is currently healthy.",
         "- Do not return run_health_check for nginx_running, healthz_200, or api_items_200; verifier handles them.",
         "- If an editable file snippet already shows an exact faulty line, prioritize edit_file before any restart action.",
+        "- Prefer replace_text as the first choice when a local fault is directly visible.",
+        "- Treat restore_from_base as a last resort rather than a default repair strategy.",
         "- If you return restart_compose_service, it must come after a state-changing edit_file action.",
         "- A plan containing only run_config_test and/or restart_compose_service is invalid when the observation already shows an editable fault.",
         "- If an editable env or config line appears wrong but the corrected value is not directly visible in the evidence, prefer restore_from_base over guessing.",
         "- If you edit startup-time settings such as app/app.env, prefer rebuild_compose_service for app instead of restart_compose_service.",
         "- If you edit app/main.py, prefer rebuild_compose_service for app so the running process reloads the changed code.",
+        "- Avoid initial restore_from_base for app/main.py when a smaller replace_text patch is directly supported by the evidence.",
+        "- If you choose restore_from_base, include a short reason in the summary.",
         "- Distinguish reference layers. In nginx, a proxy_pass target can be an upstream group name, while server entries inside that upstream block can be backend hosts or Docker services.",
     ]
     if state["prompt_mode"] == "hinted":
@@ -291,28 +251,88 @@ def _runtime_guidance(state: SingleAgentState) -> str:
     return "\n".join(guidance_lines)
 
 
-def worker_node(state: SingleAgentState) -> SingleAgentState:
+def _planner_history_context(state: SingleAgentState) -> str:
+    sections: list[str] = []
+    planner_history = state.get("planner_history", [])
+    reviewer_history = state.get("reviewer_history", [])
+    if planner_history:
+        sections.append(f"Previous planner turns: {planner_history[-3:]}")
+    if reviewer_history:
+        sections.append(f"Previous reviewer turns: {reviewer_history[-3:]}")
+    if state.get("review_feedback"):
+        sections.append(f"Latest reviewer feedback: {state['review_feedback']}")
+    if state.get("review_decision"):
+        sections.append(f"Latest reviewer decision: {state['review_decision']}")
+    if state.get("reviewer_recommended_scope"):
+        sections.append(f"Reviewer recommended scope adjustment: {state['reviewer_recommended_scope']}")
+    if state.get("reviewer_recommended_next_observations"):
+        sections.append(
+            "Reviewer recommended next observations: "
+            f"{state['reviewer_recommended_next_observations']}"
+        )
+    return "\n".join(sections)
+
+
+def _planner_phase_title(state: SingleAgentState, role: AgentRole) -> str:
+    if role == AgentRole.PLANNER:
+        return f"🧠 [PHASE 4] PLANNER (TURN {state.get('planner_turn', 1)})"
+    return "🧠 [PHASE 3] WORKER"
+
+
+def _planner_prompt(state: SingleAgentState) -> str:
+    prompt = (
+        f"Observed symptoms: {state['observed_symptoms']}\n"
+        f"{_runtime_guidance(state)}\n"
+        f"Worker-visible context: {state['worker_visible_context']}\n"
+    )
+    history_context = _planner_history_context(state)
+    if history_context:
+        prompt += (
+            "Multi-turn replanning context:\n"
+            "Use the latest reviewer feedback and prior turn outcomes to prioritize the next remaining fault. "
+            "Do not repeat the same ineffective action sequence unless the reviewer explicitly says the prior turn failed only due to timing.\n"
+            f"{history_context}\n"
+        )
+    return prompt
+
+
+def _run_planner_with_role(state: SingleAgentState, role: AgentRole) -> SingleAgentState:
     prompt_spec = get_prompt_spec(state["prompt_mode"])
-    planner_config = _planner_config()
-    api_key = os.getenv("GOOGLE_API_KEY")
-    if not api_key:
-        planner_output_raw = '{"summary":"GOOGLE_API_KEY is not set","actions":[]}'
+    model_binding = build_chat_model_binding(role)
+    planner_settings = model_binding.settings
+    phase_title = _planner_phase_title(state, role)
+    agent_role_trace = [*state.get("agent_role_trace", []), f"{role.value}:{state.get('planner_turn', 1)}"]
+    role_model_trace = _append_role_trace(
+        state.get("role_model_trace", []),
+        role=role.value,
+        provider=planner_settings.provider,
+        model=planner_settings.model,
+    )
+    if model_binding.client is None:
+        planner_output_raw = (
+            '{"summary":"'
+            + model_binding.initialization_error_message.replace('"', "'")
+            + '","actions":[]}'
+        )
         plan, parse_errors = parse_plan_text(
             planner_output_raw,
             forbidden_action_types={"show_file"},
         )
-        _section("🧠 [PHASE 3] WORKER")
+        _section(phase_title)
         print(f"mode: {state['worker_mode']}")
         print(f"prompt_mode: {state['prompt_mode']} ({prompt_spec['name']})")
+        print(f"model: {planner_settings.provider}/{planner_settings.model}")
         print(format_actions(plan["actions"]))
         print()
         return {
             **state,
             "system_prompt_name": prompt_spec["name"],
-            "planner_error_type": "api_key_missing",
-            "planner_error_stage": "config",
+            "planner_provider": planner_settings.provider,
+            "planner_model": planner_settings.model,
+            "planner_error_type": model_binding.initialization_error_type,
+            "planner_error_stage": model_binding.initialization_error_stage,
             "planner_retry_count": 0,
-            "planner_timeout_seconds": planner_config["timeout_seconds"],
+            "planner_timeout_seconds": planner_settings.timeout_seconds,
             "planner_attempts": [],
             "planner_transport_failure": False,
             "planner_reasoning_failure": False,
@@ -323,29 +343,16 @@ def worker_node(state: SingleAgentState) -> SingleAgentState:
             "planner_summary": plan["summary"],
             "normalized_actions": plan["actions"],
             "proposed_actions": plan["actions"],
+            "agent_role_trace": agent_role_trace,
+            "role_model_trace": role_model_trace,
             "verifier_precheck_result": {
                 **state["verifier_precheck_result"],
                 "planner_errors": parse_errors,
             },
         }
 
-    model_kwargs: dict[str, Any] = {
-        "model": planner_config["model_name"],
-        "google_api_key": api_key,
-        "temperature": 0,
-        "timeout": planner_config["timeout_seconds"],
-        "max_retries": MODEL_MAX_RETRIES,
-        "response_mime_type": "application/json",
-        "transport": "rest",
-    }
-    if planner_config["thinking_budget"] is not None:
-        model_kwargs["thinking_budget"] = planner_config["thinking_budget"]
-    model = ChatGoogleGenerativeAI(**model_kwargs)
-    prompt = (
-        f"Observed symptoms: {state['observed_symptoms']}\n"
-        f"{_runtime_guidance(state)}\n"
-        f"Worker-visible context: {state['worker_visible_context']}\n"
-    )
+    model = model_binding.client
+    prompt = _planner_prompt(state)
 
     planner_output_raw = ""
     planner_error_type = "none"
@@ -360,20 +367,19 @@ def worker_node(state: SingleAgentState) -> SingleAgentState:
     planner_fallback_reason = ""
     planner_fallback_type = ""
 
-    for attempt in range(1, planner_config["max_attempts"] + 1):
+    for attempt in range(1, planner_settings.max_attempts + 1):
         attempt_started_at = time.time()
         try:
             print(
-                f"[worker] invoking {planner_config['model_name']} attempt={attempt}/{planner_config['max_attempts']} "
-                f"timeout={planner_config['timeout_seconds']}s thinking={planner_config['thinking_level']}"
+                f"[planner] invoking {planner_settings.provider}/{planner_settings.model} "
+                f"attempt={attempt}/{planner_settings.max_attempts} "
+                f"timeout={planner_settings.timeout_seconds}s thinking={planner_settings.thinking_level}"
             )
             response = model.invoke(
                 [
                     ("system", prompt_spec["system_prompt"]),
                     ("human", prompt),
-                ],
-                timeout=planner_config["timeout_seconds"],
-                max_retries=MODEL_MAX_RETRIES,
+                ]
             )
             elapsed_seconds = round(time.time() - attempt_started_at, 3)
             planner_output_raw = response.content if isinstance(response.content, str) else str(response.content)
@@ -385,8 +391,9 @@ def worker_node(state: SingleAgentState) -> SingleAgentState:
             planner_attempts.append(
                 {
                     "attempt": attempt,
-                    "model_name": planner_config["model_name"],
-                    "timeout_seconds": planner_config["timeout_seconds"],
+                    "model_name": planner_settings.model,
+                    "provider": planner_settings.provider,
+                    "timeout_seconds": planner_settings.timeout_seconds,
                     "elapsed_seconds": elapsed_seconds,
                     "error_type": "none",
                     "exception_class": "",
@@ -414,22 +421,23 @@ def worker_node(state: SingleAgentState) -> SingleAgentState:
             planner_attempts.append(
                 {
                     "attempt": attempt,
-                    "model_name": planner_config["model_name"],
-                    "timeout_seconds": planner_config["timeout_seconds"],
+                    "model_name": planner_settings.model,
+                    "provider": planner_settings.provider,
+                    "timeout_seconds": planner_settings.timeout_seconds,
                     "elapsed_seconds": elapsed_seconds,
                     "error_type": planner_error_type,
                     "exception_class": exc.__class__.__name__,
                     "message": str(exc),
                 }
             )
-            if not retriable or attempt == planner_config["max_attempts"]:
+            if not retriable or attempt == planner_settings.max_attempts:
                 break
             sleep_seconds = _planner_backoff_seconds(
                 attempt,
-                planner_config["backoff_base_seconds"],
-                planner_config["backoff_cap_seconds"],
+                planner_settings.backoff_base_seconds,
+                planner_settings.backoff_cap_seconds,
             )
-            print(f"[worker] retrying after {sleep_seconds}s due to {planner_error_type}")
+            print(f"[planner] retrying after {sleep_seconds}s due to {planner_error_type}")
             time.sleep(sleep_seconds)
 
     if not plan["actions"]:
@@ -443,12 +451,12 @@ def worker_node(state: SingleAgentState) -> SingleAgentState:
 
     planner_retry_count = max(0, len(planner_attempts) - 1)
 
-    _section("🧠 [PHASE 3] WORKER")
+    _section(phase_title)
     print(f"mode: {state['worker_mode']}")
     print(f"prompt_mode: {state['prompt_mode']} ({prompt_spec['name']})")
     print(
-        f"model: {planner_config['model_name']} timeout={planner_config['timeout_seconds']}s "
-        f"thinking={planner_config['thinking_level']}"
+        f"model: {planner_settings.provider}/{planner_settings.model} "
+        f"timeout={planner_settings.timeout_seconds}s thinking={planner_settings.thinking_level}"
     )
     print(f"planner_error_type: {planner_error_type}")
     print(f"planner_error_stage: {planner_error_stage}")
@@ -459,10 +467,12 @@ def worker_node(state: SingleAgentState) -> SingleAgentState:
     return {
         **state,
         "system_prompt_name": prompt_spec["name"],
+        "planner_provider": planner_settings.provider,
+        "planner_model": planner_settings.model,
         "planner_error_type": planner_error_type,
         "planner_error_stage": planner_error_stage,
         "planner_retry_count": planner_retry_count,
-        "planner_timeout_seconds": planner_config["timeout_seconds"],
+        "planner_timeout_seconds": planner_settings.timeout_seconds,
         "planner_attempts": planner_attempts,
         "planner_transport_failure": planner_transport_failure,
         "planner_reasoning_failure": planner_reasoning_failure,
@@ -473,8 +483,18 @@ def worker_node(state: SingleAgentState) -> SingleAgentState:
         "planner_summary": planner_summary,
         "normalized_actions": plan["actions"],
         "proposed_actions": plan["actions"],
+        "agent_role_trace": agent_role_trace,
+        "role_model_trace": role_model_trace,
         "verifier_precheck_result": {
             **state["verifier_precheck_result"],
             "planner_errors": parse_errors,
         },
     }
+
+
+def worker_node(state: SingleAgentState) -> SingleAgentState:
+    return _run_planner_with_role(state, AgentRole.SINGLE_AGENT)
+
+
+def planner_node(state: SingleAgentState) -> SingleAgentState:
+    return _run_planner_with_role(state, AgentRole.PLANNER)
