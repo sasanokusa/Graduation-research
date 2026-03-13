@@ -69,7 +69,8 @@ class DiscordWebhookNotifier:
         if not self.webhook_url:
             return
         highest = self._severity_label(self._highest_severity(outcome))
-        services = ",".join(sorted({finding.service for finding in outcome.findings if finding.service})) or "host"
+        service_names = sorted({finding.service for finding in outcome.findings if finding.service})
+        services = ",".join(service_names) or "host"
         summary = (
             f"[{highest}] 障害検知 | ホスト={host_label} | 対象={services} "
             f"| 時刻={outcome.checked_at} | 相関ID={outcome.correlation_id} | モード={mode}"
@@ -101,11 +102,14 @@ class DiscordWebhookNotifier:
         for execution in outcome.execution_results[:1]:
             detail_lines.append(f"実行結果: ok={execution.ok} kind={execution.action.action.kind}")
         if outcome.verification:
-            detail_lines.append(f"検証成功: {outcome.verification.get('ok')}")
+            if outcome.verification.get("skipped"):
+                detail_lines.append(f"検証: スキップ ({outcome.verification.get('reason', '理由なし')})")
+            else:
+                detail_lines.append(f"検証成功: {outcome.verification.get('ok')}")
         if outcome.escalation_reason:
             detail_lines.append(f"エスカレーション: {outcome.escalation_reason}")
         if outcome.related_logs:
-            excerpt = self._related_log_excerpt(outcome.related_logs)
+            excerpt = self._related_log_excerpt(outcome.related_logs, preferred_terms=service_names or ["host"])
             if excerpt:
                 detail_lines.append("ログ抜粋:")
                 detail_lines.extend(excerpt)
@@ -179,20 +183,59 @@ class DiscordWebhookNotifier:
         }.get(value, value)
 
     @staticmethod
-    def _related_log_excerpt(related_logs: dict[str, object]) -> list[str]:
-        excerpt: list[str] = []
+    def _related_log_excerpt(related_logs: dict[str, object], *, preferred_terms: list[str]) -> list[str]:
+        flattened: list[tuple[bool, str]] = []
+        lowered_terms = [term.lower() for term in preferred_terms if term]
+
         for key, value in related_logs.items():
             if isinstance(value, list):
-                excerpt.extend(f"{key}: {line}" for line in value[:4])
-            elif isinstance(value, dict):
-                for inner_key, inner_value in value.items():
-                    if isinstance(inner_value, list):
-                        excerpt.extend(f"{inner_key}: {line}" for line in inner_value[:2])
-                    elif isinstance(inner_value, str) and inner_value:
-                        excerpt.append(f"{inner_key}: {inner_value[:160]}")
-            if len(excerpt) >= 8:
-                break
-        return excerpt[:8]
+                for line in value[:4]:
+                    flattened.append((DiscordWebhookNotifier._matches_preferred(key, line, lowered_terms), f"{key}: {line}"))
+                continue
+
+            if not isinstance(value, dict):
+                continue
+
+            stdout = value.get("stdout")
+            stderr = value.get("stderr")
+            if isinstance(stdout, str) and stdout.strip():
+                first_line = next((line.strip() for line in stdout.splitlines() if line.strip()), "")
+                if first_line:
+                    flattened.append(
+                        (
+                            DiscordWebhookNotifier._matches_preferred(key, first_line, lowered_terms),
+                            f"{key}: {first_line[:220]}",
+                        )
+                    )
+            if isinstance(stderr, str) and stderr.strip():
+                flattened.append(
+                    (
+                        DiscordWebhookNotifier._matches_preferred(key, stderr, lowered_terms),
+                        f"{key}: {stderr[:220]}",
+                    )
+                )
+
+            for inner_key, inner_value in value.items():
+                if inner_key in {"stdout", "stderr", "service", "ok", "command", "timed_out", "status", "url", "host", "port", "state"}:
+                    continue
+                if isinstance(inner_value, list):
+                    for line in inner_value[:2]:
+                        flattened.append(
+                            (
+                                DiscordWebhookNotifier._matches_preferred(inner_key, line, lowered_terms),
+                                f"{inner_key}: {line}",
+                            )
+                        )
+
+        preferred = [line for is_preferred, line in flattened if is_preferred]
+        others = [line for is_preferred, line in flattened if not is_preferred]
+        return (preferred + others)[:8]
+
+    @staticmethod
+    def _matches_preferred(source: str, line: str, preferred_terms: list[str]) -> bool:
+        lowered_source = source.lower()
+        lowered_line = line.lower()
+        return any(term in lowered_source or term in lowered_line for term in preferred_terms)
 
     @staticmethod
     def _warn_notification_failure(message: str) -> None:

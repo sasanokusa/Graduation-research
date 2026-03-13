@@ -61,13 +61,18 @@ def test_discord_notifier_formats_startup_and_incident(monkeypatch) -> None:
             )
         ],
         probe_details={},
-        related_logs={"host_journal": ["error line"]},
+        related_logs={
+            "web_access_logs": {"/var/log/nginx/access.log": ["web access line"]},
+            "minecraft_logs": {"/srv/minecraft/latest.log": ["minecraft line"]},
+            "web_status": {"stdout": "● nginx.service - running\nmore"},
+        },
         analysis=IncidentAnalysis(
             analyzer="rule_based",
             summary="nginx is down",
             likely_causes=[{"cause": "service stopped", "confidence": "medium", "evidence": ["inactive"]}],
             proposed_actions=[ProposedAction(kind="restart_service", service="nginx", reason="recover")],
         ),
+        verification={"ok": True, "skipped": True, "reason": "no executable action selected"},
     )
 
     notifier.send_startup_summary(snapshot)
@@ -78,6 +83,9 @@ def test_discord_notifier_formats_startup_and_incident(monkeypatch) -> None:
     assert "監視開始" not in sent_payloads[0]["content"]
     assert "相関ID=abc123" in sent_payloads[2]["content"]
     assert "ログ抜粋" in sent_payloads[3]["content"]
+    assert "検証: スキップ" in sent_payloads[3]["content"]
+    assert "web_status: ● nginx.service - running" in sent_payloads[3]["content"]
+    assert sent_payloads[3]["content"].find("web access line") < sent_payloads[3]["content"].find("minecraft line")
 
 
 def test_discord_notifier_ignores_http_error_and_continues(monkeypatch, capsys) -> None:
@@ -114,3 +122,51 @@ def test_discord_notifier_ignores_http_error_and_continues(monkeypatch, capsys) 
 
     captured = capsys.readouterr()
     assert "HTTP 403" in captured.err
+
+
+def test_discord_notifier_prioritizes_finding_related_logs(monkeypatch) -> None:
+    sent_payloads: list[dict[str, str]] = []
+
+    def _fake_urlopen(request, timeout=10):  # noqa: ANN001
+        sent_payloads.append(json.loads(request.data.decode("utf-8")))
+        return _DummyResponse()
+
+    monkeypatch.setattr("urllib.request.urlopen", _fake_urlopen)
+    notifier = DiscordWebhookNotifier("https://example.invalid/webhook")
+
+    outcome = MonitorOutcome(
+        correlation_id="mc123",
+        checked_at="2026-03-13T00:01:00+00:00",
+        findings=[
+            Finding(
+                id="minecraft_port_failed",
+                severity="critical",
+                service="minecraft",
+                title="Minecraft TCP check failed",
+                summary="The Minecraft TCP probe failed.",
+                evidence=["ConnectionRefusedError"],
+            )
+        ],
+        probe_details={},
+        related_logs={
+            "web_access_logs": {"/var/log/apache2/access.log": ["web access line"]},
+            "minecraft_logs": {"/srv/minecraft/latest.log": ["minecraft line"]},
+            "web_status": {"stdout": "● apache2.service - running"},
+        },
+        analysis=IncidentAnalysis(
+            analyzer="rule_based",
+            summary="The Minecraft TCP probe failed.",
+            likely_causes=[{"cause": "minecraft unavailable", "confidence": "medium", "evidence": []}],
+            proposed_actions=[],
+            escalation_reason="manual recovery required",
+        ),
+        verification={"ok": True, "skipped": True, "reason": "no executable action selected"},
+        escalated=True,
+        escalation_reason="manual recovery required",
+    )
+
+    notifier.send_incident(outcome, host_label="homebox", mode="propose-only")
+
+    detail = sent_payloads[1]["content"]
+    assert detail.find("minecraft line") < detail.find("web access line")
+    assert "検証: スキップ" in detail
