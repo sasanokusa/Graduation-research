@@ -109,6 +109,7 @@ def _config(tmp_path: Path, mode: str) -> ProductionPocConfig:
         actions=ActionsConfig(
             mode=mode,
             allowed_restart_services=["nginx"],
+            restart_command_prefix=[],
             dangerous_action_policy="require-human-approval",
             max_auto_actions_per_incident=1,
         ),

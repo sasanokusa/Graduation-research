@@ -128,9 +128,11 @@ class ActionGuard:
     def _preview_for(self, action: ProposedAction) -> CommandPreview | None:
         service = action.service.strip()
         if action.kind == "restart_service" and service:
+            args = [*self._config.restart_command_prefix, "systemctl", "restart", service]
+            prefix_summary = " via command prefix" if self._config.restart_command_prefix else ""
             return CommandPreview(
-                args=["systemctl", "restart", service],
-                summary=f"Restart allowlisted service {service}",
+                args=args,
+                summary=f"Restart allowlisted service {service}{prefix_summary}",
                 expected_impact=action.expected_impact or "Service restart may restore a stopped but otherwise healthy process.",
             )
         if action.kind == "service_status" and service:

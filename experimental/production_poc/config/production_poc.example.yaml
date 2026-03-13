@@ -63,6 +63,11 @@ actions:
     - nginx
     # systemd で安全に再起動できる service だけを追加してください。
     # - minecraft
+  # execute モードで非 root ユーザーから restart する場合の例:
+  # restart_command_prefix:
+  #   - sudo
+  #   - -n
+  restart_command_prefix: []
   dangerous_action_policy: require-human-approval
   max_auto_actions_per_incident: 1
 

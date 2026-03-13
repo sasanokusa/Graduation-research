@@ -149,6 +149,7 @@ class MinecraftServiceConfig:
 class ActionsConfig:
     mode: str
     allowed_restart_services: list[str]
+    restart_command_prefix: list[str]
     dangerous_action_policy: str
     max_auto_actions_per_incident: int
 
@@ -252,6 +253,7 @@ def load_config(config_path: str | Path, *, env_file: str | Path | None = None) 
     actions = ActionsConfig(
         mode=str(action_payload.get("mode", "propose-only")).strip().lower(),
         allowed_restart_services=list(action_payload.get("allowed_restart_services") or []),
+        restart_command_prefix=[str(item) for item in (action_payload.get("restart_command_prefix") or []) if str(item).strip()],
         dangerous_action_policy=str(action_payload.get("dangerous_action_policy", "require-human-approval")),
         max_auto_actions_per_incident=_to_int(action_payload.get("max_auto_actions_per_incident"), 1),
     )

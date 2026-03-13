@@ -24,6 +24,7 @@ def test_allowlisted_restart_is_executable_only_in_execute_mode() -> None:
         ActionsConfig(
             mode="execute",
             allowed_restart_services=["nginx"],
+            restart_command_prefix=[],
             dangerous_action_policy="require-human-approval",
             max_auto_actions_per_incident=1,
         ),
@@ -38,6 +39,7 @@ def test_allowlisted_restart_is_executable_only_in_execute_mode() -> None:
         ActionsConfig(
             mode="propose-only",
             allowed_restart_services=["nginx"],
+            restart_command_prefix=[],
             dangerous_action_policy="require-human-approval",
             max_auto_actions_per_incident=1,
         ),
@@ -53,6 +55,7 @@ def test_non_allowlisted_restart_requires_human_approval() -> None:
         ActionsConfig(
             mode="execute",
             allowed_restart_services=["nginx"],
+            restart_command_prefix=[],
             dangerous_action_policy="require-human-approval",
             max_auto_actions_per_incident=1,
         ),
@@ -70,6 +73,7 @@ def test_read_only_action_is_allowed_in_dry_run() -> None:
         ActionsConfig(
             mode="dry-run",
             allowed_restart_services=[],
+            restart_command_prefix=[],
             dangerous_action_policy="require-human-approval",
             max_auto_actions_per_incident=1,
         ),
@@ -79,3 +83,23 @@ def test_read_only_action_is_allowed_in_dry_run() -> None:
     assert result.allowed is True
     assert result.executable is True
     assert result.risk_class == "read-only"
+
+
+def test_restart_preview_can_use_sudo_prefix() -> None:
+    guard = ActionGuard(
+        ActionsConfig(
+            mode="execute",
+            allowed_restart_services=["apache2"],
+            restart_command_prefix=["sudo", "-n"],
+            dangerous_action_policy="require-human-approval",
+            max_auto_actions_per_incident=1,
+        ),
+        _Runner(),
+    )
+
+    result = guard.evaluate(ProposedAction(kind="restart_service", service="apache2"))
+
+    assert result.allowed is True
+    assert result.executable is True
+    assert result.command_preview is not None
+    assert result.command_preview.args == ["sudo", "-n", "systemctl", "restart", "apache2"]

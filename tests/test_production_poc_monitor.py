@@ -82,6 +82,7 @@ def _config(tmp_path: Path, access_log: Path, mc_log: Path) -> ProductionPocConf
         actions=ActionsConfig(
             mode="propose-only",
             allowed_restart_services=["nginx", "minecraft"],
+            restart_command_prefix=[],
             dangerous_action_policy="require-human-approval",
             max_auto_actions_per_incident=1,
         ),
