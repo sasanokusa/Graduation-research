@@ -35,9 +35,15 @@ services:
       - apache2
       - caddy
   minecraft:
-    service_name: minecraft
+    # auto | systemd | tmux | screen | shell_script | java_process
+    management_mode: auto
+    # systemd 管理のときだけ service_name を設定します。
+    service_name: ""
     port: 25565
     tcp_host: 127.0.0.1
+    # tmux / shell_script 管理のときだけ設定します。自動実行はせず、通知や手動復旧手順の参照に使います。
+    working_directory: /srv/minecraft
+    startup_script_path: /srv/minecraft/start-server.sh
     log_paths:
       - /opt/minecraft/logs/latest.log
       - /srv/minecraft/logs/latest.log
@@ -53,7 +59,8 @@ actions:
   mode: propose-only
   allowed_restart_services:
     - nginx
-    - minecraft
+    # systemd で安全に再起動できる service だけを追加してください。
+    # - minecraft
   dangerous_action_policy: require-human-approval
   max_auto_actions_per_incident: 1
 

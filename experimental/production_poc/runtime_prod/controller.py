@@ -209,6 +209,7 @@ class ProductionPocController:
             )
 
         minecraft_details = self._probe_minecraft(snapshot)
+        minecraft_label = str(minecraft_details.get("service_name") or "minecraft")
         probe_details["minecraft"] = minecraft_details
         related_logs.update(minecraft_details.get("logs", {}))
         if minecraft_details.get("service_active") is not None and not minecraft_details["service_active"].get("ok"):
@@ -216,7 +217,7 @@ class ProductionPocController:
                 Finding(
                     id="minecraft_process_missing",
                     severity="critical",
-                    service=str(minecraft_details.get("service_name", "")),
+                    service=minecraft_label,
                     title="Minecraft service is not active",
                     summary="The configured or detected Minecraft service is not active.",
                     evidence=[str(minecraft_details["service_active"].get("state", "unknown"))],
@@ -227,7 +228,7 @@ class ProductionPocController:
                 Finding(
                     id="minecraft_process_missing",
                     severity="critical",
-                    service=str(minecraft_details.get("service_name", "")),
+                    service=minecraft_label,
                     title="Minecraft process is missing",
                     summary="No Minecraft-like Java process is visible.",
                     evidence=["java process with Minecraft hints was not found"],
@@ -238,7 +239,7 @@ class ProductionPocController:
                 Finding(
                     id="minecraft_port_failed",
                     severity="critical",
-                    service=str(minecraft_details.get("service_name", "")),
+                    service=minecraft_label,
                     title="Minecraft TCP check failed",
                     summary="The Minecraft TCP probe failed.",
                     evidence=[str(minecraft_details["tcp_result"].get("error", ""))],
@@ -249,7 +250,7 @@ class ProductionPocController:
                 Finding(
                     id="minecraft_crash_log",
                     severity="warning",
-                    service=str(minecraft_details.get("service_name", "")),
+                    service=minecraft_label,
                     title="Minecraft crash keywords detected",
                     summary="Minecraft logs contain crash-like keywords.",
                     evidence=minecraft_details["crash_signals"].get("samples", [])[:3],
@@ -356,10 +357,11 @@ class ProductionPocController:
 
     def _probe_minecraft(self, snapshot: DiscoverySnapshot) -> dict[str, Any]:
         service_name = str(snapshot.detected_minecraft.get("service_name") or self._config.minecraft.service_name)
+        management_mode = self._minecraft_management_mode(snapshot)
         port = int(snapshot.detected_minecraft.get("port") or self._config.minecraft.port)
         service_active = (
             systemd_is_active(self._runner, service_name, timeout_seconds=5)
-            if service_name
+            if service_name and management_mode == "systemd"
             else None
         )
         tcp_result = tcp_probe(self._config.minecraft.tcp_host, port, timeout_seconds=5)
@@ -369,7 +371,7 @@ class ProductionPocController:
             ["exception", "crash", "fatal", "oom", "outofmemory", "stopping server"],
         )
         logs = {"minecraft_logs": log_excerpt}
-        if service_name:
+        if service_name and management_mode == "systemd":
             logs["minecraft_status"] = systemd_status_excerpt(self._runner, service_name, timeout_seconds=5)
             logs["minecraft_journal"] = journal_excerpt(
                 self._runner,
@@ -380,11 +382,18 @@ class ProductionPocController:
             )
         return {
             "service_name": service_name,
+            "management_mode": management_mode,
             "port": port,
             "service_active": service_active,
             "process_present": self._minecraft_process_present(),
             "tcp_result": tcp_result,
             "crash_signals": crash_signals,
+            "startup_script_path": str(
+                snapshot.detected_minecraft.get("startup_script_path") or self._config.minecraft.startup_script_path or ""
+            ),
+            "working_directory": str(
+                snapshot.detected_minecraft.get("working_directory") or self._config.minecraft.working_directory or ""
+            ),
             "logs": logs,
         }
 
@@ -447,7 +456,13 @@ class ProductionPocController:
             self._config.minecraft.service_name,
         }:
             minecraft_details = self._probe_minecraft(snapshot)
-            ok = bool(minecraft_details.get("service_active", {}).get("ok")) and bool(minecraft_details.get("tcp_result", {}).get("ok"))
+            management_mode = str(minecraft_details.get("management_mode", "auto"))
+            if management_mode == "systemd":
+                ok = bool(minecraft_details.get("service_active", {}).get("ok")) and bool(
+                    minecraft_details.get("tcp_result", {}).get("ok")
+                )
+            else:
+                ok = bool(minecraft_details.get("process_present")) and bool(minecraft_details.get("tcp_result", {}).get("ok"))
             return {"ok": ok, "target": action.service, "minecraft": minecraft_details}
         return {"ok": False, "target": action.service, "reason": "No verification routine matched the action target."}
 
@@ -490,6 +505,14 @@ class ProductionPocController:
             if any(hint in lowered for hint in self._config.minecraft.process_hints):
                 return True
         return False
+
+    def _minecraft_management_mode(self, snapshot: DiscoverySnapshot) -> str:
+        return str(
+            snapshot.detected_minecraft.get("management_mode")
+            or snapshot.detected_minecraft.get("launch_method")
+            or self._config.minecraft.management_mode
+            or "auto"
+        ).strip().lower()
 
     @staticmethod
     def _read_proc_stat() -> dict[str, int]:

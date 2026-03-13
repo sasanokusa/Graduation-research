@@ -117,14 +117,25 @@ class DiscordWebhookNotifier:
         request = urllib.request.Request(
             self.webhook_url,
             data=payload,
-            headers={"Content-Type": "application/json"},
+            headers={
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+                "User-Agent": "infra-emergency-poc/0.1",
+            },
             method="POST",
         )
         try:
             with urllib.request.urlopen(request, timeout=10):
                 return
         except urllib.error.HTTPError as exc:
-            self._warn_notification_failure(f"Discord webhook returned HTTP {exc.code}: {exc.reason}")
+            body = ""
+            if exc.fp is not None:
+                try:
+                    body = exc.fp.read(200).decode("utf-8", errors="replace").strip()
+                except Exception:  # pragma: no cover - best effort diagnostics only
+                    body = ""
+            detail = f" | body={body}" if body else ""
+            self._warn_notification_failure(f"Discord webhook returned HTTP {exc.code}: {exc.reason}{detail}")
         except Exception as exc:  # pragma: no cover - defensive runtime safeguard
             self._warn_notification_failure(f"Discord webhook send failed: {exc}")
 

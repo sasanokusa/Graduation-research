@@ -4,6 +4,7 @@ from experimental.production_poc.adapters.action_guard import ActionGuard
 from experimental.production_poc.adapters.backup_provider import NullBackupProvider
 from experimental.production_poc.adapters.command_runner import CommandResult
 from experimental.production_poc.adapters.host_observer import HostObserver
+from experimental.production_poc.adapters.llm_analyzer import RuleBasedIncidentAnalyzer
 from experimental.production_poc.notifications.discord import NullNotifier
 from experimental.production_poc.runtime_prod.config import (
     ActionsConfig,
@@ -94,11 +95,14 @@ def _config(tmp_path: Path, mode: str) -> ProductionPocConfig:
             systemd_candidates=["nginx"],
         ),
         minecraft=MinecraftServiceConfig(
+            management_mode="systemd",
             service_name="minecraft",
             port=25565,
             tcp_host="127.0.0.1",
             log_paths=[],
             process_hints=["minecraft"],
+            working_directory=None,
+            startup_script_path=None,
         ),
         actions=ActionsConfig(
             mode=mode,
@@ -139,10 +143,18 @@ def _snapshot() -> DiscoverySnapshot:
         cpu_usage={"used_percent": 5.0},
         journal_summary={"keyword_counts": {}},
         detected_web={"service_name": "nginx", "server_type": "nginx"},
-        detected_minecraft={"service_name": "minecraft", "launch_method": "systemd", "port": 25565},
+        detected_minecraft={
+            "service_name": "minecraft",
+            "launch_method": "systemd",
+            "management_mode": "systemd",
+            "port": 25565,
+        },
         inferred_health_checks={"web": {"selected_target": "http://127.0.0.1/healthz"}},
         backup_status={"summary": "none"},
-        lightweight_context={"detected_web": {"service_name": "nginx"}},
+        lightweight_context={
+            "detected_web": {"service_name": "nginx"},
+            "detected_minecraft": {"service_name": "minecraft", "management_mode": "systemd"},
+        },
     )
 
 
@@ -228,3 +240,97 @@ def test_controller_in_execute_mode_restarts_once_and_verifies(monkeypatch, tmp_
     assert outcome.verification["ok"] is True
     assert runner.calls == [["systemctl", "restart", "nginx"]]
     assert notifier.incidents == 1
+
+
+def test_controller_escalates_for_shell_script_managed_minecraft_without_auto_restart(monkeypatch, tmp_path: Path) -> None:
+    runner = _Runner()
+    notifier = _Notifier()
+    config = _config(tmp_path, mode="propose-only")
+    config = ProductionPocConfig(
+        path=config.path,
+        host=config.host,
+        monitoring=config.monitoring,
+        web=config.web,
+        minecraft=MinecraftServiceConfig(
+            management_mode="shell_script",
+            service_name="",
+            port=25565,
+            tcp_host="127.0.0.1",
+            log_paths=[],
+            process_hints=["minecraft"],
+            working_directory=tmp_path / "minecraft-server",
+            startup_script_path=tmp_path / "minecraft-server" / "start-server.sh",
+        ),
+        actions=config.actions,
+        notifications=config.notifications,
+        llm=config.llm,
+        escalation=config.escalation,
+    )
+    controller = ProductionPocController(
+        config=config,
+        runner=runner,
+        observer=_Observer(runner),
+        analyzer=RuleBasedIncidentAnalyzer(),
+        guard=ActionGuard(config.actions, runner),
+        notifier=notifier,
+        store=StateStore(config.host.state_dir),
+        backup_provider=NullBackupProvider(),
+    )
+    shell_snapshot = DiscoverySnapshot(
+        captured_at="2026-03-13T00:00:00+00:00",
+        host={"hostname": "homebox"},
+        systemd_services=[],
+        process_summary=[],
+        open_ports=[{"port": 25565}],
+        disk_usage=[],
+        memory_usage={"used_percent": 10.0},
+        cpu_usage={"used_percent": 5.0},
+        journal_summary={"keyword_counts": {}},
+        detected_web={"service_name": "nginx", "server_type": "nginx"},
+        detected_minecraft={
+            "service_name": "",
+            "launch_method": "shell_script",
+            "management_mode": "shell_script",
+            "port": 25565,
+            "working_directory": str(tmp_path / "minecraft-server"),
+            "startup_script_path": str(tmp_path / "minecraft-server" / "start-server.sh"),
+        },
+        inferred_health_checks={"web": {"selected_target": "http://127.0.0.1/healthz"}},
+        backup_status={"summary": "none"},
+        lightweight_context={
+            "detected_web": {"service_name": "nginx"},
+            "detected_minecraft": {
+                "management_mode": "shell_script",
+                "working_directory": str(tmp_path / "minecraft-server"),
+                "startup_script_path": str(tmp_path / "minecraft-server" / "start-server.sh"),
+            },
+        },
+    )
+    monkeypatch.setattr(controller, "_load_or_refresh_snapshot", lambda: shell_snapshot)
+    monkeypatch.setattr(
+        controller,
+        "_run_rule_based_probes",
+        lambda snapshot: (
+            [
+                Finding(
+                    id="minecraft_process_missing",
+                    severity="critical",
+                    service="minecraft",
+                    title="Minecraft process is missing",
+                    summary="No Minecraft-like Java process is visible.",
+                    evidence=["java process with Minecraft hints was not found"],
+                )
+            ],
+            {"minecraft": {"management_mode": "shell_script"}},
+            {},
+        ),
+    )
+
+    outcome = controller.run_monitor_once()
+
+    assert outcome.analysis is not None
+    assert outcome.analysis.proposed_actions == []
+    assert "shell_script" in outcome.analysis.escalation_reason
+    assert "start-server.sh" in outcome.analysis.escalation_reason
+    assert outcome.execution_results == []
+    assert runner.calls == []

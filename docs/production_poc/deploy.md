@@ -100,12 +100,28 @@ sudo chmod 640 /etc/infra-production-poc/production_poc.env
 `/etc/infra-production-poc/production_poc.yaml` は次を実ホストに合わせて修正してください。
 
 - `services.web.service_name`
+- `services.minecraft.management_mode`
 - `services.minecraft.service_name`
+- `services.minecraft.working_directory`
+- `services.minecraft.startup_script_path`
 - Web health URL
 - access log / error log path
 - Minecraft log path
 - 初回は `actions.mode: propose-only`
 - 意図して provider key を入れるまで `llm.enabled: false`
+
+Minecraft が `tmux` や `start-server.sh` で動いている場合は、次のように設定してください。
+
+- `services.minecraft.management_mode: shell_script` または `tmux`
+- `services.minecraft.service_name: ""`
+- `services.minecraft.working_directory` にサーバーディレクトリを入れる
+- `services.minecraft.startup_script_path` に `start-server.sh` を入れる
+
+この PoC は安全上の理由から、`shell script` / `tmux` 管理の Minecraft を自動起動しません。
+この情報は Discord 通知や手動復旧時の参照情報として使われます。
+
+`actions.allowed_restart_services` には、`systemd` で安全に再起動できる service だけを入れてください。
+`tmux` や `shell script` 管理の Minecraft をここへ入れても自動実行対象にはしないでください。
 
 `/etc/infra-production-poc/production_poc.env` では次を設定します。
 
@@ -182,6 +198,13 @@ service 名に広い指定や wildcard は入れないでください。
 - `experimental/production_poc/deploy/production-poc-monitor.service`
 - `experimental/production_poc/deploy/production-poc-monitor.timer`
 
+重要:
+
+- サーバー上のリポジトリ内ファイル `experimental/production_poc/deploy/production-poc-monitor.service` を直接編集し続けないでください
+- ここを編集すると、将来 `git pull` したときにローカル変更として衝突します
+- 追跡対象ではない `/etc/systemd/system/production-poc-monitor.service` 側を編集対象にしてください
+- API key や webhook URL は unit ファイルに書かず、`/etc/infra-production-poc/production_poc.env` に置いてください
+
 特に `production-poc-monitor.service` では次を確認してください。
 
 - `User=infra-poc`
@@ -200,33 +223,69 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now production-poc-monitor.timer
 ```
 
-## 12. 停止方法
+配置後の修正は、原則として `/etc/systemd/system/production-poc-monitor.service` 側だけに行ってください。
+
+## 12. `git pull` が local changes で止まったとき
+
+すでにサーバー上の追跡ファイルを編集してしまった場合は、次の流れで復旧できます。
+
+1. 現在のローカル変更を退避する
+2. `/etc/systemd/system/production-poc-monitor.service` へ必要な変更を移す
+3. リポジトリ内の追跡ファイルを元に戻す
+4. `git pull` する
+
+例:
+
+```bash
+cd /opt/infra-emergency-recovery
+cp experimental/production_poc/deploy/production-poc-monitor.service /tmp/production-poc-monitor.service.local
+sudo cp /tmp/production-poc-monitor.service.local /etc/systemd/system/production-poc-monitor.service
+git restore experimental/production_poc/deploy/production-poc-monitor.service
+git pull
+sudo systemctl daemon-reload
+```
+
+もし `/etc/systemd/system/production-poc-monitor.service` を直接編集したい場合は:
+
+```bash
+sudoedit /etc/systemd/system/production-poc-monitor.service
+```
+
+あるいは override を使う方法でも構いません。
+
+```bash
+sudo systemctl edit production-poc-monitor.service
+```
+
+## 13. 停止方法
 
 ```bash
 sudo systemctl stop production-poc-monitor.timer
 sudo systemctl stop production-poc-monitor.service
 ```
 
-## 13. ログの見方
+## 14. ログの見方
 
 - `journalctl -u production-poc-monitor.service -n 100 --no-pager`
 - 設定した `state_dir`
 - 相関 ID 付き Discord 通知
-- 対象 service の journal:
+- 対象 service の log / journal:
 
 ```bash
 journalctl -u nginx -n 100 --no-pager
-journalctl -u minecraft -n 100 --no-pager
+journalctl -u minecraft -n 100 --no-pager   # systemd 管理時のみ
+tail -n 100 /path/to/minecraft/logs/latest.log
 ```
 
-## 14. セキュリティ上の注意
+## 15. セキュリティ上の注意
 
 - env file は管理者か専用 service account のみが読めるようにする
 - 必要な log と command だけにアクセスできる専用 user を推奨
 - `NoNewPrivileges=true` を維持する
 - 明示した state directory 以外に書き込み権限を広げない
+- API key、Discord webhook URL、token 類は Git 管理下のファイルへ書かない
 
-## 15. バックアップ未整備環境での注意
+## 16. バックアップ未整備環境での注意
 
 この PoC は、バックアップや snapshot が弱い、または未整備な環境を前提にしています。
 

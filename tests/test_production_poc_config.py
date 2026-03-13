@@ -16,6 +16,10 @@ def test_load_config_expands_env_and_resolves_paths(monkeypatch, tmp_path: Path)
                 "    service_name: nginx",
                 "    access_log_paths:",
                 "      - logs/access.log",
+                "  minecraft:",
+                "    management_mode: shell_script",
+                "    working_directory: minecraft-server",
+                "    startup_script_path: minecraft-server/start-server.sh",
                 "notifications:",
                 "  discord_webhook_url: ${DISCORD_WEBHOOK_URL}",
             ]
@@ -29,5 +33,8 @@ def test_load_config_expands_env_and_resolves_paths(monkeypatch, tmp_path: Path)
     assert config.host.host_label == "test-host"
     assert config.host.state_dir == (tmp_path / "state").resolve()
     assert config.web.access_log_paths == [(tmp_path / "logs" / "access.log").resolve()]
+    assert config.minecraft.management_mode == "shell_script"
+    assert config.minecraft.working_directory == (tmp_path / "minecraft-server").resolve()
+    assert config.minecraft.startup_script_path == (tmp_path / "minecraft-server" / "start-server.sh").resolve()
     assert config.notifications.discord_webhook_url == "https://example.invalid/webhook"
     assert config.actions.mode == "propose-only"

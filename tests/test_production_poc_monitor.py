@@ -25,8 +25,10 @@ from experimental.production_poc.runtime_prod.persistence import StateStore
 class _MappedRunner:
     def __init__(self, responses: dict[tuple[str, ...], CommandResult]) -> None:
         self._responses = responses
+        self.calls: list[list[str]] = []
 
     def run(self, args: list[str], *, timeout_seconds: int) -> CommandResult:
+        self.calls.append(args)
         key = tuple(args)
         if key in self._responses:
             return self._responses[key]
@@ -66,11 +68,14 @@ def _config(tmp_path: Path, access_log: Path, mc_log: Path) -> ProductionPocConf
             systemd_candidates=["nginx"],
         ),
         minecraft=MinecraftServiceConfig(
+            management_mode="systemd",
             service_name="minecraft",
             port=25565,
             tcp_host="127.0.0.1",
             log_paths=[mc_log],
             process_hints=["minecraft", "paper", "server.jar"],
+            working_directory=None,
+            startup_script_path=None,
         ),
         actions=ActionsConfig(
             mode="propose-only",
@@ -229,13 +234,21 @@ def test_rule_based_probe_detects_service_and_host_anomalies(monkeypatch, tmp_pa
         cpu_usage={"used_percent": 5.0},
         journal_summary={"keyword_counts": {}},
         detected_web={"service_name": "nginx", "server_type": "nginx"},
-        detected_minecraft={"service_name": "minecraft", "launch_method": "systemd", "port": 25565},
+        detected_minecraft={
+            "service_name": "minecraft",
+            "launch_method": "systemd",
+            "management_mode": "systemd",
+            "port": 25565,
+        },
         inferred_health_checks={
             "web": {"selected_target": "http://127.0.0.1/healthz"},
             "minecraft": {"selected_target": "127.0.0.1:25565"},
         },
         backup_status={"summary": "none"},
-        lightweight_context={"detected_web": {"service_name": "nginx"}, "detected_minecraft": {"service_name": "minecraft"}},
+        lightweight_context={
+            "detected_web": {"service_name": "nginx"},
+            "detected_minecraft": {"service_name": "minecraft", "management_mode": "systemd"},
+        },
     )
 
     monkeypatch.setattr(
@@ -257,3 +270,168 @@ def test_rule_based_probe_detects_service_and_host_anomalies(monkeypatch, tmp_pa
     assert "systemd_failed" in ids
     assert "journal_critical" in ids
     assert probe_details["web"]["http_5xx"]["count"] == 3
+
+
+def test_non_systemd_minecraft_skips_systemctl_and_relies_on_process_and_tcp(monkeypatch, tmp_path: Path) -> None:
+    access_log = tmp_path / "access.log"
+    access_log.write_text("", encoding="utf-8")
+    mc_log = tmp_path / "latest.log"
+    mc_log.write_text("[00:00:00] [Server thread/INFO]: Done\n", encoding="utf-8")
+
+    responses = {
+        ("systemctl", "is-active", "nginx"): CommandResult(
+            args=["systemctl", "is-active", "nginx"],
+            returncode=0,
+            stdout="active",
+            stderr="",
+            timed_out=False,
+            timeout_seconds=5,
+            duration_ms=1,
+        ),
+        ("ss", "-ltnpH"): CommandResult(
+            args=["ss", "-ltnpH"],
+            returncode=0,
+            stdout="LISTEN 0 511 *:80 *:*",
+            stderr="",
+            timed_out=False,
+            timeout_seconds=5,
+            duration_ms=1,
+        ),
+        ("systemctl", "status", "nginx", "--no-pager", "--lines=25"): CommandResult(
+            args=["systemctl", "status", "nginx", "--no-pager", "--lines=25"],
+            returncode=0,
+            stdout="active",
+            stderr="",
+            timed_out=False,
+            timeout_seconds=5,
+            duration_ms=1,
+        ),
+        ("journalctl", "-u", "nginx", "--since", "-15m", "--no-pager", "-n", "10"): CommandResult(
+            args=["journalctl", "-u", "nginx", "--since", "-15m", "--no-pager", "-n", "10"],
+            returncode=0,
+            stdout="",
+            stderr="",
+            timed_out=False,
+            timeout_seconds=8,
+            duration_ms=1,
+        ),
+        ("ps", "-eo", "comm,args", "--no-headers"): CommandResult(
+            args=["ps", "-eo", "comm,args", "--no-headers"],
+            returncode=0,
+            stdout="java java @user_jvm_args.txt @libraries/net/minecraftforge/forge/1.20.1-47.4.10/unix_args.txt nogui",
+            stderr="",
+            timed_out=False,
+            timeout_seconds=5,
+            duration_ms=1,
+        ),
+        ("df", "-P", "-x", "tmpfs", "-x", "devtmpfs"): CommandResult(
+            args=["df", "-P", "-x", "tmpfs", "-x", "devtmpfs"],
+            returncode=0,
+            stdout="Filesystem 1024-blocks Used Available Capacity Mounted on\n/dev/sda1 10 2 8 20% /\n",
+            stderr="",
+            timed_out=False,
+            timeout_seconds=5,
+            duration_ms=1,
+        ),
+        ("systemctl", "--failed", "--no-legend", "--plain"): CommandResult(
+            args=["systemctl", "--failed", "--no-legend", "--plain"],
+            returncode=0,
+            stdout="",
+            stderr="",
+            timed_out=False,
+            timeout_seconds=5,
+            duration_ms=1,
+        ),
+        ("journalctl", "--since", "-15m", "--no-pager", "-n", "10"): CommandResult(
+            args=["journalctl", "--since", "-15m", "--no-pager", "-n", "10"],
+            returncode=0,
+            stdout="",
+            stderr="",
+            timed_out=False,
+            timeout_seconds=8,
+            duration_ms=1,
+        ),
+    }
+    runner = _MappedRunner(responses)
+    config = _config(tmp_path, access_log, mc_log)
+    config = ProductionPocConfig(
+        path=config.path,
+        host=config.host,
+        monitoring=config.monitoring,
+        web=config.web,
+        minecraft=MinecraftServiceConfig(
+            management_mode="shell_script",
+            service_name="",
+            port=25565,
+            tcp_host="127.0.0.1",
+            log_paths=[mc_log],
+            process_hints=["minecraft", "paper", "server.jar", "forge"],
+            working_directory=tmp_path / "minecraft-server",
+            startup_script_path=tmp_path / "minecraft-server" / "start-server.sh",
+        ),
+        actions=config.actions,
+        notifications=config.notifications,
+        llm=config.llm,
+        escalation=config.escalation,
+    )
+    controller = ProductionPocController(
+        config=config,
+        runner=runner,
+        observer=HostObserver(runner),
+        analyzer=RuleBasedIncidentAnalyzer(),
+        guard=ActionGuard(config.actions, runner),
+        notifier=NullNotifier(),
+        store=StateStore(config.host.state_dir),
+        backup_provider=NullBackupProvider(),
+    )
+    snapshot = DiscoverySnapshot(
+        captured_at="2026-03-13T00:00:00+00:00",
+        host={"hostname": "homebox"},
+        systemd_services=[],
+        process_summary=[],
+        open_ports=[{"port": 80}, {"port": 25565}],
+        disk_usage=[],
+        memory_usage={"used_percent": 10.0},
+        cpu_usage={"used_percent": 5.0},
+        journal_summary={"keyword_counts": {}},
+        detected_web={"service_name": "nginx", "server_type": "nginx"},
+        detected_minecraft={
+            "service_name": "",
+            "launch_method": "shell_script",
+            "management_mode": "shell_script",
+            "port": 25565,
+            "working_directory": str(tmp_path / "minecraft-server"),
+            "startup_script_path": str(tmp_path / "minecraft-server" / "start-server.sh"),
+        },
+        inferred_health_checks={
+            "web": {"selected_target": "http://127.0.0.1/healthz"},
+            "minecraft": {"selected_target": "127.0.0.1:25565"},
+        },
+        backup_status={"summary": "none"},
+        lightweight_context={
+            "detected_web": {"service_name": "nginx"},
+            "detected_minecraft": {
+                "management_mode": "shell_script",
+                "working_directory": str(tmp_path / "minecraft-server"),
+                "startup_script_path": str(tmp_path / "minecraft-server" / "start-server.sh"),
+            },
+        },
+    )
+
+    monkeypatch.setattr(
+        "experimental.production_poc.runtime_prod.controller.http_probe",
+        lambda url, timeout_seconds: {"ok": True, "url": url, "status": 200, "error": ""},
+    )
+    monkeypatch.setattr(
+        "experimental.production_poc.runtime_prod.controller.tcp_probe",
+        lambda host, port, timeout_seconds: {"ok": True, "host": host, "port": port, "error": ""},
+    )
+
+    findings, probe_details, _ = controller._run_rule_based_probes(snapshot)
+
+    ids = {finding.id for finding in findings}
+    assert "minecraft_process_missing" not in ids
+    assert "minecraft_port_failed" not in ids
+    assert probe_details["minecraft"]["management_mode"] == "shell_script"
+    assert ["systemctl", "is-active", "minecraft"] not in runner.calls
+    assert "minecraft_status" not in probe_details["minecraft"]["logs"]

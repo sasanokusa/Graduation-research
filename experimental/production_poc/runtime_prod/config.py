@@ -79,6 +79,13 @@ def _to_path_list(values: Any, *, base_dir: Path) -> list[Path]:
     return resolved
 
 
+def _to_optional_path(value: Any, *, base_dir: Path) -> Path | None:
+    if not value:
+        return None
+    path = Path(str(value))
+    return path if path.is_absolute() else (base_dir / path).resolve()
+
+
 def _expand_env_in_value(value: Any) -> Any:
     if isinstance(value, dict):
         return {key: _expand_env_in_value(item) for key, item in value.items()}
@@ -126,11 +133,14 @@ class WebServiceConfig:
 
 @dataclass(frozen=True)
 class MinecraftServiceConfig:
+    management_mode: str
     service_name: str
     port: int
     tcp_host: str
     log_paths: list[Path]
     process_hints: list[str]
+    working_directory: Path | None
+    startup_script_path: Path | None
 
 
 @dataclass(frozen=True)
@@ -226,11 +236,14 @@ def load_config(config_path: str | Path, *, env_file: str | Path | None = None) 
         systemd_candidates=list(web_payload.get("systemd_candidates") or DEFAULT_WEB_SYSTEMD_CANDIDATES),
     )
     minecraft = MinecraftServiceConfig(
+        management_mode=str(minecraft_payload.get("management_mode", "auto")).strip().lower() or "auto",
         service_name=str(minecraft_payload.get("service_name", "")).strip(),
         port=_to_int(minecraft_payload.get("port"), 25565),
         tcp_host=str(minecraft_payload.get("tcp_host", "127.0.0.1")),
         log_paths=_to_path_list(minecraft_payload.get("log_paths") or DEFAULT_MINECRAFT_LOGS, base_dir=base_dir),
         process_hints=list(minecraft_payload.get("process_hints") or DEFAULT_MINECRAFT_HINTS),
+        working_directory=_to_optional_path(minecraft_payload.get("working_directory"), base_dir=base_dir),
+        startup_script_path=_to_optional_path(minecraft_payload.get("startup_script_path"), base_dir=base_dir),
     )
     actions = ActionsConfig(
         mode=str(action_payload.get("mode", "propose-only")).strip().lower(),

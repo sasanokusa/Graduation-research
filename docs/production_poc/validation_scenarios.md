@@ -12,13 +12,27 @@
    - Discord 障害通知
 4. service は手動復旧するか、restart allowlist を確認済みの場合のみ `execute` で再試験
 
-## シナリオ 2: Minecraft service を停止して検知
+## シナリオ 2: Minecraft 停止を検知
+
+`systemd` 管理か、`tmux` / `shell script` 管理かで手順を分けてください。
+
+### 2-A. systemd 管理の Minecraft
 
 1. `sudo systemctl stop minecraft`
 2. `monitor-once` を実行
 3. 次を確認
    - `minecraft_process_missing` または `minecraft_port_failed`
    - Discord 障害通知
+   - `execute` でも allowlist 外なら自動再起動されない
+
+### 2-B. tmux / shell script 管理の Minecraft
+
+1. 安全な時間帯に、Minecraft Java process を停止するか、tmux session を明示的に落とす
+2. `monitor-once` を実行
+3. 次を確認
+   - `minecraft_process_missing` または `minecraft_port_failed`
+   - `systemctl is-active minecraft` のような誤判定が出ない
+   - Discord では「手動復旧が必要」という趣旨の通知になる
 
 ## シナリオ 3: localhost health check を失敗させる
 

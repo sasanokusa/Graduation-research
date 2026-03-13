@@ -45,6 +45,7 @@ class RuleBasedIncidentAnalyzer:
         detected_minecraft = incident_context.get("snapshot_context", {}).get("detected_minecraft", {})
         likely_causes: list[dict[str, Any]] = []
         proposed_actions: list[ProposedAction] = []
+        manual_recovery_notes: list[str] = []
 
         for finding in findings:
             finding_id = str(finding.get("id", ""))
@@ -70,15 +71,24 @@ class RuleBasedIncidentAnalyzer:
                         )
                     )
             elif finding_id in {"minecraft_process_missing", "minecraft_port_failed"}:
+                management_mode = str(
+                    detected_minecraft.get("management_mode")
+                    or detected_minecraft.get("launch_method")
+                    or "unknown"
+                ).strip()
                 likely_causes.append(
                     {
-                        "cause": "The Minecraft server process or listener appears to have stopped unexpectedly.",
+                        "cause": (
+                            "The Minecraft server process or listener appears to have stopped unexpectedly."
+                            if management_mode == "systemd"
+                            else f"The Minecraft server managed via {management_mode or 'non-systemd'} may be unavailable."
+                        ),
                         "confidence": "medium",
                         "evidence": evidence[:3],
                     }
                 )
                 service_name = str(detected_minecraft.get("service_name", "")).strip()
-                if service_name:
+                if service_name and management_mode == "systemd":
                     proposed_actions.append(
                         ProposedAction(
                             kind="restart_service",
@@ -87,6 +97,10 @@ class RuleBasedIncidentAnalyzer:
                             expected_impact="Restarts the allowlisted Minecraft service if execute mode is enabled.",
                             evidence=evidence[:3],
                         )
+                    )
+                else:
+                    manual_recovery_notes.append(
+                        self._manual_minecraft_recovery_note(detected_minecraft, management_mode=management_mode)
                     )
             elif finding_id in {"disk_pressure", "memory_pressure", "systemd_failed", "journal_critical"}:
                 likely_causes.append(
@@ -109,7 +123,9 @@ class RuleBasedIncidentAnalyzer:
         summary = "; ".join(str(finding.get("summary", "")) for finding in findings[:3]) or "No findings detected."
         escalation_reason = ""
         if not proposed_actions:
-            escalation_reason = "No low-risk allowlisted action was derived from the current findings."
+            escalation_reason = "; ".join(dict.fromkeys(note for note in manual_recovery_notes if note))
+            if not escalation_reason:
+                escalation_reason = "No low-risk allowlisted action was derived from the current findings."
 
         return IncidentAnalysis(
             analyzer="rule_based",
@@ -119,6 +135,18 @@ class RuleBasedIncidentAnalyzer:
             escalation_reason=escalation_reason,
             raw_response="",
         )
+
+    @staticmethod
+    def _manual_minecraft_recovery_note(detected_minecraft: dict[str, Any], *, management_mode: str) -> str:
+        script_path = str(detected_minecraft.get("startup_script_path", "")).strip()
+        working_directory = str(detected_minecraft.get("working_directory", "")).strip()
+        detail_parts: list[str] = [f"Minecraft is managed via {management_mode or 'non-systemd'}"]
+        if working_directory:
+            detail_parts.append(f"working_directory={working_directory}")
+        if script_path:
+            detail_parts.append(f"startup_script={script_path}")
+        detail_parts.append("automatic restart is disabled and requires human approval")
+        return ", ".join(detail_parts) + "."
 
 
 @dataclass

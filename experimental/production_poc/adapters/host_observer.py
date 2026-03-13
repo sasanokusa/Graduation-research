@@ -266,13 +266,27 @@ class HostObserver:
         processes: list[dict[str, Any]],
         ports: list[dict[str, Any]],
     ) -> dict[str, Any]:
+        configured_mode = config.minecraft.management_mode
         explicit_service = config.minecraft.service_name
+        if configured_mode != "auto":
+            return {
+                "service_name": explicit_service if configured_mode == "systemd" else "",
+                "launch_method": configured_mode,
+                "management_mode": configured_mode,
+                "port": config.minecraft.port,
+                "active": True,
+                "startup_script_path": str(config.minecraft.startup_script_path or ""),
+                "working_directory": str(config.minecraft.working_directory or ""),
+            }
         if explicit_service:
             return {
                 "service_name": explicit_service,
-                "launch_method": "config",
+                "launch_method": "systemd",
+                "management_mode": "systemd",
                 "port": config.minecraft.port,
                 "active": True,
+                "startup_script_path": str(config.minecraft.startup_script_path or ""),
+                "working_directory": str(config.minecraft.working_directory or ""),
             }
 
         for service in services:
@@ -281,8 +295,11 @@ class HostObserver:
                 return {
                     "service_name": unit_name[:-8] if unit_name.endswith(".service") else unit_name,
                     "launch_method": "systemd",
+                    "management_mode": "systemd",
                     "port": config.minecraft.port,
                     "active": service.get("active") == "active",
+                    "startup_script_path": str(config.minecraft.startup_script_path or ""),
+                    "working_directory": str(config.minecraft.working_directory or ""),
                 }
 
         screen_result = self._runner.run(["screen", "-ls"], timeout_seconds=2)
@@ -290,8 +307,11 @@ class HostObserver:
             return {
                 "service_name": "",
                 "launch_method": "screen",
+                "management_mode": "screen",
                 "port": config.minecraft.port,
                 "active": True,
+                "startup_script_path": str(config.minecraft.startup_script_path or ""),
+                "working_directory": str(config.minecraft.working_directory or ""),
             }
 
         tmux_result = self._runner.run(["tmux", "ls"], timeout_seconds=2)
@@ -299,8 +319,11 @@ class HostObserver:
             return {
                 "service_name": "",
                 "launch_method": "tmux",
+                "management_mode": "tmux",
                 "port": config.minecraft.port,
                 "active": True,
+                "startup_script_path": str(config.minecraft.startup_script_path or ""),
+                "working_directory": str(config.minecraft.working_directory or ""),
             }
 
         for process in processes:
@@ -315,15 +338,21 @@ class HostObserver:
                 return {
                     "service_name": "",
                     "launch_method": launch_method,
+                    "management_mode": launch_method,
                     "port": detected_port,
                     "active": True,
+                    "startup_script_path": str(config.minecraft.startup_script_path or ""),
+                    "working_directory": str(config.minecraft.working_directory or ""),
                 }
 
         return {
             "service_name": "",
             "launch_method": "unknown",
+            "management_mode": "unknown",
             "port": config.minecraft.port,
             "active": False,
+            "startup_script_path": str(config.minecraft.startup_script_path or ""),
+            "working_directory": str(config.minecraft.working_directory or ""),
         }
 
     def _infer_health_checks(
