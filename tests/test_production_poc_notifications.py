@@ -4,8 +4,11 @@ from dataclasses import dataclass
 
 from experimental.production_poc.notifications.discord import DiscordWebhookNotifier
 from experimental.production_poc.runtime_prod.models import (
+    ActionExecutionResult,
+    CommandPreview,
     DiscoverySnapshot,
     Finding,
+    GuardedAction,
     IncidentAnalysis,
     MonitorOutcome,
     ProposedAction,
@@ -83,9 +86,10 @@ def test_discord_notifier_formats_startup_and_incident(monkeypatch) -> None:
     assert "監視開始" not in sent_payloads[0]["content"]
     assert "相関ID=abc123" in sent_payloads[2]["content"]
     assert "ログ抜粋" in sent_payloads[3]["content"]
-    assert "検証: スキップ" in sent_payloads[3]["content"]
+    assert "復旧確認: スキップ" in sent_payloads[3]["content"]
     assert "web_status: ● nginx.service - running" in sent_payloads[3]["content"]
-    assert sent_payloads[3]["content"].find("web access line") < sent_payloads[3]["content"].find("minecraft line")
+    assert "web access line" in sent_payloads[3]["content"]
+    assert "minecraft line" not in sent_payloads[3]["content"]
 
 
 def test_discord_notifier_ignores_http_error_and_continues(monkeypatch, capsys) -> None:
@@ -168,5 +172,81 @@ def test_discord_notifier_prioritizes_finding_related_logs(monkeypatch) -> None:
     notifier.send_incident(outcome, host_label="homebox", mode="propose-only")
 
     detail = sent_payloads[1]["content"]
-    assert detail.find("minecraft line") < detail.find("web access line")
-    assert "検証: スキップ" in detail
+    assert "minecraft line" in detail
+    assert "web access line" not in detail
+    assert "状態: 手動対応待ち" in detail
+    assert "復旧確認: スキップ" in detail
+
+
+def test_discord_notifier_highlights_auto_recovery_success(monkeypatch) -> None:
+    sent_payloads: list[dict[str, str]] = []
+
+    def _fake_urlopen(request, timeout=10):  # noqa: ANN001
+        sent_payloads.append(json.loads(request.data.decode("utf-8")))
+        return _DummyResponse()
+
+    monkeypatch.setattr("urllib.request.urlopen", _fake_urlopen)
+    notifier = DiscordWebhookNotifier("https://example.invalid/webhook")
+
+    action = ProposedAction(kind="restart_service", service="apache2", reason="recover")
+    guarded = GuardedAction(
+        action=action,
+        risk_class="low",
+        allowed=True,
+        executable=True,
+        requires_human_approval=False,
+        command_preview=CommandPreview(
+            args=["sudo", "-n", "systemctl", "restart", "apache2"],
+            summary="Restart allowlisted service apache2",
+            expected_impact="Restart apache2",
+        ),
+        reason="",
+    )
+    execution = ActionExecutionResult(
+        action=guarded,
+        executed=True,
+        ok=True,
+        details={"returncode": 0, "stdout": "", "stderr": ""},
+    )
+
+    outcome = MonitorOutcome(
+        correlation_id="ok123",
+        checked_at="2026-03-13T00:01:00+00:00",
+        findings=[
+            Finding(
+                id="web_service_inactive",
+                severity="critical",
+                service="apache2",
+                title="Web service is not active",
+                summary="apache2 is down",
+                evidence=["inactive"],
+            )
+        ],
+        probe_details={},
+        related_logs={},
+        analysis=IncidentAnalysis(
+            analyzer="rule_based",
+            summary="apache2 is down",
+            likely_causes=[],
+            proposed_actions=[action],
+        ),
+        guard_results=[guarded],
+        execution_results=[execution],
+        verification={
+            "ok": True,
+            "target": "apache2",
+            "web": {
+                "service_active": {"state": "active"},
+                "listen_result": {"ok": True, "port": 80},
+                "http_result": {"status": 200},
+            },
+        },
+    )
+
+    notifier.send_incident(outcome, host_label="homebox", mode="execute")
+
+    assert "復旧成功" in sent_payloads[0]["content"]
+    assert "復旧確認まで完了" in sent_payloads[0]["content"]
+    assert "状態: 自動復旧成功" in sent_payloads[1]["content"]
+    assert "自動対応: 成功 kind=restart_service service=apache2" in sent_payloads[1]["content"]
+    assert "復旧確認: 成功 target=apache2 / systemd=active / port=80:ok / http=200" in sent_payloads[1]["content"]

@@ -150,6 +150,10 @@ sasa ALL=(root) NOPASSWD: /usr/bin/systemctl restart apache2
 `sudo -n` はパスワード対話を禁止します。
 そのため `sudoers` が不足している場合、PoC は即失敗し、無言で権限昇格されることはありません。
 
+さらに、systemd unit で `NoNewPrivileges=true` を有効にしていると `sudo -n` 自体が失敗します。
+`execute` モードで `restart_command_prefix: ["sudo", "-n"]` を使う場合は、
+`/etc/systemd/system/production-poc-monitor.service` の `NoNewPrivileges=false` を維持してください。
+
 既知のノイズを抑えたい場合は、次のような ignorelist を使えます。
 
 ```yaml
@@ -257,6 +261,7 @@ service 名に広い指定や wildcard は入れないでください。
 - `Environment=PYTHONPATH=/opt/infra-emergency-recovery`
 - `ExecStart=/opt/infra-emergency-recovery/.venv/bin/python ...`
 - Minecraft の log や working directory が `/home/...` 配下なら `ProtectHome=read-only`
+- `restart_command_prefix: ["sudo", "-n"]` を使うなら `NoNewPrivileges=false`
 
 もし別 path に仮想環境を作った場合や、別ユーザーを使う場合は、それぞれ実環境の値へ書き換えてから `/etc/systemd/system/` へ配置してください。
 

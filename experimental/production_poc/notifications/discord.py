@@ -68,19 +68,17 @@ class DiscordWebhookNotifier:
     def send_incident(self, outcome: MonitorOutcome, *, host_label: str, mode: str) -> None:
         if not self.webhook_url:
             return
-        highest = self._severity_label(self._highest_severity(outcome))
+        incident_label, summary_line = self._incident_summary(outcome, mode=mode)
         service_names = sorted({finding.service for finding in outcome.findings if finding.service})
         services = ",".join(service_names) or "host"
         summary = (
-            f"[{highest}] 障害検知 | ホスト={host_label} | 対象={services} "
+            f"[{incident_label}] 監視結果 | ホスト={host_label} | 対象={services} "
             f"| 時刻={outcome.checked_at} | 相関ID={outcome.correlation_id} | モード={mode}"
-        )
-        summary_line = outcome.analysis.summary if outcome.analysis else "; ".join(
-            finding.summary for finding in outcome.findings[:2]
         )
         self._send_text(f"{summary}\n{summary_line}")
 
         detail_lines = []
+        detail_lines.append(f"状態: {self._incident_state_label(outcome, mode=mode)}")
         for finding in outcome.findings[:4]:
             detail_lines.append(
                 f"- {self._severity_label(finding.severity)}: {finding.title} ({finding.service or 'host'})"
@@ -100,12 +98,16 @@ class DiscordWebhookNotifier:
                 f"risk={self._risk_label(guard.risk_class)} 理由={guard.reason or guard.action.reason}"
             )
         for execution in outcome.execution_results[:1]:
-            detail_lines.append(f"実行結果: ok={execution.ok} kind={execution.action.action.kind}")
+            detail_lines.append(
+                "自動対応: "
+                f"{'成功' if execution.ok else '失敗'} "
+                f"kind={execution.action.action.kind} service={execution.action.action.service or '-'}"
+            )
+            failure_reason = str(execution.details.get("stderr", "") or execution.details.get("exception_class", "")).strip()
+            if failure_reason:
+                detail_lines.append(f"失敗理由: {failure_reason}")
         if outcome.verification:
-            if outcome.verification.get("skipped"):
-                detail_lines.append(f"検証: スキップ ({outcome.verification.get('reason', '理由なし')})")
-            else:
-                detail_lines.append(f"検証成功: {outcome.verification.get('ok')}")
+            detail_lines.append(f"復旧確認: {self._verification_summary(outcome.verification)}")
         if outcome.escalation_reason:
             detail_lines.append(f"エスカレーション: {outcome.escalation_reason}")
         if outcome.related_logs:
@@ -163,6 +165,77 @@ class DiscordWebhookNotifier:
             "warning": "警告",
             "critical": "重大",
         }.get(value, value)
+
+    def _incident_summary(self, outcome: MonitorOutcome, *, mode: str) -> tuple[str, str]:
+        if outcome.execution_results:
+            execution = outcome.execution_results[0]
+            service = execution.action.action.service or outcome.verification.get("target") or "service"
+            action = execution.action.action.kind
+            if execution.ok and outcome.verification and outcome.verification.get("ok"):
+                return "復旧成功", (
+                    f"{service} の異常を検知し、{action} を実行して復旧確認まで完了しました。"
+                )
+            failure_reason = str(
+                execution.details.get("stderr")
+                or execution.details.get("exception_class")
+                or outcome.escalation_reason
+                or "自動対応に失敗しました。"
+            ).strip()
+            return "復旧失敗", (
+                f"{service} の異常を検知し、{action} を試しましたが復旧できませんでした。"
+                f" 理由: {failure_reason[:240]}"
+            )
+
+        if mode == "propose-only" and outcome.guard_results:
+            return "提案のみ", (
+                "異常を検知しました。自動実行は行わず、対応候補の提案までで停止しています。"
+            )
+
+        highest = self._severity_label(self._highest_severity(outcome))
+        summary_line = outcome.analysis.summary if outcome.analysis else "; ".join(
+            finding.summary for finding in outcome.findings[:2]
+        )
+        return highest, summary_line
+
+    def _incident_state_label(self, outcome: MonitorOutcome, *, mode: str) -> str:
+        if outcome.execution_results:
+            execution = outcome.execution_results[0]
+            if execution.ok and outcome.verification and outcome.verification.get("ok"):
+                return "自動復旧成功"
+            return "自動復旧失敗"
+        if mode == "propose-only" and outcome.guard_results:
+            return "提案のみ"
+        if outcome.escalated:
+            return "手動対応待ち"
+        return "障害検知"
+
+    def _verification_summary(self, verification: dict[str, object]) -> str:
+        if verification.get("skipped"):
+            return f"スキップ ({verification.get('reason', '理由なし')})"
+
+        ok = bool(verification.get("ok"))
+        target = str(verification.get("target", "") or "-")
+        parts = [("成功" if ok else "失敗") + f" target={target}"]
+
+        web = verification.get("web")
+        if isinstance(web, dict):
+            service_active = web.get("service_active")
+            if isinstance(service_active, dict):
+                parts.append(f"systemd={service_active.get('state', 'unknown')}")
+            listen_result = web.get("listen_result")
+            if isinstance(listen_result, dict):
+                port = listen_result.get("port")
+                port_label = f"port={port}" if port else "port=unknown"
+                parts.append(f"{port_label}:{'ok' if listen_result.get('ok') else 'ng'}")
+            http_result = web.get("http_result")
+            if isinstance(http_result, dict):
+                status = http_result.get("status")
+                parts.append(f"http={status if status is not None else 'failed'}")
+
+        reason = str(verification.get("reason", "")).strip()
+        if reason:
+            parts.append(f"reason={reason}")
+        return " / ".join(parts)
 
     @staticmethod
     def _confidence_label(value: str) -> str:
@@ -229,7 +302,9 @@ class DiscordWebhookNotifier:
 
         preferred = [line for is_preferred, line in flattened if is_preferred]
         others = [line for is_preferred, line in flattened if not is_preferred]
-        return (preferred + others)[:8]
+        if preferred:
+            return preferred[:8]
+        return others[:8]
 
     @staticmethod
     def _matches_preferred(source: str, line: str, preferred_terms: list[str]) -> bool:

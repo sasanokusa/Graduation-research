@@ -16,7 +16,9 @@ Environment=PYTHONPATH=/opt/infra-emergency-recovery
 ExecStart=/opt/infra-emergency-recovery/.venv/bin/python -m experimental.production_poc.runtime_prod.main --config /etc/infra-production-poc/production_poc.yaml --env-file /etc/infra-production-poc/production_poc.env monitor-once
 Nice=10
 PrivateTmp=true
-NoNewPrivileges=true
+# `sudo -n systemctl restart ...` を使う execute モードでは
+# NoNewPrivileges=true のままだと権限昇格が拒否されるため false を維持します。
+NoNewPrivileges=false
 ProtectSystem=full
 # Minecraft log や working_directory を /home 配下に置く構成でも読めるように、
 # home は read-only に保ちつつ参照だけ許可します。
