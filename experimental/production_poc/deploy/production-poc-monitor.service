@@ -18,7 +18,9 @@ Nice=10
 PrivateTmp=true
 NoNewPrivileges=true
 ProtectSystem=full
-ProtectHome=true
+# Minecraft log や working_directory を /home 配下に置く構成でも読めるように、
+# home は read-only に保ちつつ参照だけ許可します。
+ProtectHome=read-only
 ReadWritePaths=/var/lib/infra-production-poc /var/log /run
 
 [Install]

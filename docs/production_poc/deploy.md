@@ -256,8 +256,12 @@ service 名に広い指定や wildcard は入れないでください。
 - `Group=infra-poc`
 - `Environment=PYTHONPATH=/opt/infra-emergency-recovery`
 - `ExecStart=/opt/infra-emergency-recovery/.venv/bin/python ...`
+- Minecraft の log や working directory が `/home/...` 配下なら `ProtectHome=read-only`
 
 もし別 path に仮想環境を作った場合や、別ユーザーを使う場合は、それぞれ実環境の値へ書き換えてから `/etc/systemd/system/` へ配置してください。
+
+`ProtectHome=true` のままだと `/home/...` 配下が見えなくなり、`/home/sasa/minecraft-server-20260226/logs/latest.log` のような構成では監視に失敗します。
+この PoC では `/home` 配下を読むケースがあるため、同梱の service 雛形は `ProtectHome=read-only` を前提にしています。
 
 その後、以下で配置します。
 
