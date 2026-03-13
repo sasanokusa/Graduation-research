@@ -8,6 +8,9 @@ Type=oneshot
 User=infra-poc
 Group=infra-poc
 WorkingDirectory=/opt/infra-emergency-recovery
+# `.venv/` は gitignore 対象のためリポジトリには含まれません。
+# この unit を有効化する前に、配備先ホスト上で仮想環境を作成してください。
+# 別の仮想環境 path を使う場合は、ExecStart をその path に合わせて修正してください。
 ExecStart=/opt/infra-emergency-recovery/.venv/bin/python -m experimental.production_poc.runtime_prod.main --config /etc/infra-production-poc/production_poc.yaml --env-file /etc/infra-production-poc/production_poc.env monitor-once
 Nice=10
 PrivateTmp=true

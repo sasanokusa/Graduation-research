@@ -22,12 +22,26 @@ git clone <repo-url> /opt/infra-emergency-recovery
 cd /opt/infra-emergency-recovery
 ```
 
+注意:
+
+- `.gitignore` により `.venv/` はリポジトリへ含まれません
+- `.env`, `.env.*` も原則リポジトリに含まれません
+- そのため、仮想環境と secrets を含む env file は配備先 Ubuntu Server 上で必ず手動作成してください
+
 ## 4. 実行環境の準備
+
+この手順で `/opt/infra-emergency-recovery/.venv` を新規作成します。clone 直後のリポジトリには `.venv` は存在しません。
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements_agent.txt
+```
+
+作成確認:
+
+```bash
+test -x /opt/infra-emergency-recovery/.venv/bin/python
 ```
 
 ## 5. PoC 設定ファイルの作成
@@ -115,6 +129,16 @@ service 名に広い指定や wildcard は入れないでください。
 
 - `experimental/production_poc/deploy/production-poc-monitor.service`
 - `experimental/production_poc/deploy/production-poc-monitor.timer`
+
+特に `production-poc-monitor.service` の `ExecStart` は、実際に作成した Python 仮想環境の path に合わせてください。
+
+既定例:
+
+```ini
+ExecStart=/opt/infra-emergency-recovery/.venv/bin/python -m experimental.production_poc.runtime_prod.main --config /etc/infra-production-poc/production_poc.yaml --env-file /etc/infra-production-poc/production_poc.env monitor-once
+```
+
+もし別 path に仮想環境を作った場合は、その path へ書き換えてから `/etc/systemd/system/` へ配置してください。
 
 その後、以下で配置します。
 
