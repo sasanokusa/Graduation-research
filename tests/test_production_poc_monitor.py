@@ -57,6 +57,8 @@ def _config(tmp_path: Path, access_log: Path, mc_log: Path) -> ProductionPocConf
             anomaly_cooldown_seconds=0,
             max_related_log_lines=10,
             journal_keywords=["error", "failed"],
+            ignored_failed_units=[],
+            ignored_journal_patterns=[],
         ),
         web=WebServiceConfig(
             service_name="nginx",
@@ -435,3 +437,195 @@ def test_non_systemd_minecraft_skips_systemctl_and_relies_on_process_and_tcp(mon
     assert probe_details["minecraft"]["management_mode"] == "shell_script"
     assert ["systemctl", "is-active", "minecraft"] not in runner.calls
     assert "minecraft_status" not in probe_details["minecraft"]["logs"]
+
+
+def test_host_ignorelist_suppresses_known_failed_units_and_journal_noise(monkeypatch, tmp_path: Path) -> None:
+    access_log = tmp_path / "access.log"
+    access_log.write_text("", encoding="utf-8")
+    mc_log = tmp_path / "latest.log"
+    mc_log.write_text("[00:00:00] [Server thread/INFO]: Done\n", encoding="utf-8")
+
+    responses = {
+        ("systemctl", "is-active", "nginx"): CommandResult(
+            args=["systemctl", "is-active", "nginx"],
+            returncode=0,
+            stdout="active",
+            stderr="",
+            timed_out=False,
+            timeout_seconds=5,
+            duration_ms=1,
+        ),
+        ("ss", "-ltnpH"): CommandResult(
+            args=["ss", "-ltnpH"],
+            returncode=0,
+            stdout="LISTEN 0 511 *:80 *:*",
+            stderr="",
+            timed_out=False,
+            timeout_seconds=5,
+            duration_ms=1,
+        ),
+        ("systemctl", "status", "nginx", "--no-pager", "--lines=25"): CommandResult(
+            args=["systemctl", "status", "nginx", "--no-pager", "--lines=25"],
+            returncode=0,
+            stdout="active",
+            stderr="",
+            timed_out=False,
+            timeout_seconds=5,
+            duration_ms=1,
+        ),
+        ("journalctl", "-u", "nginx", "--since", "-15m", "--no-pager", "-n", "10"): CommandResult(
+            args=["journalctl", "-u", "nginx", "--since", "-15m", "--no-pager", "-n", "10"],
+            returncode=0,
+            stdout="",
+            stderr="",
+            timed_out=False,
+            timeout_seconds=8,
+            duration_ms=1,
+        ),
+        ("systemctl", "is-active", "minecraft"): CommandResult(
+            args=["systemctl", "is-active", "minecraft"],
+            returncode=0,
+            stdout="active",
+            stderr="",
+            timed_out=False,
+            timeout_seconds=5,
+            duration_ms=1,
+        ),
+        ("systemctl", "status", "minecraft", "--no-pager", "--lines=25"): CommandResult(
+            args=["systemctl", "status", "minecraft", "--no-pager", "--lines=25"],
+            returncode=0,
+            stdout="active",
+            stderr="",
+            timed_out=False,
+            timeout_seconds=5,
+            duration_ms=1,
+        ),
+        ("journalctl", "-u", "minecraft", "--since", "-15m", "--no-pager", "-n", "10"): CommandResult(
+            args=["journalctl", "-u", "minecraft", "--since", "-15m", "--no-pager", "-n", "10"],
+            returncode=0,
+            stdout="",
+            stderr="",
+            timed_out=False,
+            timeout_seconds=8,
+            duration_ms=1,
+        ),
+        ("ps", "-eo", "comm,args", "--no-headers"): CommandResult(
+            args=["ps", "-eo", "comm,args", "--no-headers"],
+            returncode=0,
+            stdout="java minecraft-server.jar",
+            stderr="",
+            timed_out=False,
+            timeout_seconds=5,
+            duration_ms=1,
+        ),
+        ("df", "-P", "-x", "tmpfs", "-x", "devtmpfs"): CommandResult(
+            args=["df", "-P", "-x", "tmpfs", "-x", "devtmpfs"],
+            returncode=0,
+            stdout="Filesystem 1024-blocks Used Available Capacity Mounted on\n/dev/sda1 10 2 8 20% /\n",
+            stderr="",
+            timed_out=False,
+            timeout_seconds=5,
+            duration_ms=1,
+        ),
+        ("systemctl", "--failed", "--no-legend", "--plain"): CommandResult(
+            args=["systemctl", "--failed", "--no-legend", "--plain"],
+            returncode=0,
+            stdout=(
+                "apt-daily.service loaded failed failed Daily apt download activities\n"
+                "logrotate.service loaded failed failed Rotate log files\n"
+            ),
+            stderr="",
+            timed_out=False,
+            timeout_seconds=5,
+            duration_ms=1,
+        ),
+        ("journalctl", "--since", "-15m", "--no-pager", "-n", "10"): CommandResult(
+            args=["journalctl", "--since", "-15m", "--no-pager", "-n", "10"],
+            returncode=0,
+            stdout=(
+                "Mar 13 22:35:34 saserver ssh[2288]: connect_to localhost port 25565: failed.\n"
+                "Mar 13 22:36:33 saserver logrotate[434948]: error: stat of /var/log/playit/playit.log failed: No such file or directory\n"
+            ),
+            stderr="",
+            timed_out=False,
+            timeout_seconds=8,
+            duration_ms=1,
+        ),
+    }
+    runner = _MappedRunner(responses)
+    base_config = _config(tmp_path, access_log, mc_log)
+    config = ProductionPocConfig(
+        path=base_config.path,
+        host=base_config.host,
+        monitoring=MonitoringConfig(
+            poll_interval_seconds=base_config.monitoring.poll_interval_seconds,
+            journal_lookback_minutes=base_config.monitoring.journal_lookback_minutes,
+            disk_percent_threshold=base_config.monitoring.disk_percent_threshold,
+            memory_percent_threshold=base_config.monitoring.memory_percent_threshold,
+            cpu_percent_threshold=base_config.monitoring.cpu_percent_threshold,
+            web_5xx_threshold=base_config.monitoring.web_5xx_threshold,
+            anomaly_cooldown_seconds=base_config.monitoring.anomaly_cooldown_seconds,
+            max_related_log_lines=base_config.monitoring.max_related_log_lines,
+            journal_keywords=base_config.monitoring.journal_keywords,
+            ignored_failed_units=["apt-daily.service", "logrotate.service"],
+            ignored_journal_patterns=["connect_to localhost port 25565: failed", "/var/log/playit/playit.log"],
+        ),
+        web=base_config.web,
+        minecraft=base_config.minecraft,
+        actions=base_config.actions,
+        notifications=base_config.notifications,
+        llm=base_config.llm,
+        escalation=base_config.escalation,
+    )
+    controller = ProductionPocController(
+        config=config,
+        runner=runner,
+        observer=HostObserver(runner),
+        analyzer=RuleBasedIncidentAnalyzer(),
+        guard=ActionGuard(config.actions, runner),
+        notifier=NullNotifier(),
+        store=StateStore(config.host.state_dir),
+        backup_provider=NullBackupProvider(),
+    )
+    snapshot = DiscoverySnapshot(
+        captured_at="2026-03-13T00:00:00+00:00",
+        host={"hostname": "homebox"},
+        systemd_services=[],
+        process_summary=[],
+        open_ports=[{"port": 80}, {"port": 25565}],
+        disk_usage=[],
+        memory_usage={"used_percent": 10.0},
+        cpu_usage={"used_percent": 5.0},
+        journal_summary={"keyword_counts": {}},
+        detected_web={"service_name": "nginx", "server_type": "nginx"},
+        detected_minecraft={
+            "service_name": "minecraft",
+            "launch_method": "systemd",
+            "management_mode": "systemd",
+            "port": 25565,
+        },
+        inferred_health_checks={
+            "web": {"selected_target": "http://127.0.0.1/healthz"},
+            "minecraft": {"selected_target": "127.0.0.1:25565"},
+        },
+        backup_status={"summary": "none"},
+        lightweight_context={
+            "detected_web": {"service_name": "nginx"},
+            "detected_minecraft": {"service_name": "minecraft", "management_mode": "systemd"},
+        },
+    )
+
+    monkeypatch.setattr(
+        "experimental.production_poc.runtime_prod.controller.http_probe",
+        lambda url, timeout_seconds: {"ok": True, "url": url, "status": 200, "error": ""},
+    )
+    monkeypatch.setattr(
+        "experimental.production_poc.runtime_prod.controller.tcp_probe",
+        lambda host, port, timeout_seconds: {"ok": True, "host": host, "port": port, "error": ""},
+    )
+
+    findings, _, _ = controller._run_rule_based_probes(snapshot)
+
+    ids = {finding.id for finding in findings}
+    assert "systemd_failed" not in ids
+    assert "journal_critical" not in ids

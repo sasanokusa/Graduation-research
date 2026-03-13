@@ -84,6 +84,8 @@ def _config(tmp_path: Path, mode: str) -> ProductionPocConfig:
             anomaly_cooldown_seconds=0,
             max_related_log_lines=10,
             journal_keywords=["error"],
+            ignored_failed_units=[],
+            ignored_journal_patterns=[],
         ),
         web=WebServiceConfig(
             service_name="nginx",

@@ -418,7 +418,11 @@ class ProductionPocController:
             ["systemctl", "--failed", "--no-legend", "--plain"],
             timeout_seconds=5,
         )
-        failed_services = [line.strip() for line in failed_services_result.stdout.splitlines() if line.strip()]
+        failed_services = [
+            line.strip()
+            for line in failed_services_result.stdout.splitlines()
+            if line.strip() and not self._is_ignored_failed_unit(line)
+        ]
 
         journal = journal_excerpt(
             self._runner,
@@ -431,6 +435,7 @@ class ProductionPocController:
             line[:240]
             for line in journal_lines
             if any(keyword.lower() in line.lower() for keyword in self._config.monitoring.journal_keywords)
+            and not self._is_ignored_journal_line(line)
         ]
         return {
             "disk_pressure": disk_pressure,
@@ -513,6 +518,17 @@ class ProductionPocController:
             or self._config.minecraft.management_mode
             or "auto"
         ).strip().lower()
+
+    def _is_ignored_failed_unit(self, line: str) -> bool:
+        ignored_units = {unit.strip() for unit in self._config.monitoring.ignored_failed_units if unit.strip()}
+        if not ignored_units:
+            return False
+        unit_name = line.split(None, 1)[0]
+        return unit_name in ignored_units
+
+    def _is_ignored_journal_line(self, line: str) -> bool:
+        lowered = line.lower()
+        return any(pattern.strip().lower() in lowered for pattern in self._config.monitoring.ignored_journal_patterns if pattern.strip())
 
     @staticmethod
     def _read_proc_stat() -> dict[str, int]:

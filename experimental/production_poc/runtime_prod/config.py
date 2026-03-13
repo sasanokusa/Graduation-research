@@ -118,6 +118,8 @@ class MonitoringConfig:
     anomaly_cooldown_seconds: int
     max_related_log_lines: int
     journal_keywords: list[str]
+    ignored_failed_units: list[str]
+    ignored_journal_patterns: list[str]
 
 
 @dataclass(frozen=True)
@@ -225,6 +227,8 @@ def load_config(config_path: str | Path, *, env_file: str | Path | None = None) 
         anomaly_cooldown_seconds=_to_int(monitoring_payload.get("anomaly_cooldown_seconds"), 300),
         max_related_log_lines=_to_int(monitoring_payload.get("max_related_log_lines"), 40),
         journal_keywords=list(monitoring_payload.get("journal_keywords") or ["error", "failed", "oom", "segfault"]),
+        ignored_failed_units=list(monitoring_payload.get("ignored_failed_units") or []),
+        ignored_journal_patterns=list(monitoring_payload.get("ignored_journal_patterns") or []),
     )
     web = WebServiceConfig(
         service_name=str(web_payload.get("service_name", "")).strip(),

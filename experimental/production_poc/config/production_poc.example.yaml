@@ -17,6 +17,8 @@ monitoring:
     - failed
     - oom
     - segfault
+  ignored_failed_units: []
+  ignored_journal_patterns: []
 
 services:
   web:
