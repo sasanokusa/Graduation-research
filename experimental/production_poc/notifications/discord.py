@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import sys
+import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from typing import Protocol
@@ -118,8 +120,13 @@ class DiscordWebhookNotifier:
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        with urllib.request.urlopen(request, timeout=10):
-            return
+        try:
+            with urllib.request.urlopen(request, timeout=10):
+                return
+        except urllib.error.HTTPError as exc:
+            self._warn_notification_failure(f"Discord webhook returned HTTP {exc.code}: {exc.reason}")
+        except Exception as exc:  # pragma: no cover - defensive runtime safeguard
+            self._warn_notification_failure(f"Discord webhook send failed: {exc}")
 
     @staticmethod
     def _highest_severity(outcome: MonitorOutcome) -> str:
@@ -175,6 +182,10 @@ class DiscordWebhookNotifier:
             if len(excerpt) >= 8:
                 break
         return excerpt[:8]
+
+    @staticmethod
+    def _warn_notification_failure(message: str) -> None:
+        print(f"[production_poc] {message}", file=sys.stderr)
 
 
 class NullNotifier:

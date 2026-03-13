@@ -5,9 +5,11 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
+# `infra-poc` は例示名です。事前に作成するか、既存の専用ユーザーへ置き換えてください。
 User=infra-poc
 Group=infra-poc
 WorkingDirectory=/opt/infra-emergency-recovery
+Environment=PYTHONPATH=/opt/infra-emergency-recovery
 # `.venv/` は gitignore 対象のためリポジトリには含まれません。
 # この unit を有効化する前に、配備先ホスト上で仮想環境を作成してください。
 # 別の仮想環境 path を使う場合は、ExecStart をその path に合わせて修正してください。

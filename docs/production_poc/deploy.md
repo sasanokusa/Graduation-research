@@ -11,9 +11,37 @@
 - `systemd`, `journalctl`, `ss`, `curl`, `df` が利用可能
 - 対象 service log を読める権限
 - Discord 通知を使う場合は webhook URL
-- `infra-poc` のような専用 service account
+- 監視実行用の専用 service account を作成するか、既存の安全な service account を 1 つ決めておく
 
-## 3. リポジトリ配置
+## 3. 専用ユーザーの作成
+
+`infra-poc` は例示名であり、Ubuntu に最初から存在するユーザーではありません。
+
+新規に専用ユーザーを作る場合の例:
+
+```bash
+sudo useradd \
+  --system \
+  --create-home \
+  --home-dir /var/lib/infra-production-poc \
+  --shell /usr/sbin/nologin \
+  --user-group \
+  infra-poc
+```
+
+確認:
+
+```bash
+id infra-poc
+getent passwd infra-poc
+```
+
+既存ユーザーを使う場合:
+
+- この手順書中の `infra-poc` をそのユーザー名に置き換える
+- `production-poc-monitor.service` の `User=` と `Group=` も同じ名前に修正する
+
+## 4. リポジトリ配置
 
 ```bash
 sudo mkdir -p /opt/infra-emergency-recovery
@@ -28,7 +56,7 @@ cd /opt/infra-emergency-recovery
 - `.env`, `.env.*` も原則リポジトリに含まれません
 - そのため、仮想環境と secrets を含む env file は配備先 Ubuntu Server 上で必ず手動作成してください
 
-## 4. 実行環境の準備
+## 5. 実行環境の準備
 
 この手順で `/opt/infra-emergency-recovery/.venv` を新規作成します。clone 直後のリポジトリには `.venv` は存在しません。
 
@@ -44,14 +72,30 @@ pip install -r requirements_agent.txt
 test -x /opt/infra-emergency-recovery/.venv/bin/python
 ```
 
-## 5. PoC 設定ファイルの作成
+モジュール起動時の注意:
+
+- `experimental.production_poc...` はリポジトリ直下を Python import path に含める必要があります
+- 手動実行では、`cd /opt/infra-emergency-recovery` してから起動するか、`PYTHONPATH=/opt/infra-emergency-recovery` を付けて実行してください
+
+## 6. PoC 設定ファイルの作成
 
 ```bash
 sudo mkdir -p /etc/infra-production-poc
 sudo cp experimental/production_poc/config/production_poc.example.yaml /etc/infra-production-poc/production_poc.yaml
 sudo cp experimental/production_poc/.env.example /etc/infra-production-poc/production_poc.env
-sudo chmod 600 /etc/infra-production-poc/production_poc.env
+sudo chown root:infra-poc /etc/infra-production-poc/production_poc.yaml
+sudo chmod 640 /etc/infra-production-poc/production_poc.yaml
+sudo chown root:infra-poc /etc/infra-production-poc/production_poc.env
+sudo chmod 640 /etc/infra-production-poc/production_poc.env
 ```
+
+`infra-poc` を使わない場合は、ここも実際に使う service account のグループ名へ置き換えてください。
+
+重要:
+
+- `production_poc.env` は監視実行ユーザーが読める必要があります
+- `chmod 600` のままだと root 以外は読めず、`PermissionError` になります
+- 推奨は `root:<service-account-group>` と `640` です
 
 `/etc/infra-production-poc/production_poc.yaml` は次を実ホストに合わせて修正してください。
 
@@ -68,24 +112,30 @@ sudo chmod 600 /etc/infra-production-poc/production_poc.env
 - `DISCORD_WEBHOOK_URL=...`
 - LLM を有効にする場合のみ `OPENAI_API_KEY=...` など
 
-## 6. 状態保存ディレクトリ作成
+## 7. 状態保存ディレクトリ作成
 
 ```bash
 sudo mkdir -p /var/lib/infra-production-poc
 sudo chown -R infra-poc:infra-poc /var/lib/infra-production-poc
 ```
 
-## 7. 初回 discovery 実行
+`infra-poc` を使わない場合は、この `chown` のユーザー名とグループ名も実際に使う値へ置き換えてください。
+
+## 8. 初回 discovery 実行
 
 timer を有効化する前に、まず discovery を手動実行します。
 
 ```bash
-sudo -u infra-poc /opt/infra-emergency-recovery/.venv/bin/python \
+cd /opt/infra-emergency-recovery
+sudo -u infra-poc env PYTHONPATH=/opt/infra-emergency-recovery \
+  /opt/infra-emergency-recovery/.venv/bin/python \
   -m experimental.production_poc.runtime_prod.main \
   --config /etc/infra-production-poc/production_poc.yaml \
   --env-file /etc/infra-production-poc/production_poc.env \
   discover
 ```
+
+既存ユーザーを使う場合は、`sudo -u infra-poc` もそのユーザー名へ置き換えてください。
 
 設定した `state_dir` 以下に次が作られます。
 
@@ -93,12 +143,14 @@ sudo -u infra-poc /opt/infra-emergency-recovery/.venv/bin/python \
 - `latest_snapshot.md`
 - timestamp 付き snapshot archive
 
-## 8. dry-run / propose-only 初回確認
+## 9. dry-run / propose-only 初回確認
 
 初回は `actions.mode: propose-only` のまま 1 回監視を実行します。
 
 ```bash
-sudo -u infra-poc /opt/infra-emergency-recovery/.venv/bin/python \
+cd /opt/infra-emergency-recovery
+sudo -u infra-poc env PYTHONPATH=/opt/infra-emergency-recovery \
+  /opt/infra-emergency-recovery/.venv/bin/python \
   -m experimental.production_poc.runtime_prod.main \
   --config /etc/infra-production-poc/production_poc.yaml \
   --env-file /etc/infra-production-poc/production_poc.env \
@@ -112,33 +164,32 @@ sudo -u infra-poc /opt/infra-emergency-recovery/.venv/bin/python \
 - 自動 restart が走らない
 - 異常時だけ incident JSON が保存される
 
-## 9. execute モード移行
+## 10. execute モード移行
 
 propose-only の確認後にのみ execute へ進みます。
 
-1. Keep `allowed_restart_services` small and explicit.
-2. Change `actions.mode` to `execute`.
-3. Re-run `monitor-once`.
-4. Verify that only the intended service names can be restarted.
+1. `allowed_restart_services` を小さく明示的に保つ
+2. `actions.mode` を `execute` に変更する
+3. `monitor-once` を再実行する
+4. 想定した service 名だけが restart 対象になることを確認する
 
 service 名に広い指定や wildcard は入れないでください。
 
-## 10. systemd service / timer 化
+## 11. systemd service / timer 化
 
 まず次の雛形を実環境向けに見直します。
 
 - `experimental/production_poc/deploy/production-poc-monitor.service`
 - `experimental/production_poc/deploy/production-poc-monitor.timer`
 
-特に `production-poc-monitor.service` の `ExecStart` は、実際に作成した Python 仮想環境の path に合わせてください。
+特に `production-poc-monitor.service` では次を確認してください。
 
-既定例:
+- `User=infra-poc`
+- `Group=infra-poc`
+- `Environment=PYTHONPATH=/opt/infra-emergency-recovery`
+- `ExecStart=/opt/infra-emergency-recovery/.venv/bin/python ...`
 
-```ini
-ExecStart=/opt/infra-emergency-recovery/.venv/bin/python -m experimental.production_poc.runtime_prod.main --config /etc/infra-production-poc/production_poc.yaml --env-file /etc/infra-production-poc/production_poc.env monitor-once
-```
-
-もし別 path に仮想環境を作った場合は、その path へ書き換えてから `/etc/systemd/system/` へ配置してください。
+もし別 path に仮想環境を作った場合や、別ユーザーを使う場合は、それぞれ実環境の値へ書き換えてから `/etc/systemd/system/` へ配置してください。
 
 その後、以下で配置します。
 
@@ -149,14 +200,14 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now production-poc-monitor.timer
 ```
 
-## 11. 停止方法
+## 12. 停止方法
 
 ```bash
 sudo systemctl stop production-poc-monitor.timer
 sudo systemctl stop production-poc-monitor.service
 ```
 
-## 12. ログの見方
+## 13. ログの見方
 
 - `journalctl -u production-poc-monitor.service -n 100 --no-pager`
 - 設定した `state_dir`
@@ -168,14 +219,14 @@ journalctl -u nginx -n 100 --no-pager
 journalctl -u minecraft -n 100 --no-pager
 ```
 
-## 13. セキュリティ上の注意
+## 14. セキュリティ上の注意
 
 - env file は管理者か専用 service account のみが読めるようにする
 - 必要な log と command だけにアクセスできる専用 user を推奨
 - `NoNewPrivileges=true` を維持する
 - 明示した state directory 以外に書き込み権限を広げない
 
-## 14. バックアップ未整備環境での注意
+## 15. バックアップ未整備環境での注意
 
 この PoC は、バックアップや snapshot が弱い、または未整備な環境を前提にしています。
 

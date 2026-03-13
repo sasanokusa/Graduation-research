@@ -1,4 +1,5 @@
 import json
+import urllib.error
 from dataclasses import dataclass
 
 from experimental.production_poc.notifications.discord import DiscordWebhookNotifier
@@ -77,3 +78,39 @@ def test_discord_notifier_formats_startup_and_incident(monkeypatch) -> None:
     assert "監視開始" not in sent_payloads[0]["content"]
     assert "相関ID=abc123" in sent_payloads[2]["content"]
     assert "ログ抜粋" in sent_payloads[3]["content"]
+
+
+def test_discord_notifier_ignores_http_error_and_continues(monkeypatch, capsys) -> None:
+    def _raise_http_error(request, timeout=10):  # noqa: ANN001
+        raise urllib.error.HTTPError(
+            url=request.full_url,
+            code=403,
+            msg="Forbidden",
+            hdrs=None,
+            fp=None,
+        )
+
+    monkeypatch.setattr("urllib.request.urlopen", _raise_http_error)
+    notifier = DiscordWebhookNotifier("https://example.invalid/webhook")
+
+    snapshot = DiscoverySnapshot(
+        captured_at="2026-03-13T00:00:00+00:00",
+        host={"hostname": "homebox", "uptime": "up 2 hours"},
+        systemd_services=[],
+        process_summary=[],
+        open_ports=[],
+        disk_usage=[],
+        memory_usage={"used_percent": 55.0},
+        cpu_usage={"used_percent": 11.0},
+        journal_summary={"keyword_counts": {}},
+        detected_web={"service_name": "nginx", "server_type": "nginx"},
+        detected_minecraft={"launch_method": "systemd"},
+        inferred_health_checks={},
+        backup_status={"summary": "none"},
+        lightweight_context={},
+    )
+
+    notifier.send_startup_summary(snapshot)
+
+    captured = capsys.readouterr()
+    assert "HTTP 403" in captured.err
