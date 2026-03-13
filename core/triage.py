@@ -1,5 +1,9 @@
 from typing import Any
 
+from core.healthchecks import (
+    evaluate_api_items_nonempty,
+    evaluate_api_items_schema_ok,
+)
 from core.verifier import run_postcheck
 
 DOMAIN_POLICY_MAP = {
@@ -115,7 +119,10 @@ def _rank_domains(observation: dict[str, Any]) -> list[dict[str, Any]]:
     healthz = health_checks.get("healthz", {})
     api_items = health_checks.get("api_items", {})
     app_port = _extract_app_port(observation)
+    baseline_app_port = str(observation.get("static_observations", {}).get("baseline_app_port", "")).strip()
     historical_evidence = observation.get("historical_evidence", [])
+    api_nonempty = evaluate_api_items_nonempty(api_items)
+    api_schema_ok = evaluate_api_items_schema_ok(api_items)
 
     domains = {
         key: {"domain": key, "confidence": 0.0, "evidence": []}
@@ -181,23 +188,30 @@ def _rank_domains(observation: dict[str, Any]) -> list[dict[str, Any]]:
             0.72,
             "editable app env snippet exposes a database credential setting",
         )
-    if "APP_PORT=9000" in app_env_snippet:
+    if app_port and baseline_app_port and app_port != baseline_app_port:
         _score_domain(
             domains,
             "app_config_or_env_mismatch",
             0.82,
-            "editable app env snippet shows a non-default application listen port",
+            "editable app env or log evidence shows a non-baseline application listen port",
         )
-    if "Uvicorn running on http://0.0.0.0:9000" in str(observation.get("service_logs", {}).get("app", "")):
+    if (
+        "Uvicorn running on http://0.0.0.0:" in str(observation.get("service_logs", {}).get("app", ""))
+        and app_port
+        and baseline_app_port
+        and app_port != baseline_app_port
+    ):
         _score_domain(
             domains,
             "app_config_or_env_mismatch",
             0.86,
-            "app logs show the service listening on port 9000",
+            f"app logs show the service listening on port {app_port} instead of the baseline port",
         )
     if (
-        app_port == "9000"
-        and "server app:8000" in nginx_snippet
+        app_port
+        and baseline_app_port
+        and app_port != baseline_app_port
+        and f"server app:{baseline_app_port}" in nginx_snippet
         and any(pattern in nginx_patterns for pattern in ["connect() failed", "502 Bad Gateway"])
     ):
         _score_domain(
@@ -233,6 +247,20 @@ def _rank_domains(observation: dict[str, Any]) -> list[dict[str, Any]]:
             0.58,
             "visible app code snippet routes the failing API query through an indirect constant that needs narrower inspection",
         )
+    if healthz.get("status") == 200 and api_items.get("status") == 200 and not api_nonempty["ok"]:
+        _score_domain(
+            domains,
+            "query_or_code_bug",
+            0.86,
+            "the items API returns HTTP 200 but the payload is empty, which suggests a hidden query or fallback-code path",
+        )
+    if healthz.get("status") == 200 and api_items.get("status") == 200 and api_nonempty["ok"] and not api_schema_ok["ok"]:
+        _score_domain(
+            domains,
+            "query_or_code_bug",
+            0.82,
+            "the items API returns HTTP 200 but the payload schema is degraded",
+        )
     if healthz.get("status") == 200 and api_items.get("status") != 200 and _contains_any(
         http_evidence_text, ["itemz", "doesn't exist", "Table '"]
     ):
@@ -248,6 +276,13 @@ def _rank_domains(observation: dict[str, Any]) -> list[dict[str, Any]]:
             "query_or_code_bug",
             0.95,
             "editable app code snippet shows the query targeting a non-existent table",
+        )
+    if "return []" in app_main_snippet and "itemz" in app_main_snippet:
+        _score_domain(
+            domains,
+            "query_or_code_bug",
+            0.97,
+            "editable app code snippet shows a broken query whose exception path silently returns an empty fallback payload",
         )
     if healthz.get("status") == 200 and api_items.get("status") != 200 and _contains_any(
         http_evidence_text, ["Unknown column", "details"]
@@ -370,6 +405,7 @@ def _missing_evidence_and_next_steps(
     top_domain = suspected_domains[0]["domain"] if suspected_domains else "unknown"
     ambiguity = _ambiguity_level(suspected_domains)
     file_snippets = observation.get("file_snippets", {})
+    baseline_app_port = str(observation.get("static_observations", {}).get("baseline_app_port", "")).strip()
     app_excerpt = str(observation.get("relevant_log_excerpts", {}).get("app", ""))
     nginx_excerpt = str(observation.get("relevant_log_excerpts", {}).get("nginx", ""))
     http_error_text = "\n".join(str(value) for value in observation.get("http_error_evidence", {}).values())
@@ -419,7 +455,8 @@ def _missing_evidence_and_next_steps(
         )
     if (
         top_domain in {"reverse_proxy_or_upstream_mismatch", "ambiguous_service_disagreement"}
-        and "APP_PORT=9000" in str(file_snippets.get("app/app.env", ""))
+        and baseline_app_port
+        and f"APP_PORT={baseline_app_port}" not in str(file_snippets.get("app/app.env", ""))
         and "DB_PASSWORD=" not in str(file_snippets.get("app/app.env", ""))
     ):
         missing_evidence.append("additional downstream application failures may still be masked until upstream reachability is restored")
@@ -494,7 +531,15 @@ def build_triage_result(
 
     initial_postcheck_result = run_postcheck(
         {
-            "success_checks": ["nginx_running", "app_running", "healthz_200", "api_items_200"],
+            "success_checks": [
+                "nginx_running",
+                "app_running",
+                "healthz_200",
+                "api_items_200",
+                "api_items_nonempty",
+                "api_items_schema_ok",
+                "port_contract_matches_baseline",
+            ],
             "failure_conditions": ["service_continuity_not_restored"],
         }
     )

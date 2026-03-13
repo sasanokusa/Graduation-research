@@ -12,4 +12,4 @@ cp "${ROOT_DIR}/app/app.env.base" "${ROOT_DIR}/app/app.env"
 docker compose down -v
 docker compose up -d
 
-echo "[reset] restored baseline files for scenarios A-O and recreated the stack"
+echo "[reset] restored baseline files for scenarios A-R and recreated the stack"

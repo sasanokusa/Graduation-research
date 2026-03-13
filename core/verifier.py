@@ -9,9 +9,13 @@ from core.actions import (
     expand_execution_actions,
 )
 from core.healthchecks import (
+    classify_front_most_failure,
     collect_service_logs,
     compose_config_check,
     docker_compose_ps,
+    evaluate_api_items_nonempty,
+    evaluate_api_items_schema_ok,
+    evaluate_port_contract_matches_baseline,
     http_check,
     service_running,
 )
@@ -101,6 +105,12 @@ def _evaluate_success_check(
         return healthz.get("status") == 200
     if check_id == "api_items_200":
         return api_items.get("status") == 200
+    if check_id == "api_items_nonempty":
+        return evaluate_api_items_nonempty(api_items).get("ok", False)
+    if check_id == "api_items_schema_ok":
+        return evaluate_api_items_schema_ok(api_items).get("ok", False)
+    if check_id == "port_contract_matches_baseline":
+        return evaluate_port_contract_matches_baseline().get("ok", False)
     if check_id == "app_running":
         return service_running(ps_snapshot, "app")
     if check_id == "nginx_running":
@@ -282,6 +292,7 @@ def _collect_postcheck_snapshot(scenario_definition: dict[str, Any]) -> dict[str
         scenario_definition.get("success_checks", [])
     )
     evaluated_checks: dict[str, bool] = {}
+    check_details: dict[str, Any] = {}
     for check_id in validated_success_checks:
         evaluated_checks[check_id] = _evaluate_success_check(
             check_id,
@@ -289,6 +300,12 @@ def _collect_postcheck_snapshot(scenario_definition: dict[str, Any]) -> dict[str
             healthz=healthz,
             api_items=api_items,
         )
+        if check_id == "api_items_nonempty":
+            check_details[check_id] = evaluate_api_items_nonempty(api_items)
+        elif check_id == "api_items_schema_ok":
+            check_details[check_id] = evaluate_api_items_schema_ok(api_items)
+        elif check_id == "port_contract_matches_baseline":
+            check_details[check_id] = evaluate_port_contract_matches_baseline()
 
     ok = all(evaluated_checks.values()) if evaluated_checks and not success_check_validation_errors else False
     warnings: list[str] = []
@@ -300,6 +317,7 @@ def _collect_postcheck_snapshot(scenario_definition: dict[str, Any]) -> dict[str
     return {
         "ok": ok,
         "checks": evaluated_checks,
+        "check_details": check_details,
         "validated_success_checks": validated_success_checks,
         "success_check_validation_errors": success_check_validation_errors,
         "compose_ps": ps_snapshot,
@@ -309,6 +327,11 @@ def _collect_postcheck_snapshot(scenario_definition: dict[str, Any]) -> dict[str
         "suspicious_hits": suspicious_hits,
         "warnings": warnings,
         "failure_conditions": scenario_definition.get("failure_conditions", []),
+        "front_most_failure": classify_front_most_failure(
+            healthz=healthz,
+            api_items=api_items,
+            service_logs=recent_logs,
+        ),
     }
 
 

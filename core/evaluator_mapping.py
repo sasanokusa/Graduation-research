@@ -8,7 +8,15 @@ AUTO_EVALUATION_DEFINITION = {
     "description": "Generic emergency recovery criteria for auto mode.",
     "allowed_files": [],
     "allowed_actions": [],
-    "success_checks": ["nginx_running", "app_running", "healthz_200", "api_items_200"],
+    "success_checks": [
+        "nginx_running",
+        "app_running",
+        "healthz_200",
+        "api_items_200",
+        "api_items_nonempty",
+        "api_items_schema_ok",
+        "port_contract_matches_baseline",
+    ],
     "failure_conditions": ["service_continuity_not_restored"],
 }
 
@@ -17,7 +25,15 @@ UNKNOWN_SCENARIO_DEFINITION = {
     "description": "No supported internal benchmark scenario was confidently inferred.",
     "allowed_files": [],
     "allowed_actions": [],
-    "success_checks": ["nginx_running", "app_running", "healthz_200", "api_items_200"],
+    "success_checks": [
+        "nginx_running",
+        "app_running",
+        "healthz_200",
+        "api_items_200",
+        "api_items_nonempty",
+        "api_items_schema_ok",
+        "port_contract_matches_baseline",
+    ],
     "failure_conditions": ["unsupported_fault_class"],
 }
 
@@ -80,7 +96,7 @@ def _rank_internal_scenarios(observation: dict[str, Any]) -> list[dict[str, Any]
 
     candidates = {
         key: {"scenario": key, "confidence": 0.0, "evidence": []}
-        for key in ["a", "b", "c", "d", "e", "f", "g", "h", "i", "i2", "k", "l", "m", "n", "o"]
+        for key in ["a", "b", "c", "d", "e", "f", "g", "h", "i", "i2", "k", "l", "m", "n", "o", "p", "q", "r"]
     }
     hidden = _hidden_benchmark_evidence()
 
@@ -154,6 +170,31 @@ def _rank_internal_scenarios(observation: dict[str, Any]) -> list[dict[str, Any]
         and historical_evidence
     ):
         _score_candidate(candidates, "o", 0.99, "hidden benchmark state shows stale upstream evidence layered on top of DB auth drift and a hidden query bug")
+    if "FROM itemz ORDER BY id" in hidden["app_main"] and "return []" in hidden["app_main"]:
+        _score_candidate(
+            candidates,
+            "p",
+            0.99,
+            "hidden benchmark state shows a broken items query whose exception path silently returns an empty fallback payload",
+        )
+    if "APP_PORT=9100" in hidden["app_env"]:
+        _score_candidate(
+            candidates,
+            "q",
+            0.99,
+            "hidden benchmark state shows an app-side port drift that must be restored to the baseline contract",
+        )
+    if (
+        "uvicorn[standard]" not in hidden["requirements"]
+        and "DB_PASSWORD=wrongpassword" in hidden["app_env"]
+        and "FROM itemz ORDER BY id" in hidden["app_main"]
+    ):
+        _score_candidate(
+            candidates,
+            "r",
+            0.995,
+            "hidden benchmark state shows a dependency failure masking DB auth drift and a downstream query bug",
+        )
     if healthz.get("status") == 200 and api_items.get("status") != 200 and any(
         "older upstream connection failures" in item for item in historical_evidence + current_state_evidence
     ):

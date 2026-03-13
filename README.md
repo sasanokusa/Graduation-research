@@ -2,14 +2,14 @@
 
 本リポジトリは、Docker Compose ベースの意図的に破壊可能な標的環境に対して、LLM が応急復旧を試みる研究評価基盤である。目的は本番運用ではなく、障害注入、観測、修復計画、検証、ロールバック、結果記録までを安全に反復実験することである。
 
-今回の主系は、自由形式シェルコマンドをそのまま実行する PoC ではなく、構造化アクション、Verifier、Rollback を備えた単一エージェント版である。さらに現在は、内部ベンチマーク用の A-O シナリオ真値を保持しつつ、sensor / triage / planner 側は closed-set の scenario classifier ではなく、open-world の仮説生成器として動作する構成へ寄せている。
+今回の主系は、自由形式シェルコマンドをそのまま実行する PoC ではなく、構造化アクション、Verifier、Rollback を備えた単一エージェント版である。さらに現在は、内部ベンチマーク用の A-R シナリオ真値を保持しつつ、sensor / triage / planner 側は closed-set の scenario classifier ではなく、open-world の仮説生成器として動作する構成へ寄せている。
 
 ## 応急復旧の成功条件
 
 本リポジトリにおける「応急復旧成功」は、元の構成を一字一句再現することではない。以下を満たし、かつ被害拡大を起こしていない状態を成功とみなす。
 
 - シナリオごとに定義した主要ヘルスチェックが通る
-- 主要 API が 200 を返す
+- 主要 API が 200 を返し、必要な semantic check も満たす
 - 許可されていないファイル変更や危険操作を行っていない
 - 失敗時にロールバック可能な変更は自動で巻き戻される
 
@@ -27,7 +27,7 @@
 - [app/requirements.txt](/Users/ryoike/Documents/codex/app/requirements.txt)
 - [app/app.env](/Users/ryoike/Documents/codex/app/app.env)
 
-`break.sh` による A-O 障害注入と `reset.sh` による初期化手順は従来どおり利用できる。
+`break.sh` による A-R 障害注入と `reset.sh` による初期化手順は従来どおり利用できる。
 
 ## 現在の主系構成
 
@@ -58,13 +58,13 @@
 │   └── definitions.yaml          # シナリオ定義
 ├── tests                         # pytest ベースの unit test
 ├── results                       # 実験結果 JSON と backup
-├── multi_agent.py                # 旧 PoC 系の参考実装
+├── multi_agent.py                # multi-agent minimal の薄い入口
 ├── docker-compose.yml
 ├── break.sh
 └── reset.sh
 ```
 
-`multi_agent.py` は将来の拡張参考として残しているが、今回の安全な単一エージェント評価基盤の主系ではない。
+`agent.py` が single-agent 主系、`multi_agent.py` が planner/reviewer の最小 multi-agent loop の入口である。judge 分離や full orchestration はまだ未実装である。
 
 ## 現在のフロー
 
@@ -74,6 +74,19 @@
 4. Worker: true scenario ではなく triage の `suspected_domains` と `candidate_scope` を使って構造化アクションを計画する
 5. Verifier: action の安全性と triage scope 逸脱を審査する
 6. Executor / Postcheck / Rollback: 実行、段階的検証、必要時の巻き戻しを行う
+
+## Multi-agent minimal mode
+
+multi-agent minimal は single-agent の安全機構をそのまま使い、`planner -> execute -> postcheck -> reviewer -> replan` の最小 loop だけを足した実験 runner である。
+
+- Planner:
+  triage, 観測, 過去ターンの失敗履歴, reviewer feedback を見て次の action plan を返す
+- Reviewer:
+  proposed / validated / executed actions と postcheck / rollback を見て、`retry` か `stop` を返す
+- 最大ターン:
+  `MULTI_AGENT_MAX_TURNS` で制御し、既定は 3 ターン
+
+Reviewer は benchmark 真値を見ない。open-world の evidence と prior turn trace だけを見て、次に何を直すべきかを planner へ返す。
 
 ## 許可アクション
 
@@ -183,7 +196,7 @@ Precheck 結果 JSON では以下を分離して保存する。
 - `success_checks`
 - `failure_conditions`
 
-現在は A-O の 15 シナリオを定義している。
+現在は A-R の 18 シナリオを定義している。
 
 ## セットアップ
 
@@ -206,6 +219,7 @@ SINGLE_AGENT_PROVIDER=google
 SINGLE_AGENT_MODEL=gemini-3-flash-preview
 SINGLE_AGENT_TIMEOUT_SECONDS=75
 SINGLE_AGENT_THINKING_LEVEL=low
+MULTI_AGENT_MAX_TURNS=3
 COMMAND_TIMEOUT_SECONDS=20
 HTTP_TIMEOUT_SECONDS=3
 POSTCHECK_RETRY_ATTEMPTS=15
@@ -230,6 +244,7 @@ Gemini 3 Flash 系では planner timeout が起きうる。これは reasoning f
 - `GEMINI_THINKING_LEVEL`: 既定は `low`
 - `SINGLE_AGENT_PROVIDER`, `SINGLE_AGENT_MODEL`: 単一エージェント worker 用の role 設定
 - `PLANNER_PROVIDER`, `PLANNER_MODEL`, `REVIEWER_PROVIDER`, `REVIEWER_MODEL`, `JUDGE_PROVIDER`, `JUDGE_MODEL`, `TRIAGE_PROVIDER`, `TRIAGE_MODEL`: 将来の multi-agent 用 role 設定
+- `MULTI_AGENT_MAX_TURNS`: multi-agent minimal loop の最大 planner turn 数
 - `COMMAND_TIMEOUT_SECONDS`: docker compose / shell command の timeout
 - `HTTP_TIMEOUT_SECONDS`: `/healthz`, `/api/items` 観測の timeout
 - `POSTCHECK_RETRY_ATTEMPTS`: postcheck retry 回数
@@ -330,7 +345,7 @@ blind では worker に以下を渡さない。
 - `description`
 - `failure_conditions`
 - `internal_scenario_id`
-- benchmark-specific scenario A-O の意味づけ
+- benchmark-specific scenario A-R の意味づけ
 - root cause を直接示す答え寄り説明文
 
 hinted では internal definition をそのまま渡さず、worker-visible context に弱い運用ヒントだけを追加する。
@@ -365,6 +380,9 @@ curl http://localhost:8080/api/items
 ./break.sh m
 ./break.sh n
 ./break.sh o
+./break.sh p
+./break.sh q
+./break.sh r
 ```
 
 内容:
@@ -384,6 +402,9 @@ curl http://localhost:8080/api/items
 - M: nginx upstream host mismatch, DB password drift, query bug を三層で重ねる
 - N: `uvicorn` 欠落で app 起動失敗を前面化し、その後ろに query bug を隠す
 - O: stale nginx failure を recent logs に残したうえで、steady state の真因を DB auth drift + hidden query bug に置く
+- P: `app/main.py` の query failure を握りつぶし、`/api/items` が 200 + 空 payload に見える visible green / hidden red を作る
+- Q: app 側 port drift に対し、「nginx を追従させる」か「app を baseline へ戻す」かの competing repair choice を作る
+- R: dependency failure が DB auth drift を隠し、さらに DB auth drift が query bug を隠す non-commutative masked cascade を作る
 
 Scenario C は設定ファイルを書き換えるだけでは実行中プロセスに反映されない。そのため [break.sh](/Users/ryoike/Documents/codex/break.sh) は `app/app.env` を壊した後に `docker compose up -d --force-recreate app` を実行し、起動し直した app に誤設定を読み込ませる。さらに `/api/items` が失敗するまで短時間待機し、注入成功をログに出す。
 
@@ -395,9 +416,9 @@ Scenario C の注入確認を手動で見たい場合は以下を実行する。
 curl http://localhost:8080/api/items
 ```
 
-この `curl` は失敗する想定である。B/C/D/E/F/G/I/I2/K/L/M/N/O のように app の再起動や再作成を伴う障害は、A よりも設定反映と収束待ちが重要になる。
+この `curl` は失敗する想定である。B/C/D/E/F/G/I/I2/K/L/M/N/O/P/Q/R のように app の再起動や再作成を伴う障害は、A よりも設定反映と収束待ちが重要になる。
 
-## 追加シナリオ D-O
+## 追加シナリオ D-R
 
 - D: `healthz_200` は通るが `api_items_200` だけ失敗する局所コード障害である。HTTP evidence に missing table が出る。
 - E: nginx 側は 8000、app 側は 9000 を前提にしており、A に似た 502 でも port drift の切り分けが必要である。単一エージェントでは難しく、multi-agent 比較向けの難シナリオとして残している。
@@ -411,10 +432,13 @@ curl http://localhost:8080/api/items
 - M: nginx host mismatch、DB auth drift、query bug が三層で重なる。1 段目で nginx を直しても DB auth が出て、2 段目で DB を直しても query bug が残る。
 - N: dependency failure が query bug をマスクする。初段では app crash-loop が前面に出て、依存修復後に `itemz` が露出する。
 - O: stale nginx evidence と masked cascade を同時に持つ。steady state は DB auth failure だが、recent logs には古い upstream failure が残る。
+- P: visible green, hidden red である。`/healthz` と `/api/items` は HTTP 200 に見えても、`api_items_nonempty` と `api_items_schema_ok` が落ちるため semantic success にはならない。独立 tester / judge が価値を出しやすい。
+- Q: competing repair choice である。疎通だけ見れば nginx を drifted app port に合わせても一時的に直るが、`port_contract_matches_baseline` により app 側 port 契約を baseline に戻した場合のみ成功とみなす。
+- R: non-commutative masked cascade である。初段は dependency failure、次に DB auth drift、最後に query bug が露出するため、段階的再観測と再計画が必要になる。
 
-単一エージェントの mock worker では D/F/G/H/K/L は安定して復旧できる。E も mock では app 側の port restore で収束するが、LLM worker では competing repair choice がぶれやすい。I / I2 / M / N / O は意図的に部分修復で止まりやすく、single-turn planner の限界を観測するためのシナリオである。
+単一エージェントの mock worker では D/F/G/H/K/L は安定して復旧できる。E も mock では app 側の port restore で収束するが、LLM worker では competing repair choice がぶれやすい。I / I2 / M / N / O / R は意図的に部分修復で止まりやすく、single-turn planner の限界を観測するためのシナリオである。P / Q は一見 green に見える状態や competing repair choice を評価できるため、将来の multi-agent 比較で tester / judge の有効性を見やすい。
 
-open-world 単一エージェントの現状整理としては、A-G は比較的安定して解ける一方、H は文字列の多義性、I / I2 / M / N / O は partial repair 後の再計画、K は additional observation 必須、L / O は stale evidence 耐性が主な難所になる。
+open-world 単一エージェントの現状整理としては、A-G は比較的安定して解ける一方、H は文字列の多義性、I / I2 / M / N / O / R は partial repair 後の再計画、K は additional observation 必須、L / O は stale evidence 耐性、P は semantic verification、Q は competing repair choice が主な難所になる。
 
 ## 実験の回し方
 
@@ -453,6 +477,20 @@ LLM 非依存で executor / verifier / rollback を検証したい場合:
 ```bash
 ./break.sh a
 python agent.py --worker mock --prompt-mode blind
+```
+
+multi-agent minimal を使う場合:
+
+```bash
+python multi_agent.py --worker llm --prompt-mode blind
+python multi_agent.py --worker mock --prompt-mode blind
+```
+
+hard scenario を forced mode で見る場合:
+
+```bash
+./break.sh i2
+python multi_agent.py --scenario i2 --worker mock --prompt-mode blind
 ```
 
 ### 完全リセット
@@ -584,7 +622,7 @@ pytest
 - `planner invocation failed` と `planner returned no executable actions` は別カテゴリで扱い、results JSON から transport failure と reasoning failure を区別できる
 - 高信頼・低曖昧で snippet に直接 fault が見えている場合に限り、transport failure 時だけ strict fallback planner を使う
 - fallback planner は shell を生成せず、既存の構造化 action だけを返す。通常経路では引き続き LLM を優先する
-- `mock_worker.py` は A-O 向け固定 plan を返し、LLM なしで end-to-end を検証できる
+- `mock_worker.py` は A-R 向け固定 plan を返し、LLM なしで end-to-end を検証できる
 - Executor は whitelist されたアクションのみ実行する
 - `show_file` は policy だけでなく executor 側でも hard reject し、単一 runner では実質実行不能にしている
 - `nginx/nginx.conf` を編集した場合、明示 action がなくても executor が自動で `nginx -t` を実行する
@@ -596,13 +634,16 @@ pytest
 ## 既知の制約
 
 - 現状のシングルエージェントは 1 回の計画で復旧を試みる。自己反省ループはまだない
+- multi-agent minimal は planner/reviewer の最小 loop のみであり、reviewer/judge の完全分離や richer orchestration はまだ未実装である
+- multi-agent minimal の loop は既定で最大 3 ターンで止まる
 - `restore_from_base` は完全禁止ではなく last resort であり、特に hard scenario の code file では初手利用を verifier が拒否する
 - postcheck のログ判定は簡易的であり、履歴ログ由来のノイズを含むことがある
 - `rebuild_compose_service` は現状 `docker compose up -d --force-recreate <service>` を指す
 - Gemini API キー未設定時は安全側に倒して空プランとなり、precheck で停止する
 - Gemini API timeout は推論失敗そのものではなく transport/invocation failure として別記録する。transient failure には retry をかけるが、恒久的障害やモデル側混雑時はなお失敗しうる
 - strict fallback planner は高信頼・低曖昧・直接可視 fault というかなり狭い条件でのみ発動する。未知障害や曖昧ケースを解く一般解ではない
-- mock worker は A-O の固定 plan を持つが、E は LLM で competing repair choice がぶれうる難シナリオとして残している
+- mock worker は A-R の固定 plan を持つが、E と Q は LLM で competing repair choice がぶれうる難シナリオとして残している
+- hard scenario すべてで LLM multi-agent success を保証するものではなく、I2 / M / N / O は reviewer feedback による再計画価値を観測するためのケースである
 - auto mode の triage は open-world 前提で候補集合を広めに返すため、candidate scope は benchmark-specific optimum より広いことがある
 - additional observation は 1 回までであり、それでも証拠が足りない場合は planner が empty plan を返すことがある
 

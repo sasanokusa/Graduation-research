@@ -34,7 +34,9 @@ def test_reviewer_settings_use_role_default_provider(monkeypatch) -> None:
     assert settings.api_key_env_name == "ANTHROPIC_API_KEY"
 
 
-def test_model_binding_reports_missing_api_key(monkeypatch) -> None:
+def test_model_binding_reports_missing_api_key(monkeypatch, tmp_path) -> None:
+    (tmp_path / ".env").write_text("", encoding="utf-8")
+    monkeypatch.setattr("core.settings.ROOT_DIR", tmp_path)
     monkeypatch.setenv("SINGLE_AGENT_PROVIDER", "openai")
     monkeypatch.setenv("SINGLE_AGENT_MODEL", "gpt-test-model")
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)

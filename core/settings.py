@@ -22,7 +22,7 @@ DEFAULT_PROVIDER_BY_ROLE: dict[AgentRole, str] = {
 DEFAULT_MODEL_BY_PROVIDER = {
     "google": "gemini-3-flash-preview",
     "openai": "gpt-4.1-mini",
-    "anthropic": "claude-3-5-sonnet-latest",
+    "anthropic": "claude-sonnet-4-6",
 }
 
 DEFAULT_TIMEOUT_BY_PROVIDER = {

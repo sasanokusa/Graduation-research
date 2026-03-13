@@ -47,6 +47,13 @@ EXPECTED_DOMAINS_BY_SCENARIO = {
     "m": {"reverse_proxy_or_upstream_mismatch"},
     "n": {"app_startup_or_dependency_failure"},
     "o": {"database_auth_or_connectivity_issue", "query_or_code_bug"},
+    "p": {"query_or_code_bug"},
+    "q": {
+        "ambiguous_service_disagreement",
+        "app_config_or_env_mismatch",
+        "reverse_proxy_or_upstream_mismatch",
+    },
+    "r": {"app_startup_or_dependency_failure"},
 }
 
 

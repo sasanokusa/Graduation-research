@@ -28,6 +28,8 @@ class SingleAgentState(TypedDict):
     internal_scenario_definition: dict[str, Any]
     observation: dict[str, Any]
     observed_symptoms: list[str]
+    stage_progression: list[str]
+    surfaced_failure_sequence: list[str]
     initial_postcheck_result: dict[str, Any]
     additional_observation_used: bool
     planner_input_scope: dict[str, Any]

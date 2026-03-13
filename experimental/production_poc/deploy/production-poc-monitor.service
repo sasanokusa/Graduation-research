@@ -1,0 +1,20 @@
+[Unit]
+Description=Production emergency recovery PoC monitor
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=infra-poc
+Group=infra-poc
+WorkingDirectory=/opt/infra-emergency-recovery
+ExecStart=/opt/infra-emergency-recovery/.venv/bin/python -m experimental.production_poc.runtime_prod.main --config /etc/infra-production-poc/production_poc.yaml --env-file /etc/infra-production-poc/production_poc.env monitor-once
+Nice=10
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/var/lib/infra-production-poc /var/log /run
+
+[Install]
+WantedBy=multi-user.target

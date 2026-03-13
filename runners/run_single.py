@@ -223,6 +223,22 @@ def postcheck_node(state: SingleAgentState) -> SingleAgentState:
     return {
         **state,
         "verifier_postcheck_result": postcheck,
+        "stage_progression": [
+            *state.get("stage_progression", []),
+            *(
+                []
+                if state.get("stage_progression", [])[-1:] == [postcheck.get("front_most_failure", "")]
+                else [postcheck.get("front_most_failure", "")]
+            ),
+        ],
+        "surfaced_failure_sequence": [
+            *state.get("surfaced_failure_sequence", []),
+            *(
+                []
+                if state.get("surfaced_failure_sequence", [])[-1:] == [postcheck.get("front_most_failure", "")]
+                else [postcheck.get("front_most_failure", "")]
+            ),
+        ],
         "final_status": final_status,
     }
 
@@ -234,6 +250,7 @@ def should_rollback(state: SingleAgentState) -> Literal["rollback", "end"]:
 
 
 def rollback_node(state: SingleAgentState) -> SingleAgentState:
+    pre_rollback_postcheck_result = state.get("verifier_postcheck_result", {})
     rollback_result = rollback_with_refresh(
         state["execution_result"].get("backups", {}),
         run_id=f"rollback_{state['scenario']}",
@@ -242,7 +259,11 @@ def rollback_node(state: SingleAgentState) -> SingleAgentState:
         state["scenario_definition"],
         readiness_wait_used=bool(rollback_result.get("readiness_wait_requested")),
     )
-    rollback_result = {**rollback_result, "rollback_postcheck_result": rollback_postcheck_result}
+    rollback_result = {
+        **rollback_result,
+        "pre_rollback_postcheck_result": pre_rollback_postcheck_result,
+        "rollback_postcheck_result": rollback_postcheck_result,
+    }
     _section("↩️ [PHASE 7] ROLLBACK")
     print(json.dumps(rollback_result, ensure_ascii=False, indent=2))
     print()
@@ -253,6 +274,22 @@ def rollback_node(state: SingleAgentState) -> SingleAgentState:
         "rollback_result": rollback_result,
         "rollback_used": True,
         "verifier_postcheck_result": rollback_postcheck_result,
+        "stage_progression": [
+            *state.get("stage_progression", []),
+            *(
+                []
+                if state.get("stage_progression", [])[-1:] == [rollback_postcheck_result.get("front_most_failure", "")]
+                else [rollback_postcheck_result.get("front_most_failure", "")]
+            ),
+        ],
+        "surfaced_failure_sequence": [
+            *state.get("surfaced_failure_sequence", []),
+            *(
+                []
+                if state.get("surfaced_failure_sequence", [])[-1:] == [rollback_postcheck_result.get("front_most_failure", "")]
+                else [rollback_postcheck_result.get("front_most_failure", "")]
+            ),
+        ],
     }
 
 
@@ -319,6 +356,8 @@ def save_result(state: SingleAgentState) -> str:
             else {}
         ),
         "observed_symptoms": state["observed_symptoms"],
+        "stage_progression": state.get("stage_progression", []),
+        "surfaced_failure_sequence": state.get("surfaced_failure_sequence", []),
         "observation_additional": state["observation"].get("additional_observation", {}),
         "initial_postcheck_result": state["initial_postcheck_result"],
         "worker_raw_output": state["planner_output_raw"],
@@ -433,7 +472,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run the safe single-agent recovery baseline.")
     parser.add_argument(
         "--scenario",
-        choices=["auto", "a", "b", "c", "d", "e", "f", "g", "h", "i", "i2", "k", "l", "m", "n", "o"],
+        choices=["auto", "a", "b", "c", "d", "e", "f", "g", "h", "i", "i2", "k", "l", "m", "n", "o", "p", "q", "r"],
         default="auto",
         help="Internal benchmark scenario for forced-mode debugging, or auto for open-world triage.",
     )
@@ -481,6 +520,8 @@ def main(argv: list[str] | None = None) -> int:
         "internal_scenario_definition": {},
         "observation": {},
         "observed_symptoms": [],
+        "stage_progression": [],
+        "surfaced_failure_sequence": [],
         "initial_postcheck_result": {},
         "additional_observation_used": False,
         "planner_input_scope": {},

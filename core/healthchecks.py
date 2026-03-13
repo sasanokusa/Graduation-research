@@ -6,7 +6,12 @@ import urllib.error
 import urllib.request
 from typing import Any
 
-from core.policies import ROOT_DIR
+from core.policies import (
+    API_ITEMS_REQUIRED_KEYS,
+    ROOT_DIR,
+    get_baseline_port_contract,
+    get_current_port_contract,
+)
 
 
 DEFAULT_COMMAND_TIMEOUT_SECONDS = 20
@@ -171,6 +176,165 @@ def http_check(path: str, *, timeout_seconds: int | None = None) -> dict[str, An
     }
 
 
+def _parse_json_body(body: str) -> Any:
+    try:
+        return json.loads(body)
+    except json.JSONDecodeError:
+        return None
+
+
+def extract_api_items_payload(api_items_result: dict[str, Any]) -> dict[str, Any]:
+    parsed = _parse_json_body(str(api_items_result.get("body", "")))
+    items: list[Any] | None = None
+    shape = "unknown"
+
+    if isinstance(parsed, list):
+        items = parsed
+        shape = "list"
+    elif isinstance(parsed, dict) and isinstance(parsed.get("items"), list):
+        items = parsed["items"]
+        shape = "object.items"
+    elif isinstance(parsed, dict):
+        shape = "object"
+
+    return {
+        "parsed": parsed,
+        "items": items,
+        "shape": shape,
+    }
+
+
+def evaluate_api_items_nonempty(api_items_result: dict[str, Any]) -> dict[str, Any]:
+    payload = extract_api_items_payload(api_items_result)
+    items = payload["items"]
+    item_count = len(items) if isinstance(items, list) else 0
+    ok = api_items_result.get("status") == 200 and isinstance(items, list) and item_count >= 1
+    return {
+        "check_name": "api_items_nonempty",
+        "ok": ok,
+        "item_count": item_count,
+        "response_shape": payload["shape"],
+        "status": api_items_result.get("status"),
+    }
+
+
+def evaluate_api_items_schema_ok(api_items_result: dict[str, Any]) -> dict[str, Any]:
+    payload = extract_api_items_payload(api_items_result)
+    items = payload["items"]
+    missing_key_rows: list[dict[str, Any]] = []
+    ok = api_items_result.get("status") == 200 and isinstance(items, list) and len(items) >= 1
+
+    if isinstance(items, list):
+        for index, item in enumerate(items):
+            if not isinstance(item, dict):
+                ok = False
+                missing_key_rows.append({"index": index, "missing_keys": list(API_ITEMS_REQUIRED_KEYS)})
+                continue
+            missing_keys = [key for key in API_ITEMS_REQUIRED_KEYS if key not in item]
+            if missing_keys:
+                ok = False
+                missing_key_rows.append({"index": index, "missing_keys": missing_keys})
+    else:
+        ok = False
+
+    return {
+        "check_name": "api_items_schema_ok",
+        "ok": ok,
+        "required_keys": list(API_ITEMS_REQUIRED_KEYS),
+        "missing_key_rows": missing_key_rows,
+        "response_shape": payload["shape"],
+        "status": api_items_result.get("status"),
+    }
+
+
+def evaluate_port_contract_matches_baseline() -> dict[str, Any]:
+    baseline = get_baseline_port_contract()
+    current = get_current_port_contract()
+    ok = (
+        baseline.get("app_port")
+        and baseline.get("nginx_upstream_port")
+        and current.get("app_port") == baseline.get("app_port")
+        and current.get("nginx_upstream_port") == baseline.get("nginx_upstream_port")
+    )
+    return {
+        "check_name": "port_contract_matches_baseline",
+        "ok": bool(ok),
+        "baseline": baseline,
+        "current": current,
+    }
+
+
+def classify_front_most_failure(
+    *,
+    healthz: dict[str, Any],
+    api_items: dict[str, Any],
+    service_logs: dict[str, str] | None = None,
+    file_snippets: dict[str, str] | None = None,
+) -> str:
+    service_logs = service_logs or {}
+    file_snippets = file_snippets or {}
+    port_contract = evaluate_port_contract_matches_baseline()
+    app_text = "\n".join(
+        [
+            service_logs.get("app", ""),
+            str(healthz.get("body", "")),
+            str(api_items.get("body", "")),
+            str(file_snippets.get("app/main.py", "")),
+            str(file_snippets.get("app/app.env", "")),
+        ]
+    )
+    nginx_text = "\n".join(
+        [
+            service_logs.get("nginx", ""),
+            str(file_snippets.get("nginx/nginx.conf", "")),
+        ]
+    )
+
+    if (
+        healthz.get("status") == 200
+        and api_items.get("status") == 200
+        and evaluate_api_items_nonempty(api_items)["ok"]
+        and evaluate_api_items_schema_ok(api_items)["ok"]
+        and not port_contract["ok"]
+    ):
+        return "contract_drift_front"
+    if (
+        healthz.get("status") == 200
+        and api_items.get("status") == 200
+        and evaluate_api_items_nonempty(api_items)["ok"]
+        and evaluate_api_items_schema_ok(api_items)["ok"]
+    ):
+        return "recovered"
+    if any(
+        marker in app_text
+        for marker in ["ModuleNotFoundError", "No module named", "uvicorn: not found", "Error loading ASGI app"]
+    ):
+        return "dependency_front"
+    if any(marker in nginx_text for marker in ["host not found in upstream", "could not be resolved"]):
+        return "upstream_host_front"
+    if (
+        healthz.get("status") in {502, 503, 504}
+        or api_items.get("status") in {502, 503, 504}
+        or any(marker in nginx_text for marker in ["connect() failed", "no live upstreams", "502 Bad Gateway"])
+    ):
+        return "upstream_port_or_connectivity_front"
+    if any(marker in app_text for marker in ["Access denied", "using password: YES", "OperationalError"]):
+        return "db_auth_front"
+    if healthz.get("status") == 200 and api_items.get("status") == 200 and not evaluate_api_items_nonempty(api_items)["ok"]:
+        return "semantic_items_front"
+    if healthz.get("status") == 200 and api_items.get("status") == 200 and not evaluate_api_items_schema_ok(api_items)["ok"]:
+        return "semantic_items_front"
+    if any(marker in app_text for marker in ["itemz", "doesn't exist", "Table '"]):
+        return "query_bug_front"
+    if any(marker in app_text for marker in ["Unknown column", "details"]):
+        return "schema_drift_front"
+    if healthz.get("status") != 200 and api_items.get("status") == 200:
+        return "healthcheck_front"
+    if healthz.get("status") == 200 and api_items.get("status") != 200 and "internal error" in str(api_items.get("body", "")):
+        return "opaque_api_front"
+    return "unknown_front"
+
+
 def run_named_health_check(check_name: str) -> dict[str, Any]:
     if check_name == "healthz_200":
         result = http_check("/healthz")
@@ -180,6 +344,20 @@ def run_named_health_check(check_name: str) -> dict[str, Any]:
         result = http_check("/api/items")
         result["ok"] = result.get("status") == 200
         return result
+    if check_name == "api_items_nonempty":
+        result = http_check("/api/items")
+        return {
+            **result,
+            **evaluate_api_items_nonempty(result),
+        }
+    if check_name == "api_items_schema_ok":
+        result = http_check("/api/items")
+        return {
+            **result,
+            **evaluate_api_items_schema_ok(result),
+        }
+    if check_name == "port_contract_matches_baseline":
+        return evaluate_port_contract_matches_baseline()
     if check_name in {"app_running", "nginx_running", "db_running"}:
         service_name = check_name.removesuffix("_running")
         ps_snapshot = docker_compose_ps()

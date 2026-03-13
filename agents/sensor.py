@@ -3,12 +3,16 @@ import time
 from typing import Any
 
 from core.healthchecks import (
+    classify_front_most_failure,
     collect_service_logs,
     docker_compose_ps,
+    evaluate_api_items_nonempty,
+    evaluate_api_items_schema_ok,
+    evaluate_port_contract_matches_baseline,
     http_check,
     nginx_config_test,
 )
-from core.policies import resolve_repo_path
+from core.policies import get_baseline_app_port, resolve_repo_path
 from core.state import SingleAgentState
 
 
@@ -34,12 +38,17 @@ def _tail(text: str, count: int = 8) -> str:
 
 def _summarize_symptoms(logs: dict[str, str], healthz: dict, api_items: dict) -> list[str]:
     symptoms: list[str] = []
-    health_body = str(healthz.get("body", ""))
     api_body = str(api_items.get("body", ""))
+    api_nonempty = evaluate_api_items_nonempty(api_items)
+    api_schema_ok = evaluate_api_items_schema_ok(api_items)
     if healthz.get("status") != 200:
         symptoms.append(f"/healthz returned {healthz.get('status')}")
     if api_items.get("status") != 200:
         symptoms.append(f"/api/items returned {api_items.get('status')}")
+    if api_items.get("status") == 200 and not api_nonempty["ok"]:
+        symptoms.append("/api/items returned 200 but the payload was empty")
+    if api_items.get("status") == 200 and api_nonempty["ok"] and not api_schema_ok["ok"]:
+        symptoms.append("/api/items returned 200 but the item schema was degraded")
 
     nginx_log = logs.get("nginx", "")
     app_log = logs.get("app", "")
@@ -53,7 +62,10 @@ def _summarize_symptoms(logs: dict[str, str], healthz: dict, api_items: dict) ->
         symptoms.append("database connectivity failure observed")
     if "opaque_items_failure" in app_log:
         symptoms.append("application emitted an opaque API failure marker")
-    if "Uvicorn running on http://0.0.0.0:9000" in app_log:
+    baseline_app_port = get_baseline_app_port()
+    if "Uvicorn running on http://0.0.0.0:" in app_log and (
+        not baseline_app_port or f"Uvicorn running on http://0.0.0.0:{baseline_app_port}" not in app_log
+    ):
         symptoms.append("application listen port drift observed")
     if healthz.get("status") == 200 and api_items.get("status") != 200 and "doesn't exist" in api_body:
         symptoms.append("application query references a missing table")
@@ -255,7 +267,7 @@ def _collect_suspicious_patterns(
             "Unknown column",
             "doesn't exist",
             "opaque_items_failure",
-            "Uvicorn running on http://0.0.0.0:9000",
+            "Uvicorn running on http://0.0.0.0:",
         ],
         "http": [
             "database error",
@@ -284,6 +296,9 @@ def _collect_static_observations(service_logs: dict[str, str], file_snippets: di
     marker = "Uvicorn running on http://0.0.0.0:"
     if marker in app_log:
         observations["app_listen_port"] = app_log.split(marker, 1)[1].split()[0].strip()
+    baseline_app_port = get_baseline_app_port()
+    if baseline_app_port:
+        observations["baseline_app_port"] = baseline_app_port
     if "APP_PORT=" in file_snippets.get("app/app.env", ""):
         for line in file_snippets["app/app.env"].splitlines():
             if line.startswith("APP_PORT="):
@@ -314,7 +329,7 @@ def _app_env_needles(service_logs: dict[str, str], healthz: dict[str, Any], api_
     http_text = "\n".join(str(value) for value in [healthz.get("body", ""), api_items.get("body", "")])
 
     if (
-        "Uvicorn running on http://0.0.0.0:9000" in app_log
+        "Uvicorn running on http://0.0.0.0:" in app_log
         or "connect() failed" in nginx_log
         or healthz.get("status") == 502
         or api_items.get("status") == 502
@@ -333,13 +348,15 @@ def _app_main_needles(service_logs: dict[str, str], healthz: dict[str, Any], api
     api_body = str(api_items.get("body", ""))
     if _should_mask_app_main_query_snippet(service_logs, healthz, api_items):
         return ['@app.get("/api/items")', "def list_items():", '@app.get("/healthz")', "def healthz():"]
+    if healthz.get("status") == 200 and api_items.get("status") == 200 and api_items.get("body", "").strip() == "[]":
+        return ['@app.get("/api/items")', "itemz", "return []", "cursor.execute("]
     if healthz.get("status") == 200 and api_items.get("status") != 200 and "internal error" in api_body:
         return ['@app.get("/api/items")', "def list_items():", "cursor.execute(K_ITEMS_QUERY)"]
     if "opaque_items_failure" in app_log:
         return ["opaque_items_failure", "cursor.execute(K_ITEMS_QUERY)", "@app.get(\"/api/items\")"]
     if healthz.get("status") != 200 and api_items.get("status") == 200:
         return ["SELECT missing FROM health_checks", "@app.get(\"/healthz\")", "def healthz():"]
-    return ["cursor.execute(", "itemz", "details", "SELECT missing FROM health_checks", "K_ITEMS_QUERY"]
+    return ["cursor.execute(", "itemz", "details", "return []", "SELECT missing FROM health_checks", "K_ITEMS_QUERY"]
 
 
 def _build_temporal_evidence(
@@ -351,14 +368,25 @@ def _build_temporal_evidence(
 ) -> tuple[list[str], list[str]]:
     current_state_evidence: list[str] = []
     historical_evidence: list[str] = []
+    api_nonempty = evaluate_api_items_nonempty(api_items)
+    api_schema_ok = evaluate_api_items_schema_ok(api_items)
+    port_contract = evaluate_port_contract_matches_baseline()
 
     current_state_evidence.append(f"/healthz currently returns {healthz.get('status')}")
     current_state_evidence.append(f"/api/items currently returns {api_items.get('status')}")
 
     nginx_excerpt = relevant_log_excerpts.get("nginx", "")
     app_excerpt = relevant_log_excerpts.get("app", "")
-    if "APP_PORT=9000" in file_snippets.get("app/app.env", ""):
-        current_state_evidence.append("visible app env snippet shows APP_PORT=9000")
+    app_env_snippet = file_snippets.get("app/app.env", "")
+    baseline_app_port = get_baseline_app_port()
+    if "APP_PORT=" in app_env_snippet:
+        for line in app_env_snippet.splitlines():
+            if line.startswith("APP_PORT="):
+                current_app_port = line.split("=", 1)[1].strip()
+                if baseline_app_port and current_app_port != baseline_app_port:
+                    current_state_evidence.append(
+                        f"visible app env snippet shows a non-baseline APP_PORT={current_app_port}"
+                    )
     if "DB_PASSWORD=wrongpassword" in file_snippets.get("app/app.env", ""):
         current_state_evidence.append("visible app env snippet shows a non-baseline DB password")
     if "server app:8001" in file_snippets.get("nginx/nginx.conf", ""):
@@ -371,6 +399,14 @@ def _build_temporal_evidence(
         current_state_evidence.append("visible app code snippet references a non-existent table name")
     if "details" in file_snippets.get("app/main.py", ""):
         current_state_evidence.append("visible app code snippet references a non-existent column name")
+    if "return []" in file_snippets.get("app/main.py", ""):
+        current_state_evidence.append("visible app code snippet swallows a query failure with an empty fallback response")
+    if api_items.get("status") == 200 and not api_nonempty["ok"]:
+        current_state_evidence.append("the items API currently returns HTTP 200 but an empty payload")
+    if api_items.get("status") == 200 and not api_schema_ok["ok"]:
+        current_state_evidence.append("the items API currently returns HTTP 200 but an invalid or degraded item schema")
+    if not port_contract["ok"]:
+        current_state_evidence.append("the current app/nginx port contract has drifted away from the baseline")
     if "opaque_items_failure" in app_excerpt:
         current_state_evidence.append("current app excerpt shows an opaque API failure marker")
     if any(marker in app_excerpt for marker in ["Unknown column", "doesn't exist", "Access denied", "ModuleNotFoundError"]):
@@ -481,7 +517,7 @@ def _base_log_excerpts(service_logs: dict[str, str]) -> dict[str, str]:
                 "Unknown column",
                 "doesn't exist",
                 "opaque_items_failure",
-                "Uvicorn running on http://0.0.0.0:9000",
+                "Uvicorn running on http://0.0.0.0:",
             ],
         ),
     }
@@ -516,6 +552,12 @@ def _build_observation(
         "static_observations": _collect_static_observations(service_logs, file_snippets),
         "current_state_evidence": current_state_evidence,
         "historical_evidence": historical_evidence,
+        "front_most_failure": classify_front_most_failure(
+            healthz=healthz,
+            api_items=api_items,
+            service_logs=service_logs,
+            file_snippets=file_snippets,
+        ),
     }
 
 
@@ -556,7 +598,7 @@ def additional_observation_node(state: SingleAgentState) -> SingleAgentState:
                 "doesn't exist",
                 "opaque_items_failure",
                 "500 Internal Server Error",
-                "Uvicorn running on http://0.0.0.0:9000",
+                "Uvicorn running on http://0.0.0.0:",
             ],
             context=3,
             fallback_tail=10,
@@ -676,4 +718,20 @@ def sensor_node(state: SingleAgentState) -> SingleAgentState:
         **state,
         "observation": observation,
         "observed_symptoms": observed_symptoms,
+        "stage_progression": [
+            *state.get("stage_progression", []),
+            *(
+                []
+                if state.get("stage_progression", [])[-1:] == [observation.get("front_most_failure", "")]
+                else [observation.get("front_most_failure", "")]
+            ),
+        ],
+        "surfaced_failure_sequence": [
+            *state.get("surfaced_failure_sequence", []),
+            *(
+                []
+                if state.get("surfaced_failure_sequence", [])[-1:] == [observation.get("front_most_failure", "")]
+                else [observation.get("front_most_failure", "")]
+            ),
+        ],
     }

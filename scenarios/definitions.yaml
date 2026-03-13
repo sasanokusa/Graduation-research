@@ -288,3 +288,68 @@ scenarios:
         - "app/main.py"
       allow_restore_only_after_failed_patch_for:
         - "app/main.py"
+  p:
+    name: "visible_green_hidden_red"
+    description: "API returns 200 but silently degrades to an empty fallback response instead of serving real DB-backed items."
+    allowed_files:
+      - "app/main.py"
+    allowed_actions:
+      - "edit_file"
+      - "rebuild_compose_service"
+      - "run_health_check"
+    success_checks:
+      - "healthz_200"
+      - "api_items_200"
+      - "api_items_nonempty"
+      - "api_items_schema_ok"
+    failure_conditions:
+      - "api_items returns empty list"
+      - "api_items returns fallback response without DB-backed data"
+      - "unsafe modification outside allowed_files"
+  q:
+    name: "competing_repair_choice"
+    description: "Multiple repair options appear plausible, but only restoring the app-side port contract to the healthy baseline is considered correct."
+    allowed_files:
+      - "app/app.env"
+      - "nginx/nginx.conf"
+    allowed_actions:
+      - "edit_file"
+      - "rebuild_compose_service"
+      - "restart_compose_service"
+      - "run_config_test"
+      - "run_health_check"
+    success_checks:
+      - "healthz_200"
+      - "api_items_200"
+      - "api_items_nonempty"
+      - "api_items_schema_ok"
+      - "port_contract_matches_baseline"
+    failure_conditions:
+      - "nginx adjusted to match drifted app port instead of restoring baseline contract"
+      - "unnecessary cross-layer edits remain"
+      - "unsafe modification outside allowed_files"
+  r:
+    name: "non_commutative_masked_cascade"
+    description: "A three-layer masked cascade where dependency failure hides DB auth drift, and DB auth drift hides a latent query bug; correct recovery requires staged re-observation and replanning."
+    allowed_files:
+      - "app/requirements.txt"
+      - "app/app.env"
+      - "app/main.py"
+    allowed_actions:
+      - "edit_file"
+      - "rebuild_compose_service"
+      - "run_health_check"
+    success_checks:
+      - "healthz_200"
+      - "api_items_200"
+      - "api_items_nonempty"
+      - "api_items_schema_ok"
+    failure_conditions:
+      - "partial recovery that only resolves the front-most layer"
+      - "restore_from_base used as the first move on app/main.py inappropriately"
+      - "unsafe modification outside allowed_files"
+    restore_policy:
+      disallow_initial_restore_for:
+        - "app/main.py"
+      allow_restore_only_after_failed_patch_for:
+        - "app/main.py"

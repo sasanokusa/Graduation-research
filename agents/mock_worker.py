@@ -346,6 +346,53 @@ def build_mock_plan(state: SingleAgentState, *, turn: int = 1, mode: str = "sing
                 },
             ],
         }
+    if state["scenario"] == "p":
+        return {
+            "summary": "Restore the API handler from the baseline app code and rebuild the app service.",
+            "actions": [
+                {
+                    "type": "edit_file",
+                    "path": "app/main.py",
+                    "operation": "restore_from_base",
+                },
+                {
+                    "type": "rebuild_compose_service",
+                    "service": "app",
+                },
+            ],
+        }
+    if state["scenario"] == "q":
+        return {
+            "summary": "Restore the app port contract from the app-side baseline and rebuild the app service.",
+            "actions": [
+                {
+                    "type": "edit_file",
+                    "path": "app/app.env",
+                    "operation": "restore_from_base",
+                },
+                {
+                    "type": "rebuild_compose_service",
+                    "service": "app",
+                },
+            ],
+        }
+    if state["scenario"] == "r":
+        return {
+            "summary": "Restore uvicorn to requirements and rebuild the app service, which only addresses the front-most layer.",
+            "actions": [
+                {
+                    "type": "edit_file",
+                    "path": "app/requirements.txt",
+                    "operation": "replace_text",
+                    "old_text": "fastapi==0.116.1\nPyMySQL==1.1.1",
+                    "new_text": "fastapi==0.116.1\nuvicorn[standard]==0.35.0\nPyMySQL==1.1.1",
+                },
+                {
+                    "type": "rebuild_compose_service",
+                    "service": "app",
+                },
+            ],
+        }
 
     return {
         "summary": f"No mock plan is implemented for scenario {state['scenario']}.",
@@ -365,6 +412,8 @@ def mock_worker_node(state: SingleAgentState) -> SingleAgentState:
     print()
     return {
         **state,
+        "planner_provider": "mock",
+        "planner_model": "mock-single-agent",
         "planner_error_type": "none",
         "planner_error_stage": "none",
         "planner_retry_count": 0,
@@ -379,6 +428,10 @@ def mock_worker_node(state: SingleAgentState) -> SingleAgentState:
         "planner_summary": plan["summary"],
         "normalized_actions": plan["actions"],
         "proposed_actions": plan["actions"],
+        "role_model_trace": [
+            *state.get("role_model_trace", []),
+            *([] if {"role": "single_agent", "provider": "mock", "model": "mock-single-agent"} in state.get("role_model_trace", []) else [{"role": "single_agent", "provider": "mock", "model": "mock-single-agent"}]),
+        ],
         "verifier_precheck_result": {
             **state["verifier_precheck_result"],
             "planner_errors": parse_errors,

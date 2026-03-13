@@ -42,6 +42,27 @@ wait_for_http_success() {
   return 1
 }
 
+wait_for_http_success_body_contains() {
+  local path="$1"
+  local expected_fragment="$2"
+  local attempts="${3:-10}"
+  local sleep_seconds="${4:-2}"
+  local url="http://localhost:8080${path}"
+  local attempt
+  local body
+
+  for attempt in $(seq 1 "${attempts}"); do
+    if body="$(curl -fsS --max-time 3 "${url}" 2>/dev/null)" && [[ "${body}" == *"${expected_fragment}"* ]]; then
+      echo "[break] confirmed success at ${path} with expected body fragment on attempt ${attempt}/${attempts}"
+      return 0
+    fi
+    sleep "${sleep_seconds}"
+  done
+
+  echo "[break] warning: ${path} did not expose expected body fragment after ${attempts} attempts" >&2
+  return 1
+}
+
 wait_for_split_state() {
   local success_path="$1"
   local failure_path="$2"
@@ -201,6 +222,30 @@ apply_o() {
   wait_for_http_failure "/healthz"
 }
 
+apply_p() {
+  echo "[break] pattern P: degrade /api/items into a silent empty fallback while keeping HTTP green"
+  perl -0pi -e 's/cursor\.execute\("SELECT id, name, description FROM items ORDER BY id"\)\n                items = cursor\.fetchall\(\)\n        return \{"items": items\}\n    except Exception as exc:\n        raise HTTPException\(status_code=500, detail=f"database error: \{exc\}"\) from exc/cursor.execute("SELECT id, name, description FROM itemz ORDER BY id")\n                items = cursor.fetchall()\n        return {"items": items}\n    except Exception as exc:\n        return []/s' "${ROOT_DIR}/app/main.py"
+  docker compose up -d --force-recreate app
+  wait_for_http_success "/healthz"
+  wait_for_http_success_body_contains "/api/items" "[]"
+}
+
+apply_q() {
+  echo "[break] pattern Q: drift the app-side port contract away from the healthy baseline"
+  perl -0pi -e 's/^APP_PORT=.*/APP_PORT=9100/m' "${ROOT_DIR}/app/app.env"
+  docker compose up -d --force-recreate app
+  wait_for_http_failure "/healthz"
+}
+
+apply_r() {
+  echo "[break] pattern R: inject a non-commutative masked cascade (dependency failure + DB auth drift + hidden query bug)"
+  grep -v '^uvicorn\[standard\]==' "${ROOT_DIR}/app/requirements.txt.base" > "${ROOT_DIR}/app/requirements.txt"
+  perl -0pi -e 's/^DB_PASSWORD=.*/DB_PASSWORD=wrongpassword/m' "${ROOT_DIR}/app/app.env"
+  perl -0pi -e 's/FROM items ORDER BY id/FROM itemz ORDER BY id/' "${ROOT_DIR}/app/main.py"
+  docker compose up -d --force-recreate app
+  wait_for_http_failure "/healthz"
+}
+
 pick_pattern() {
   case "${1:-random}" in
     a|A|pattern-a)
@@ -248,8 +293,17 @@ pick_pattern() {
     o|O|pattern-o)
       echo "O"
       ;;
+    p|P|pattern-p)
+      echo "P"
+      ;;
+    q|Q|pattern-q)
+      echo "Q"
+      ;;
+    r|R|pattern-r)
+      echo "R"
+      ;;
     random)
-      case $((RANDOM % 15)) in
+      case $((RANDOM % 18)) in
         0) echo "A" ;;
         1) echo "B" ;;
         2) echo "C" ;;
@@ -265,10 +319,13 @@ pick_pattern() {
         12) echo "M" ;;
         13) echo "N" ;;
         14) echo "O" ;;
+        15) echo "P" ;;
+        16) echo "Q" ;;
+        17) echo "R" ;;
       esac
       ;;
     *)
-      echo "usage: ./break.sh [a|b|c|d|e|f|g|h|i|i2|k|l|m|n|o|random]" >&2
+      echo "usage: ./break.sh [a|b|c|d|e|f|g|h|i|i2|k|l|m|n|o|p|q|r|random]" >&2
       exit 1
       ;;
   esac
@@ -296,6 +353,9 @@ main() {
     M) apply_m ;;
     N) apply_n ;;
     O) apply_o ;;
+    P) apply_p ;;
+    Q) apply_q ;;
+    R) apply_r ;;
   esac
 
   echo "[break] injected failure pattern ${pattern}"

@@ -1,0 +1,76 @@
+host:
+  host_label: home-ubuntu
+  state_dir: /var/lib/infra-production-poc
+  snapshot_refresh_seconds: 21600
+
+monitoring:
+  poll_interval_seconds: 60
+  journal_lookback_minutes: 15
+  disk_percent_threshold: 90
+  memory_percent_threshold: 90
+  cpu_percent_threshold: 95
+  web_5xx_threshold: 5
+  anomaly_cooldown_seconds: 300
+  max_related_log_lines: 40
+  journal_keywords:
+    - error
+    - failed
+    - oom
+    - segfault
+
+services:
+  web:
+    service_name: nginx
+    port: 80
+    tcp_host: 127.0.0.1
+    health_urls:
+      - http://127.0.0.1/healthz
+      - http://127.0.0.1/
+    access_log_paths:
+      - /var/log/nginx/access.log
+    error_log_paths:
+      - /var/log/nginx/error.log
+    systemd_candidates:
+      - nginx
+      - apache2
+      - caddy
+  minecraft:
+    service_name: minecraft
+    port: 25565
+    tcp_host: 127.0.0.1
+    log_paths:
+      - /opt/minecraft/logs/latest.log
+      - /srv/minecraft/logs/latest.log
+    process_hints:
+      - minecraft
+      - paper
+      - spigot
+      - forge
+      - fabric
+      - server.jar
+
+actions:
+  mode: propose-only
+  allowed_restart_services:
+    - nginx
+    - minecraft
+  dangerous_action_policy: require-human-approval
+  max_auto_actions_per_incident: 1
+
+notifications:
+  discord_webhook_url: ${DISCORD_WEBHOOK_URL}
+  username: infra-emergency-poc
+  send_startup_summary: true
+  send_monitoring_started: true
+
+llm:
+  enabled: false
+  provider: openai
+  model: gpt-4.1-mini
+  timeout_seconds: 45
+  api_key_env: OPENAI_API_KEY
+  max_context_lines: 40
+
+escalation:
+  require_human_for_medium_risk: true
+  notify_on_verification_failure: true
