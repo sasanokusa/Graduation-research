@@ -116,7 +116,10 @@ def tail_log_files(paths: list[Path], *, max_lines: int) -> dict[str, list[str]]
 
     excerpts: dict[str, list[str]] = {}
     for path in paths:
-        if not path.exists() or not path.is_file():
+        try:
+            if not path.exists() or not path.is_file():
+                continue
+        except OSError:
             continue
         try:
             lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
