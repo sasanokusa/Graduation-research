@@ -127,6 +127,9 @@ class RuleBasedIncidentAnalyzer:
             if not escalation_reason:
                 escalation_reason = "No low-risk allowlisted action was derived from the current findings."
 
+        likely_causes = self._dedupe_likely_causes(likely_causes)
+        proposed_actions = self._dedupe_actions(proposed_actions)
+
         return IncidentAnalysis(
             analyzer="rule_based",
             summary=summary,
@@ -147,6 +150,30 @@ class RuleBasedIncidentAnalyzer:
             detail_parts.append(f"startup_script={script_path}")
         detail_parts.append("automatic restart is disabled and requires human approval")
         return ", ".join(detail_parts) + "."
+
+    @staticmethod
+    def _dedupe_actions(actions: list[ProposedAction]) -> list[ProposedAction]:
+        deduped: list[ProposedAction] = []
+        seen: set[tuple[str, str]] = set()
+        for action in actions:
+            key = (action.kind, action.service)
+            if key in seen:
+                continue
+            seen.add(key)
+            deduped.append(action)
+        return deduped
+
+    @staticmethod
+    def _dedupe_likely_causes(causes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        deduped: list[dict[str, Any]] = []
+        seen: set[tuple[str, str]] = set()
+        for cause in causes:
+            key = (str(cause.get("cause", "")), str(cause.get("confidence", "")))
+            if key in seen:
+                continue
+            seen.add(key)
+            deduped.append(cause)
+        return deduped
 
 
 @dataclass
