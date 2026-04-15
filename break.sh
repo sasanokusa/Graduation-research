@@ -25,7 +25,7 @@ wait_for_http_failure() {
 
 wait_for_http_success() {
   local path="$1"
-  local attempts="${2:-10}"
+  local attempts="${2:-60}"
   local sleep_seconds="${3:-2}"
   local url="http://localhost:8080${path}"
   local attempt
@@ -45,7 +45,7 @@ wait_for_http_success() {
 wait_for_http_success_body_contains() {
   local path="$1"
   local expected_fragment="$2"
-  local attempts="${3:-10}"
+  local attempts="${3:-60}"
   local sleep_seconds="${4:-2}"
   local url="http://localhost:8080${path}"
   local attempt
@@ -66,7 +66,7 @@ wait_for_http_success_body_contains() {
 wait_for_split_state() {
   local success_path="$1"
   local failure_path="$2"
-  local attempts="${3:-10}"
+  local attempts="${3:-60}"
   local sleep_seconds="${4:-2}"
   local attempt
 
@@ -80,6 +80,25 @@ wait_for_split_state() {
   done
 
   echo "[break] warning: split state (${success_path} success, ${failure_path} failure) was not confirmed" >&2
+  return 1
+}
+
+wait_for_topology_degraded() {
+  local attempts="${1:-60}"
+  local sleep_seconds="${2:-2}"
+  local url="http://localhost:8080/api/topology"
+  local attempt
+  local body
+
+  for attempt in $(seq 1 "${attempts}"); do
+    if body="$(curl -fsS --max-time 3 "${url}" 2>/dev/null)" && [[ "${body}" == *'"status":"degraded"'* ]]; then
+      echo "[break] confirmed degraded topology contract on attempt ${attempt}/${attempts}"
+      return 0
+    fi
+    sleep "${sleep_seconds}"
+  done
+
+  echo "[break] warning: topology contract did not become degraded after ${attempts} attempts" >&2
   return 1
 }
 
@@ -246,6 +265,57 @@ apply_r() {
   wait_for_http_failure "/healthz"
 }
 
+apply_s() {
+  echo "[break] pattern S: bilateral port contract violation (nginx upstream=9000, APP_PORT=9100, baseline=8000)"
+  perl -0pi -e 's/server app:8000 resolve;/server app:9000 resolve;/' "${ROOT_DIR}/nginx/nginx.conf"
+  perl -0pi -e 's/^APP_PORT=.*/APP_PORT=9100/m' "${ROOT_DIR}/app/app.env"
+  docker compose up -d --force-recreate app
+  docker compose restart nginx
+  wait_for_http_failure "/healthz"
+}
+
+apply_t() {
+  echo "[break] pattern T: DB_HOST points to 127.0.0.1 inside Docker (network topology fault)"
+  perl -0pi -e 's/^DB_HOST=.*/DB_HOST=127.0.0.1/m' "${ROOT_DIR}/app/app.env"
+  docker compose up -d --force-recreate app
+  wait_for_http_failure "/healthz"
+}
+
+apply_u() {
+  echo "[break] pattern U: DB_HOST connectivity failure masks a downstream query bug"
+  perl -0pi -e 's/^DB_HOST=.*/DB_HOST=127.0.0.1/m' "${ROOT_DIR}/app/app.env"
+  perl -0pi -e 's/FROM items ORDER BY id/FROM itemz ORDER BY id/' "${ROOT_DIR}/app/main.py"
+  docker compose up -d --force-recreate app
+  wait_for_http_failure "/healthz"
+}
+
+apply_v() {
+  echo "[break] pattern V: cache service-discovery target is not resolvable from the app"
+  perl -0pi -e 's/^CACHE_HOST=.*/CACHE_HOST=cache-missing/m' "${ROOT_DIR}/app/app.env"
+  docker compose up -d --force-recreate app
+  wait_for_http_success "/healthz"
+  wait_for_http_success "/api/items"
+  wait_for_topology_degraded
+}
+
+apply_w() {
+  echo "[break] pattern W: failover target mismatch routes cache dependency to the queue service"
+  perl -0pi -e 's/^CACHE_HOST=.*/CACHE_HOST=queue/m' "${ROOT_DIR}/app/app.env"
+  docker compose up -d --force-recreate app
+  wait_for_http_success "/healthz"
+  wait_for_http_success "/api/items"
+  wait_for_topology_degraded
+}
+
+apply_x() {
+  echo "[break] pattern X: bilateral cache/queue topology drift with degraded mode left enabled"
+  perl -0pi -e 's/^CACHE_HOST=.*/CACHE_HOST=queue/m; s/^QUEUE_HOST=.*/QUEUE_HOST=cache/m; s/^DEGRADED_MODE=.*/DEGRADED_MODE=true/m' "${ROOT_DIR}/app/app.env"
+  docker compose up -d --force-recreate app
+  wait_for_http_success "/healthz"
+  wait_for_http_success "/api/items"
+  wait_for_topology_degraded
+}
+
 pick_pattern() {
   case "${1:-random}" in
     a|A|pattern-a)
@@ -302,8 +372,26 @@ pick_pattern() {
     r|R|pattern-r)
       echo "R"
       ;;
+    s|S|pattern-s)
+      echo "S"
+      ;;
+    t|T|pattern-t)
+      echo "T"
+      ;;
+    u|U|pattern-u)
+      echo "U"
+      ;;
+    v|V|pattern-v)
+      echo "V"
+      ;;
+    w|W|pattern-w)
+      echo "W"
+      ;;
+    x|X|pattern-x)
+      echo "X"
+      ;;
     random)
-      case $((RANDOM % 18)) in
+      case $((RANDOM % 24)) in
         0) echo "A" ;;
         1) echo "B" ;;
         2) echo "C" ;;
@@ -322,10 +410,16 @@ pick_pattern() {
         15) echo "P" ;;
         16) echo "Q" ;;
         17) echo "R" ;;
+        18) echo "S" ;;
+        19) echo "T" ;;
+        20) echo "U" ;;
+        21) echo "V" ;;
+        22) echo "W" ;;
+        23) echo "X" ;;
       esac
       ;;
     *)
-      echo "usage: ./break.sh [a|b|c|d|e|f|g|h|i|i2|k|l|m|n|o|p|q|r|random]" >&2
+      echo "usage: ./break.sh [a|b|c|d|e|f|g|h|i|i2|k|l|m|n|o|p|q|r|s|t|u|v|w|x|random]" >&2
       exit 1
       ;;
   esac
@@ -356,6 +450,12 @@ main() {
     P) apply_p ;;
     Q) apply_q ;;
     R) apply_r ;;
+    S) apply_s ;;
+    T) apply_t ;;
+    U) apply_u ;;
+    V) apply_v ;;
+    W) apply_w ;;
+    X) apply_x ;;
   esac
 
   echo "[break] injected failure pattern ${pattern}"

@@ -31,6 +31,7 @@ from typing import Dict, Iterable, List, Tuple, Any
 
 
 DEFAULT_GROUP_BY = ["scenario"]
+# Open-world triage may legitimately map one benchmark scenario to multiple abstract domains.
 EXPECTED_DOMAINS_BY_SCENARIO = {
     "a": {"reverse_proxy_or_upstream_mismatch"},
     "b": {"app_startup_or_dependency_failure"},
@@ -54,7 +55,41 @@ EXPECTED_DOMAINS_BY_SCENARIO = {
         "reverse_proxy_or_upstream_mismatch",
     },
     "r": {"app_startup_or_dependency_failure"},
+    "s": {
+        "ambiguous_service_disagreement",
+        "app_config_or_env_mismatch",
+        "reverse_proxy_or_upstream_mismatch",
+    },
+    "t": {"app_config_or_env_mismatch", "database_auth_or_connectivity_issue"},
+    "u": {
+        "app_config_or_env_mismatch",
+        "database_auth_or_connectivity_issue",
+        "query_or_code_bug",
+    },
+    "v": {"topology_or_service_discovery_fault"},
+    "w": {"failover_contract_mismatch", "topology_or_service_discovery_fault"},
+    "x": {"degraded_mode_leak", "failover_contract_mismatch", "topology_or_service_discovery_fault"},
 }
+
+METRIC_COLUMNS = [
+    ("runs", "runs", 0),
+    ("success", "success", 0),
+    ("success_rate", "success_rate(%)", 2),
+    ("avg_elapsed_all", "avg_elapsed_all(s)", 2),
+    ("avg_elapsed_success", "avg_elapsed_success(s)", 2),
+    ("additional_obs_used", "add_obs_used", 0),
+    ("additional_obs_rate", "add_obs_rate(%)", 2),
+    ("avg_planner_retries", "avg_planner_retries", 2),
+    ("transport_failure_rate", "transport_failure_rate(%)", 2),
+    ("rollback_recovery_rate", "rollback_recovery_rate(%)", 2),
+    ("retry_assisted_recovery_count", "retry_assisted_recovery_count", 0),
+    ("fallback_recovery_count", "fallback_recovery_count", 0),
+    ("minimal_patch_ratio", "minimal_patch_ratio", 2),
+    ("domain_match", "domain_match", 0),
+    ("domain_match_rate", "domain_match_rate(%)", 2),
+    ("legacy_detection_match", "legacy_detect_match", 0),
+    ("legacy_detection_match_rate", "legacy_detect_match_rate(%)", 2),
+]
 
 
 def parse_args() -> argparse.Namespace:
@@ -69,22 +104,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument(
         "--sort-by",
         default="group",
-        choices=[
-            "group",
-            "runs",
-            "success_rate",
-            "avg_elapsed_all",
-            "avg_elapsed_success",
-            "additional_obs_rate",
-            "avg_planner_retries",
-            "transport_failure_rate",
-            "rollback_recovery_rate",
-            "retry_assisted_recovery_count",
-            "fallback_recovery_count",
-            "minimal_patch_ratio",
-            "domain_match_rate",
-            "legacy_detection_match_rate",
-        ],
+        choices=["group", *[key for key, _, _ in METRIC_COLUMNS]],
         help="並び順",
     )
     p.add_argument(
@@ -121,6 +141,18 @@ def to_float_or_none(s: str):
 
 def normalize_text(s: str) -> str:
     return " ".join(str(s).strip().split())
+
+
+def count_true(rows: Iterable[Dict[str, str]], field: str) -> int:
+    return sum(1 for row in rows if to_bool(row.get(field, "")))
+
+
+def domain_matches_expected(row: Dict[str, str]) -> bool:
+    scenario = normalize_text(row.get("scenario", ""))
+    detected_fault_class = normalize_text(row.get("detected_fault_class", ""))
+    if not scenario or not detected_fault_class:
+        return False
+    return detected_fault_class in EXPECTED_DOMAINS_BY_SCENARIO.get(scenario, set())
 
 
 def infer_failure_bucket(row: Dict[str, str]) -> str:
@@ -200,9 +232,9 @@ def compute_metrics(rows: List[Dict[str, str]]) -> Dict[str, Any]:
     elapsed_success = [x for x in (to_float_or_none(r.get("elapsed_seconds", "")) for r in success_rows) if x is not None]
     planner_retry_values = [x for x in (to_float_or_none(r.get("planner_retry_count", "")) for r in rows) if x is not None]
 
-    add_obs_true = sum(1 for r in rows if to_bool(r.get("additional_observation_used", "")))
-    transport_failure_count = sum(1 for r in rows if to_bool(r.get("planner_transport_failure", "")))
-    rollback_used_count = sum(1 for r in rows if to_bool(r.get("rollback_used", "")))
+    add_obs_true = count_true(rows, "additional_observation_used")
+    transport_failure_count = count_true(rows, "planner_transport_failure")
+    rollback_used_count = count_true(rows, "rollback_used")
     rollback_recovered_count = sum(
         1 for r in rows if to_bool(r.get("rollback_used", "")) and to_bool(r.get("rollback_postcheck_ok", ""))
     )
@@ -218,16 +250,9 @@ def compute_metrics(rows: List[Dict[str, str]]) -> Dict[str, Any]:
         if normalize_text(r.get("final_status", "")) == "success"
         and to_bool(r.get("planner_fallback_used", ""))
     )
-    minimal_patch_count = sum(1 for r in rows if to_bool(r.get("minimal_patch_used", "")))
-    restore_used_count = sum(1 for r in rows if to_bool(r.get("restore_from_base_used", "")))
-    domain_match = sum(
-        1
-        for r in rows
-        if normalize_text(r.get("scenario", "")) != ""
-        and normalize_text(r.get("detected_fault_class", "")) != ""
-        and normalize_text(r.get("detected_fault_class", ""))
-        in EXPECTED_DOMAINS_BY_SCENARIO.get(normalize_text(r.get("scenario", "")), set())
-    )
+    minimal_patch_count = count_true(rows, "minimal_patch_used")
+    restore_used_count = count_true(rows, "restore_from_base_used")
+    domain_match = sum(1 for r in rows if domain_matches_expected(r))
     legacy_detection_match = sum(
         1
         for r in rows
@@ -313,6 +338,13 @@ def render_group_name(key: Tuple[str, ...], group_by: List[str]) -> str:
     return ", ".join(parts)
 
 
+def build_metric_row(group_name: str, metrics: Dict[str, Any]) -> List[str]:
+    row = [group_name]
+    for key, _, digits in METRIC_COLUMNS:
+        row.append(fmt_num(metrics.get(key), digits))
+    return row
+
+
 def main() -> None:
     args = parse_args()
     summary_csv = Path(args.summary_csv)
@@ -331,49 +363,9 @@ def main() -> None:
 
     display_rows: List[List[str]] = []
     for key, m in items:
-        display_rows.append(
-            [
-                render_group_name(key, args.group_by),
-                fmt_num(m["runs"], 0),
-                fmt_num(m["success"], 0),
-                fmt_num(m["success_rate"]),
-                fmt_num(m["avg_elapsed_all"]),
-                fmt_num(m["avg_elapsed_success"]),
-                fmt_num(m["additional_obs_used"], 0),
-                fmt_num(m["additional_obs_rate"]),
-                fmt_num(m["avg_planner_retries"]),
-                fmt_num(m["transport_failure_rate"]),
-                fmt_num(m["rollback_recovery_rate"]),
-                fmt_num(m["retry_assisted_recovery_count"], 0),
-                fmt_num(m["fallback_recovery_count"], 0),
-                fmt_num(m["minimal_patch_ratio"]),
-                fmt_num(m["domain_match"], 0),
-                fmt_num(m["domain_match_rate"]),
-                fmt_num(m["legacy_detection_match"], 0),
-                fmt_num(m["legacy_detection_match_rate"]),
-            ]
-        )
+        display_rows.append(build_metric_row(render_group_name(key, args.group_by), m))
 
-    headers = [
-        "group",
-        "runs",
-        "success",
-        "success_rate(%)",
-        "avg_elapsed_all(s)",
-        "avg_elapsed_success(s)",
-        "add_obs_used",
-        "add_obs_rate(%)",
-        "avg_planner_retries",
-        "transport_failure_rate(%)",
-        "rollback_recovery_rate(%)",
-        "retry_assisted_recovery_count",
-        "fallback_recovery_count",
-        "minimal_patch_ratio",
-        "domain_match",
-        "domain_match_rate(%)",
-        "legacy_detect_match",
-        "legacy_detect_match_rate(%)",
-    ]
+    headers = ["group", *[label for _, label, _ in METRIC_COLUMNS]]
 
     print()
     print(f"[aggregate] source: {summary_csv}")
@@ -387,26 +379,7 @@ def main() -> None:
         print("[aggregate] overall")
         print(
             table(
-                [[
-                    "overall",
-                    fmt_num(overall["runs"], 0),
-                    fmt_num(overall["success"], 0),
-                    fmt_num(overall["success_rate"]),
-                    fmt_num(overall["avg_elapsed_all"]),
-                    fmt_num(overall["avg_elapsed_success"]),
-                    fmt_num(overall["additional_obs_used"], 0),
-                    fmt_num(overall["additional_obs_rate"]),
-                    fmt_num(overall["avg_planner_retries"]),
-                    fmt_num(overall["transport_failure_rate"]),
-                    fmt_num(overall["rollback_recovery_rate"]),
-                    fmt_num(overall["retry_assisted_recovery_count"], 0),
-                    fmt_num(overall["fallback_recovery_count"], 0),
-                    fmt_num(overall["minimal_patch_ratio"]),
-                    fmt_num(overall["domain_match"], 0),
-                    fmt_num(overall["domain_match_rate"]),
-                    fmt_num(overall["legacy_detection_match"], 0),
-                    fmt_num(overall["legacy_detection_match_rate"]),
-                ]],
+                [build_metric_row("overall", overall)],
                 headers,
             )
         )

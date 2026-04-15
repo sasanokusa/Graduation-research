@@ -377,6 +377,40 @@ def build_mock_plan(state: SingleAgentState, *, turn: int = 1, mode: str = "sing
             ],
         }
     if state["scenario"] == "r":
+        if mode == "multi_agent" and turn == 2:
+            return {
+                "summary": "Repair the now-exposed DB credential drift and rebuild the app service.",
+                "actions": [
+                    {
+                        "type": "edit_file",
+                        "path": "app/app.env",
+                        "operation": "replace_text",
+                        "old_text": "DB_PASSWORD=wrongpassword",
+                        "new_text": "DB_PASSWORD=apppassword",
+                    },
+                    {
+                        "type": "rebuild_compose_service",
+                        "service": "app",
+                    },
+                ],
+            }
+        if mode == "multi_agent" and turn >= 3:
+            return {
+                "summary": "Repair the final exposed query bug and rebuild the app service.",
+                "actions": [
+                    {
+                        "type": "edit_file",
+                        "path": "app/main.py",
+                        "operation": "replace_text",
+                        "old_text": 'cursor.execute("SELECT id, name, description FROM itemz ORDER BY id")',
+                        "new_text": 'cursor.execute("SELECT id, name, description FROM items ORDER BY id")',
+                    },
+                    {
+                        "type": "rebuild_compose_service",
+                        "service": "app",
+                    },
+                ],
+            }
         return {
             "summary": "Restore uvicorn to requirements and rebuild the app service, which only addresses the front-most layer.",
             "actions": [
@@ -386,6 +420,132 @@ def build_mock_plan(state: SingleAgentState, *, turn: int = 1, mode: str = "sing
                     "operation": "replace_text",
                     "old_text": "fastapi==0.116.1\nPyMySQL==1.1.1",
                     "new_text": "fastapi==0.116.1\nuvicorn[standard]==0.35.0\nPyMySQL==1.1.1",
+                },
+                {
+                    "type": "rebuild_compose_service",
+                    "service": "app",
+                },
+            ],
+        }
+    if state["scenario"] == "s":
+        return {
+            "summary": "Restore both nginx upstream port and app listen port to the baseline and restart services.",
+            "actions": [
+                {
+                    "type": "edit_file",
+                    "path": "nginx/nginx.conf",
+                    "operation": "replace_text",
+                    "old_text": "server app:9000 resolve;",
+                    "new_text": "server app:8000 resolve;",
+                },
+                {
+                    "type": "edit_file",
+                    "path": "app/app.env",
+                    "operation": "restore_from_base",
+                },
+                {
+                    "type": "rebuild_compose_service",
+                    "service": "app",
+                },
+                {
+                    "type": "restart_compose_service",
+                    "service": "nginx",
+                },
+            ],
+        }
+    if state["scenario"] == "t":
+        return {
+            "summary": "Restore DB_HOST to the correct Docker service name and rebuild the app service.",
+            "actions": [
+                {
+                    "type": "edit_file",
+                    "path": "app/app.env",
+                    "operation": "replace_text",
+                    "old_text": "DB_HOST=127.0.0.1",
+                    "new_text": "DB_HOST=db",
+                },
+                {
+                    "type": "rebuild_compose_service",
+                    "service": "app",
+                },
+            ],
+        }
+    if state["scenario"] == "u":
+        if turn >= 2:
+            return {
+                "summary": "Fix the now-visible query bug and rebuild the app service.",
+                "actions": [
+                    {
+                        "type": "edit_file",
+                        "path": "app/main.py",
+                        "operation": "replace_text",
+                        "old_text": 'cursor.execute("SELECT id, name, description FROM itemz ORDER BY id")',
+                        "new_text": 'cursor.execute("SELECT id, name, description FROM items ORDER BY id")',
+                    },
+                    {
+                        "type": "rebuild_compose_service",
+                        "service": "app",
+                    },
+                ],
+            }
+        return {
+            "summary": "Restore DB_HOST to the correct Docker service name and rebuild the app service.",
+            "actions": [
+                {
+                    "type": "edit_file",
+                    "path": "app/app.env",
+                    "operation": "replace_text",
+                    "old_text": "DB_HOST=127.0.0.1",
+                    "new_text": "DB_HOST=db",
+                },
+                {
+                    "type": "rebuild_compose_service",
+                    "service": "app",
+                },
+            ],
+        }
+    if state["scenario"] == "v":
+        return {
+            "summary": "Restore the cache service-discovery target and rebuild the app service.",
+            "actions": [
+                {
+                    "type": "edit_file",
+                    "path": "app/app.env",
+                    "operation": "replace_text",
+                    "old_text": "CACHE_HOST=cache-missing",
+                    "new_text": "CACHE_HOST=cache",
+                },
+                {
+                    "type": "rebuild_compose_service",
+                    "service": "app",
+                },
+            ],
+        }
+    if state["scenario"] == "w":
+        return {
+            "summary": "Restore the cache failover target to the expected cache service and rebuild the app service.",
+            "actions": [
+                {
+                    "type": "edit_file",
+                    "path": "app/app.env",
+                    "operation": "replace_text",
+                    "old_text": "CACHE_HOST=queue",
+                    "new_text": "CACHE_HOST=cache",
+                },
+                {
+                    "type": "rebuild_compose_service",
+                    "service": "app",
+                },
+            ],
+        }
+    if state["scenario"] == "x":
+        return {
+            "summary": "Restore the app-side topology contract from baseline and rebuild the app service.",
+            "actions": [
+                {
+                    "type": "edit_file",
+                    "path": "app/app.env",
+                    "operation": "restore_from_base",
                 },
                 {
                     "type": "rebuild_compose_service",

@@ -1,3 +1,34 @@
+fault_classes:
+  service_local_fault:
+    - "a"
+    - "b"
+    - "d"
+    - "f"
+    - "g"
+    - "p"
+  dependency_fault:
+    - "c"
+  topology_fault:
+    - "h"
+    - "q"
+    - "s"
+    - "t"
+    - "v"
+    - "w"
+    - "x"
+  ambiguous_noisy_fault:
+    - "k"
+    - "l"
+    - "o"
+  masked_cascade:
+    - "i"
+    - "i2"
+    - "m"
+    - "n"
+    - "o"
+    - "r"
+    - "u"
+
 scenarios:
   a:
     name: "A"
@@ -353,3 +384,144 @@ scenarios:
         - "app/main.py"
       allow_restore_only_after_failed_patch_for:
         - "app/main.py"
+  s:
+    name: "bilateral_port_contract_violation"
+    description: "Both nginx upstream port and app listen port are wrong in different directions, requiring cross-file baseline restoration."
+    allowed_files:
+      - "nginx/nginx.conf"
+      - "app/app.env"
+    allowed_actions:
+      - "edit_file"
+      - "rebuild_compose_service"
+      - "restart_compose_service"
+      - "run_config_test"
+      - "run_health_check"
+    success_checks:
+      - "healthz_200"
+      - "api_items_200"
+      - "api_items_nonempty"
+      - "api_items_schema_ok"
+      - "port_contract_matches_baseline"
+    failure_conditions:
+      - "bilateral_port_contract_violation_persists"
+      - "only_one_side_repaired"
+  t:
+    name: "network_topology_fault"
+    description: "DB_HOST points to 127.0.0.1 inside Docker, making the app unable to reach the database container."
+    allowed_files:
+      - "app/app.env"
+    allowed_actions:
+      - "edit_file"
+      - "rebuild_compose_service"
+      - "run_health_check"
+    success_checks:
+      - "app_running"
+      - "healthz_200"
+      - "api_items_200"
+    failure_conditions:
+      - "db_host_connectivity_failure_persists"
+  u:
+    name: "network_topology_masks_query_cascade"
+    description: "DB_HOST connectivity failure masks a downstream query bug until the database becomes reachable again."
+    fault_class: "masked_cascade"
+    allowed_files:
+      - "app/app.env"
+      - "app/main.py"
+    allowed_actions:
+      - "edit_file"
+      - "rebuild_compose_service"
+      - "run_health_check"
+    success_checks:
+      - "healthz_200"
+      - "api_items_200"
+      - "api_items_nonempty"
+      - "api_items_schema_ok"
+    failure_conditions:
+      - "network_fault_masks_query_bug"
+      - "partial_repair_stops_before_full_recovery"
+    restore_policy:
+      disallow_initial_restore_for:
+        - "app/main.py"
+      allow_restore_only_after_failed_patch_for:
+        - "app/main.py"
+  v:
+    name: "cache_name_resolution_fault"
+    description: "The app-visible cache dependency target points to a non-existent service, so user-facing HTTP stays green while the DC topology contract is degraded."
+    fault_class: "topology_fault"
+    dc_topology:
+      service_group: "host-A"
+      dependencies:
+        - "cache"
+        - "queue"
+        - "metrics"
+    allowed_files:
+      - "app/app.env"
+    allowed_actions:
+      - "edit_file"
+      - "rebuild_compose_service"
+      - "run_health_check"
+    success_checks:
+      - "healthz_200"
+      - "api_items_200"
+      - "api_items_nonempty"
+      - "api_items_schema_ok"
+      - "dc_services_running"
+      - "dc_topology_contract_ok"
+      - "dc_no_degraded_mode"
+    failure_conditions:
+      - "cache_name_resolution_failure_persists"
+      - "topology_contract_degraded"
+  w:
+    name: "failover_target_mismatch"
+    description: "A reachable failover target is wired into CACHE_HOST, but it points at the queue service instead of the expected cache service."
+    fault_class: "topology_fault"
+    dc_topology:
+      service_group: "host-A"
+      dependencies:
+        - "cache"
+        - "queue"
+        - "metrics"
+    allowed_files:
+      - "app/app.env"
+    allowed_actions:
+      - "edit_file"
+      - "rebuild_compose_service"
+      - "run_health_check"
+    success_checks:
+      - "healthz_200"
+      - "api_items_200"
+      - "api_items_nonempty"
+      - "api_items_schema_ok"
+      - "dc_services_running"
+      - "dc_topology_contract_ok"
+      - "dc_no_degraded_mode"
+    failure_conditions:
+      - "failover_target_mismatch_persists"
+      - "dependency_contract_degraded_but_http_green"
+  x:
+    name: "bilateral_dependency_drift"
+    description: "Cache and queue targets are swapped and degraded mode is left enabled, requiring semantic topology checks rather than plain HTTP 200 checks."
+    fault_class: "topology_fault"
+    dc_topology:
+      service_group: "host-A"
+      dependencies:
+        - "cache"
+        - "queue"
+        - "metrics"
+    allowed_files:
+      - "app/app.env"
+    allowed_actions:
+      - "edit_file"
+      - "rebuild_compose_service"
+      - "run_health_check"
+    success_checks:
+      - "healthz_200"
+      - "api_items_200"
+      - "api_items_nonempty"
+      - "api_items_schema_ok"
+      - "dc_services_running"
+      - "dc_topology_contract_ok"
+      - "dc_no_degraded_mode"
+    failure_conditions:
+      - "bilateral_dependency_drift_persists"
+      - "degraded_mode_leaks_into_success_state"

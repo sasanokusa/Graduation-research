@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import json
+import os
 import time
 from typing import Any
 
 from core.agent_factory import build_chat_model_binding
 from core.agent_roles import AgentRole
+from core.llm_usage import extract_token_usage
 from core.state import SingleAgentState
 
 
@@ -37,6 +39,23 @@ def _section(title: str) -> None:
     print(divider)
 
 
+def _env_int(name: str, default: int) -> int:
+    value = os.getenv(name, "").strip()
+    if not value:
+        return default
+    try:
+        return int(float(value))
+    except ValueError:
+        return default
+
+
+def reviewer_invocation_failure_retries() -> int:
+    role_value = os.getenv("REVIEWER_INVOCATION_FAILURE_RETRIES", "").strip()
+    if role_value:
+        return max(0, _env_int("REVIEWER_INVOCATION_FAILURE_RETRIES", 2))
+    return max(0, _env_int("LLM_INVOCATION_FAILURE_RETRIES", 2))
+
+
 def parse_reviewer_text(text: str) -> tuple[dict[str, Any], list[str]]:
     errors: list[str] = []
     normalized = {
@@ -52,8 +71,29 @@ def parse_reviewer_text(text: str) -> tuple[dict[str, Any], list[str]]:
         },
         "recommended_next_observations": [],
     }
+    text = text.strip()
+    if text.startswith("```"):
+        lines = text.splitlines()
+        start = 1 if lines[0].startswith("```") else 0
+        end = len(lines)
+        for i in range(len(lines) - 1, -1, -1):
+            if lines[i].strip() == "```":
+                end = i
+                break
+        text = "\n".join(lines[start:end])
+
     try:
         payload = json.loads(text)
+    except json.JSONDecodeError as exc:
+        if "Invalid \\escape" in str(exc):
+            try:
+                payload = json.loads(text.replace("\\'", "'"))
+            except Exception as retry_exc:
+                errors.append(f"reviewer output is not valid JSON: {retry_exc}")
+                return normalized, errors
+        else:
+            errors.append(f"reviewer output is not valid JSON: {exc}")
+            return normalized, errors
     except Exception as exc:
         errors.append(f"reviewer output is not valid JSON: {exc}")
         return normalized, errors
@@ -118,11 +158,13 @@ def _reviewer_prompt(state: SingleAgentState) -> str:
             "warnings": state.get("verifier_postcheck_result", {}).get("warnings", []),
             "healthz": state.get("verifier_postcheck_result", {}).get("healthz", {}),
             "api_items": state.get("verifier_postcheck_result", {}).get("api_items", {}),
+            "topology": state.get("verifier_postcheck_result", {}).get("topology", {}),
         },
         "rollback_used": state.get("rollback_used", False),
         "rollback_result": state.get("rollback_result", {}),
         "previous_planner_history": state.get("planner_history", []),
         "previous_reviewer_history": state.get("reviewer_history", []),
+        "incident_blackboard": state.get("incident_blackboard", {}),
     }
     return f"Review this recovery attempt and decide whether another planning turn is justified.\n{context}"
 
@@ -200,6 +242,48 @@ def _mock_review(state: SingleAgentState) -> dict[str, Any]:
             },
             "recommended_next_observations": [],
         }
+    if scenario == "u" and turn == 1:
+        return {
+            "decision": "retry",
+            "summary": "The DB_HOST connectivity repair was necessary, but a downstream app query fault remains.",
+            "failure_analysis": "The database is now reachable, yet /api/items still fails, indicating a newly exposed query bug.",
+            "feedback_for_planner": "Do not touch app.env again. Repair the visible app/main.py query fault and rebuild the app service.",
+            "suspected_remaining_domains": ["query_or_code_bug"],
+            "recommended_scope_adjustment": {
+                "editable_files": ["app/main.py"],
+                "services": ["app"],
+                "allowed_actions": ["edit_file", "rebuild_compose_service"],
+            },
+            "recommended_next_observations": [],
+        }
+    if scenario == "r" and turn == 1:
+        return {
+            "decision": "retry",
+            "summary": "The dependency/startup repair was necessary, but the database credential layer remains.",
+            "failure_analysis": "After the app can start, the remaining failure is now database authentication rather than dependency loading.",
+            "feedback_for_planner": "Do not touch requirements again. Repair the exposed app/app.env DB credential drift and rebuild the app service.",
+            "suspected_remaining_domains": ["database_auth_or_connectivity_issue"],
+            "recommended_scope_adjustment": {
+                "editable_files": ["app/app.env"],
+                "services": ["app"],
+                "allowed_actions": ["edit_file", "rebuild_compose_service"],
+            },
+            "recommended_next_observations": [],
+        }
+    if scenario == "r" and turn == 2:
+        return {
+            "decision": "retry",
+            "summary": "The DB credential layer was repaired, but a final query bug remains.",
+            "failure_analysis": "The remaining /api/items failure is now app-code level and should not be handled as another env repair.",
+            "feedback_for_planner": "Repair the visible app/main.py query bug with a minimal patch and rebuild the app service.",
+            "suspected_remaining_domains": ["query_or_code_bug"],
+            "recommended_scope_adjustment": {
+                "editable_files": ["app/main.py"],
+                "services": ["app"],
+                "allowed_actions": ["edit_file", "rebuild_compose_service"],
+            },
+            "recommended_next_observations": [],
+        }
     if scenario == "o" and turn == 1:
         return {
             "decision": "retry",
@@ -253,6 +337,7 @@ def mock_reviewer_node(state: SingleAgentState) -> SingleAgentState:
         "reviewer_output_raw": raw_output,
         "reviewer_recommended_scope": review["recommended_scope_adjustment"],
         "reviewer_recommended_next_observations": review["recommended_next_observations"],
+        "reviewer_suspected_remaining_domains": review["suspected_remaining_domains"],
         "reviewer_provider": "mock",
         "reviewer_model": "mock-reviewer",
         "reviewer_history": [*state.get("reviewer_history", []), history_entry],
@@ -281,6 +366,7 @@ def reviewer_node(state: SingleAgentState) -> SingleAgentState:
         model=settings.model,
     )
     agent_role_trace = [*state.get("agent_role_trace", []), f"reviewer:{turn}"]
+    last_error = ""
 
     if binding.client is None:
         review = {
@@ -297,16 +383,22 @@ def reviewer_node(state: SingleAgentState) -> SingleAgentState:
             "recommended_next_observations": [],
         }
         raw_output = json.dumps(review, ensure_ascii=False)
+        token_usage = {}
+        invocation_retry_count = 0
+        invocation_failed = True
     else:
         raw_output = ""
         review = None
-        last_error = ""
-        for attempt in range(1, settings.max_attempts + 1):
+        token_usage = {}
+        invocation_retry_count = 0
+        invocation_failed = False
+        max_invocation_attempts = settings.max_attempts + reviewer_invocation_failure_retries()
+        for attempt in range(1, max_invocation_attempts + 1):
             attempt_started_at = time.time()
             try:
                 print(
                     f"[reviewer] invoking {settings.provider}/{settings.model} "
-                    f"attempt={attempt}/{settings.max_attempts} timeout={settings.timeout_seconds}s"
+                    f"attempt={attempt}/{max_invocation_attempts} timeout={settings.timeout_seconds}s"
                 )
                 response = binding.client.invoke(
                     [
@@ -315,6 +407,7 @@ def reviewer_node(state: SingleAgentState) -> SingleAgentState:
                     ]
                 )
                 raw_output = response.content if isinstance(response.content, str) else str(response.content)
+                token_usage = extract_token_usage(response)
                 review, parse_errors = parse_reviewer_text(raw_output)
                 if parse_errors:
                     last_error = "; ".join(parse_errors)
@@ -323,7 +416,9 @@ def reviewer_node(state: SingleAgentState) -> SingleAgentState:
                 break
             except Exception as exc:
                 last_error = str(exc)
-                if attempt == settings.max_attempts:
+                invocation_retry_count = attempt
+                if attempt == max_invocation_attempts:
+                    invocation_failed = True
                     review = {
                         "decision": "stop",
                         "summary": f"Reviewer invocation failed after {attempt} attempts.",
@@ -354,6 +449,9 @@ def reviewer_node(state: SingleAgentState) -> SingleAgentState:
         "suspected_remaining_domains": review["suspected_remaining_domains"],
         "recommended_scope_adjustment": review["recommended_scope_adjustment"],
         "recommended_next_observations": review["recommended_next_observations"],
+        "token_usage": token_usage,
+        "invocation_failed": invocation_failed,
+        "invocation_retry_count": invocation_retry_count,
     }
     return {
         **state,
@@ -362,6 +460,11 @@ def reviewer_node(state: SingleAgentState) -> SingleAgentState:
         "reviewer_output_raw": raw_output,
         "reviewer_recommended_scope": review["recommended_scope_adjustment"],
         "reviewer_recommended_next_observations": review["recommended_next_observations"],
+        "reviewer_suspected_remaining_domains": review["suspected_remaining_domains"],
+        "reviewer_token_usage": token_usage,
+        "reviewer_invocation_failed": invocation_failed,
+        "reviewer_invocation_retry_count": invocation_retry_count,
+        "reviewer_invocation_error": last_error if invocation_failed else "",
         "reviewer_provider": settings.provider,
         "reviewer_model": settings.model,
         "reviewer_history": [*state.get("reviewer_history", []), history_entry],

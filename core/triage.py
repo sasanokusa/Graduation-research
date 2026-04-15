@@ -1,6 +1,9 @@
+import re
 from typing import Any
 
 from core.healthchecks import (
+    evaluate_dc_no_degraded_mode,
+    evaluate_dc_topology_contract_ok,
     evaluate_api_items_nonempty,
     evaluate_api_items_schema_ok,
 )
@@ -62,9 +65,24 @@ DOMAIN_POLICY_MAP = {
             "rebuild_compose_service",
         ],
     },
+    "topology_or_service_discovery_fault": {
+        "files": ["app/app.env"],
+        "services": ["app", "cache", "queue", "metrics"],
+        "allowed_actions": ["edit_file", "rebuild_compose_service", "run_health_check"],
+    },
+    "failover_contract_mismatch": {
+        "files": ["app/app.env"],
+        "services": ["app", "cache", "queue", "metrics"],
+        "allowed_actions": ["edit_file", "rebuild_compose_service", "run_health_check"],
+    },
+    "degraded_mode_leak": {
+        "files": ["app/app.env"],
+        "services": ["app", "cache", "queue", "metrics"],
+        "allowed_actions": ["edit_file", "rebuild_compose_service", "run_health_check"],
+    },
     "unknown": {
         "files": ["nginx/nginx.conf", "app/main.py", "app/requirements.txt", "app/app.env"],
-        "services": ["nginx", "app"],
+        "services": ["nginx", "app", "cache", "queue", "metrics"],
         "allowed_actions": [
             "edit_file",
             "run_config_test",
@@ -113,16 +131,20 @@ def _rank_domains(observation: dict[str, Any]) -> list[dict[str, Any]]:
     nginx_snippet = str(file_snippets.get("nginx/nginx.conf", ""))
     app_main_snippet = str(file_snippets.get("app/main.py", ""))
     app_env_snippet = str(file_snippets.get("app/app.env", ""))
+    app_requirements_snippet = str(file_snippets.get("app/requirements.txt", ""))
     app_patterns = suspicious_patterns.get("app", [])
     nginx_patterns = suspicious_patterns.get("nginx", [])
     http_evidence_text = "\n".join(str(value) for value in http_error_evidence.values())
     healthz = health_checks.get("healthz", {})
     api_items = health_checks.get("api_items", {})
+    topology = health_checks.get("topology", {})
     app_port = _extract_app_port(observation)
     baseline_app_port = str(observation.get("static_observations", {}).get("baseline_app_port", "")).strip()
     historical_evidence = observation.get("historical_evidence", [])
     api_nonempty = evaluate_api_items_nonempty(api_items)
     api_schema_ok = evaluate_api_items_schema_ok(api_items)
+    topology_contract = evaluate_dc_topology_contract_ok(topology)
+    no_degraded_mode = evaluate_dc_no_degraded_mode(topology)
 
     domains = {
         key: {"domain": key, "confidence": 0.0, "evidence": []}
@@ -135,6 +157,14 @@ def _rank_domains(observation: dict[str, Any]) -> list[dict[str, Any]]:
             "reverse_proxy_or_upstream_mismatch",
             0.92,
             "nginx configuration snippet shows an upstream port mismatch",
+        )
+    upstream_port_match = re.search(r"server\s+app:(\d+)\s+resolve;", nginx_snippet)
+    if upstream_port_match and baseline_app_port and upstream_port_match.group(1) != baseline_app_port:
+        _score_domain(
+            domains,
+            "reverse_proxy_or_upstream_mismatch",
+            0.91,
+            f"nginx upstream port {upstream_port_match.group(1)} does not match the baseline app port {baseline_app_port}",
         )
     if "server backend:8000" in nginx_snippet:
         _score_domain(
@@ -174,6 +204,17 @@ def _rank_domains(observation: dict[str, Any]) -> list[dict[str, Any]]:
             0.95,
             "app logs show startup or dependency failure",
         )
+    if (
+        app_requirements_snippet
+        and "uvicorn[standard]" not in app_requirements_snippet
+        and (healthz.get("status") != 200 or api_items.get("status") != 200)
+    ):
+        _score_domain(
+            domains,
+            "app_startup_or_dependency_failure",
+            0.93,
+            "editable requirements snippet is missing uvicorn while the app is unreachable",
+        )
     if _contains_any(http_evidence_text, ["Access denied", "using password: YES", "OperationalError"]):
         _score_domain(
             domains,
@@ -181,6 +222,24 @@ def _rank_domains(observation: dict[str, Any]) -> list[dict[str, Any]]:
             0.95,
             "HTTP error evidence indicates a database authentication or connectivity issue",
         )
+    if _contains_any(http_evidence_text, ["Can't connect", "Connection refused"]):
+        _score_domain(
+            domains,
+            "database_auth_or_connectivity_issue",
+            0.93,
+            "HTTP error evidence indicates a database host connectivity failure",
+        )
+    if "DB_HOST=" in app_env_snippet and domains["database_auth_or_connectivity_issue"]["confidence"] > 0:
+        for line in app_env_snippet.splitlines():
+            if line.startswith("DB_HOST="):
+                current_db_host = line.split("=", 1)[1].strip()
+                if current_db_host not in ("db", ""):
+                    _score_domain(
+                        domains,
+                        "database_auth_or_connectivity_issue",
+                        0.96,
+                        f"editable app env snippet shows a non-baseline DB_HOST={current_db_host}",
+                    )
     if "DB_PASSWORD=" in app_env_snippet and domains["database_auth_or_connectivity_issue"]["confidence"] > 0:
         _score_domain(
             domains,
@@ -206,6 +265,60 @@ def _rank_domains(observation: dict[str, Any]) -> list[dict[str, Any]]:
             "app_config_or_env_mismatch",
             0.86,
             f"app logs show the service listening on port {app_port} instead of the baseline port",
+        )
+    if topology.get("status") == 200 and not topology_contract["ok"]:
+        failed_checks = set(topology_contract.get("failed_checks", []))
+        dependencies = topology_contract.get("dependencies", {})
+        if "dependencies_reachable" in failed_checks:
+            _score_domain(
+                domains,
+                "topology_or_service_discovery_fault",
+                0.94,
+                "the topology endpoint reports that one or more DC dependencies are unreachable",
+            )
+        if "expected_hosts_ok" in failed_checks or "expected_groups_ok" in failed_checks:
+            _score_domain(
+                domains,
+                "failover_contract_mismatch",
+                0.93,
+                "the topology endpoint reports reachable dependencies whose host or host-group contract does not match the expected topology",
+            )
+        if "degraded_mode_ok" in failed_checks or not no_degraded_mode["ok"]:
+            _score_domain(
+                domains,
+                "degraded_mode_leak",
+                0.9,
+                "the topology endpoint indicates degraded mode is enabled or semantic topology status is degraded",
+            )
+        if isinstance(dependencies, dict):
+            for dependency_name, dependency in dependencies.items():
+                if not isinstance(dependency, dict):
+                    continue
+                host = str(dependency.get("host", ""))
+                expected_host = str(dependency.get("expected_host", ""))
+                if host and expected_host and host != expected_host:
+                    _score_domain(
+                        domains,
+                        "failover_contract_mismatch",
+                        0.96,
+                        f"{dependency_name} is routed to {host}, but the expected target is {expected_host}",
+                    )
+                if dependency.get("reachable") is False:
+                    _score_domain(
+                        domains,
+                        "topology_or_service_discovery_fault",
+                        0.96,
+                        f"{dependency_name} target {host or '(empty)'} is not reachable from the app container",
+                    )
+    if any(
+        key in app_env_snippet
+        for key in ["CACHE_HOST=", "QUEUE_HOST=", "METRICS_HOST=", "DEGRADED_MODE="]
+    ) and topology.get("status") == 200 and not topology_contract["ok"]:
+        _score_domain(
+            domains,
+            "topology_or_service_discovery_fault",
+            0.82,
+            "editable app env snippet exposes multi-service topology settings while topology semantic check is degraded",
         )
     if (
         app_port
@@ -364,7 +477,11 @@ def _merge_candidate_scope(suspected_domains: list[dict[str, Any]]) -> dict[str,
         allowed_actions.update(policy["allowed_actions"])
 
     ordered_files = [path for path in ["nginx/nginx.conf", "app/main.py", "app/requirements.txt", "app/app.env"] if path in files]
-    ordered_services = [service for service in ["nginx", "app", "db"] if service in services]
+    ordered_services = [
+        service
+        for service in ["nginx", "app", "db", "cache", "queue", "worker", "metrics"]
+        if service in services
+    ]
     ordered_actions = [
         action
         for action in ["edit_file", "rebuild_compose_service", "restart_compose_service", "run_config_test"]
@@ -453,6 +570,13 @@ def _missing_evidence_and_next_steps(
         recommended_next_observations.extend(
             ["extract narrower relevant snippet from app/app.env", "expand app log excerpt"]
         )
+    if top_domain in {"topology_or_service_discovery_fault", "failover_contract_mismatch", "degraded_mode_leak"}:
+        if not any(
+            key in str(file_snippets.get("app/app.env", ""))
+            for key in ["CACHE_HOST=", "QUEUE_HOST=", "METRICS_HOST=", "DEGRADED_MODE="]
+        ):
+            missing_evidence.append("a narrower app environment snippet with topology contract settings")
+        recommended_next_observations.append("extract narrower relevant snippet from app/app.env")
     if (
         top_domain in {"reverse_proxy_or_upstream_mismatch", "ambiguous_service_disagreement"}
         and baseline_app_port
@@ -539,6 +663,9 @@ def build_triage_result(
                 "api_items_nonempty",
                 "api_items_schema_ok",
                 "port_contract_matches_baseline",
+                "dc_services_running",
+                "dc_topology_contract_ok",
+                "dc_no_degraded_mode",
             ],
             "failure_conditions": ["service_continuity_not_restored"],
         }
@@ -556,4 +683,72 @@ def build_triage_result(
         "detection_evidence": suspected_domains[0]["evidence"],
         "detected_fault_class": suspected_domains[0]["domain"],
         "alternative_candidates": suspected_domains[1:],
+        "triage_mode": "rule",
+        "triage_llm_fallback": False,
+        "triage_provider": "",
+        "triage_model": "",
+    }
+
+
+def build_triage_result_llm(
+    observation: dict[str, Any],
+) -> dict[str, Any]:
+    from agents.triage_agent import rank_domains_llm
+
+    llm_ranked, llm_metadata = rank_domains_llm(observation)
+
+    if llm_metadata.get("fallback_used") or not llm_ranked:
+        result = build_triage_result(observation)
+        result["triage_mode"] = "llm_fallback_to_rule"
+        result["triage_llm_fallback"] = True
+        result["triage_provider"] = llm_metadata.get("provider", "")
+        result["triage_model"] = llm_metadata.get("model", "")
+        result["triage_llm_error"] = llm_metadata.get("error", "")
+        result["triage_token_usage"] = llm_metadata.get("token_usage", {})
+        return result
+
+    suspected_domains = llm_ranked
+    candidate_scope = _merge_candidate_scope(suspected_domains)
+    missing_evidence, recommended_next_observations = _missing_evidence_and_next_steps(
+        suspected_domains,
+        observation,
+    )
+    ambiguity_level = _ambiguity_level(suspected_domains)
+    triage_summary = _triage_summary(suspected_domains, ambiguity_level, observation)
+
+    initial_postcheck_result = run_postcheck(
+        {
+            "success_checks": [
+                "nginx_running",
+                "app_running",
+                "healthz_200",
+                "api_items_200",
+                "api_items_nonempty",
+                "api_items_schema_ok",
+                "port_contract_matches_baseline",
+                "dc_services_running",
+                "dc_topology_contract_ok",
+                "dc_no_degraded_mode",
+            ],
+            "failure_conditions": ["service_continuity_not_restored"],
+        }
+    )
+
+    return {
+        "suspected_domains": suspected_domains,
+        "candidate_scope": candidate_scope,
+        "missing_evidence": missing_evidence,
+        "recommended_next_observations": recommended_next_observations,
+        "ambiguity_level": ambiguity_level,
+        "triage_summary": triage_summary,
+        "initial_postcheck_result": initial_postcheck_result,
+        "detection_confidence": suspected_domains[0]["confidence"],
+        "detection_evidence": suspected_domains[0]["evidence"],
+        "detected_fault_class": suspected_domains[0]["domain"],
+        "alternative_candidates": suspected_domains[1:],
+        "triage_mode": "llm",
+        "triage_llm_fallback": False,
+        "triage_provider": llm_metadata.get("provider", ""),
+        "triage_model": llm_metadata.get("model", ""),
+        "triage_token_usage": llm_metadata.get("token_usage", {}),
     }

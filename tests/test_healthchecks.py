@@ -4,6 +4,9 @@ from core.healthchecks import (
     classify_front_most_failure,
     evaluate_api_items_nonempty,
     evaluate_api_items_schema_ok,
+    evaluate_dc_no_degraded_mode,
+    evaluate_dc_services_running,
+    evaluate_dc_topology_contract_ok,
     evaluate_port_contract_matches_baseline,
     http_check,
     run_fixed_command,
@@ -109,3 +112,86 @@ def test_classify_front_most_failure_marks_semantic_green_hidden_red() -> None:
         file_snippets={"app/main.py": "return []"},
     )
     assert front == "semantic_items_front"
+
+
+def test_dc_topology_contract_ok_passes_for_expected_topology() -> None:
+    result = evaluate_dc_topology_contract_ok(
+        {
+            "status": 200,
+            "body": (
+                '{"status":"ok","checks":{"dependencies_reachable":true,'
+                '"expected_hosts_ok":true,"expected_groups_ok":true,'
+                '"degraded_mode_ok":true},"dependencies":{}}'
+            ),
+        }
+    )
+    assert result["ok"] is True
+    assert result["failed_checks"] == []
+
+
+def test_dc_topology_contract_ok_fails_for_reachable_wrong_target() -> None:
+    result = evaluate_dc_topology_contract_ok(
+        {
+            "status": 200,
+            "body": (
+                '{"status":"degraded","checks":{"dependencies_reachable":true,'
+                '"expected_hosts_ok":false,"expected_groups_ok":true,'
+                '"degraded_mode_ok":true},"dependencies":{"cache":'
+                '{"host":"queue","expected_host":"cache","reachable":true}}}'
+            ),
+        }
+    )
+    assert result["ok"] is False
+    assert result["failed_checks"] == ["expected_hosts_ok"]
+    assert result["dependencies"]["cache"]["host"] == "queue"
+
+
+def test_dc_no_degraded_mode_fails_when_degraded_mode_enabled() -> None:
+    result = evaluate_dc_no_degraded_mode(
+        {
+            "status": 200,
+            "body": (
+                '{"status":"degraded","checks":{"dependencies_reachable":true,'
+                '"expected_hosts_ok":true,"expected_groups_ok":true,'
+                '"degraded_mode_ok":false},"dependencies":{}}'
+            ),
+        }
+    )
+    assert result["ok"] is False
+    assert result["degraded_mode_ok"] is False
+
+
+def test_dc_services_running_requires_cache_queue_worker_and_metrics() -> None:
+    result = evaluate_dc_services_running(
+        {
+            "services": [
+                {"Service": "cache", "State": "running"},
+                {"Service": "queue", "State": "running"},
+                {"Service": "worker", "State": "running"},
+                {"Service": "metrics", "State": "exited"},
+            ]
+        }
+    )
+    assert result["ok"] is False
+    assert result["service_status"]["metrics"] is False
+
+
+def test_classify_front_most_failure_marks_dc_topology_contract() -> None:
+    front = classify_front_most_failure(
+        healthz={"status": 200, "body": '{"status":"ok"}'},
+        api_items={
+            "status": 200,
+            "body": '{"items":[{"id":1,"name":"seed-item","description":"initial record"}]}',
+        },
+        topology={
+            "status": 200,
+            "body": (
+                '{"status":"degraded","checks":{"dependencies_reachable":true,'
+                '"expected_hosts_ok":false,"expected_groups_ok":true,'
+                '"degraded_mode_ok":true},"dependencies":{}}'
+            ),
+        },
+        service_logs={"app": "", "nginx": ""},
+        file_snippets={"app/app.env": "CACHE_HOST=queue\nCACHE_EXPECTED_HOST=cache"},
+    )
+    assert front == "dc_topology_contract_front"

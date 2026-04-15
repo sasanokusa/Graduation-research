@@ -36,6 +36,7 @@ COMMON_SYSTEM_PROMPT = (
     "Do not propose restart-only plans when the observation already shows a specific editable fault. "
     "Only include restart_compose_service after a state-changing edit when the edited file affects a running service configuration or startup behavior. "
     "If you edit a startup-time setting that is read when a container starts, such as an application env file, prefer rebuild_compose_service over restart_compose_service so the new value is actually applied. "
+    "For DC topology contract faults, app/app.env may contain dependency targets such as CACHE_HOST, QUEUE_HOST, METRICS_HOST, expected hosts, host groups, and DEGRADED_MODE. "
     "If the current evidence remains ambiguous after the provided observation, return an empty action list instead of guessing. "
     "If current-state evidence conflicts with older log noise, prioritize the current state and avoid unnecessary edits to currently healthy services. "
     "The same identifier can appear at different reference layers, such as an nginx upstream group name versus a backend host or Docker service name. "

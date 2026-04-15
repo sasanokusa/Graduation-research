@@ -90,12 +90,20 @@ def docker_compose_ps() -> dict[str, Any]:
     return {"raw": fallback, "services": []}
 
 
+def compose_container_identifier(service: str) -> str:
+    result = run_fixed_command(["docker", "compose", "ps", "-q", service])
+    if result["returncode"] == 0 and result["stdout"].strip():
+        return result["stdout"].splitlines()[-1].strip()
+    return ""
+
+
 def collect_service_logs(services: list[str], tail: int = 40) -> dict[str, str]:
     logs: dict[str, str] = {}
     for service in services:
         result = run_fixed_command(["docker", "compose", "logs", f"--tail={tail}", service])
         if result["returncode"] != 0:
-            fallback = run_fixed_command(["docker", "logs", f"--tail={tail}", f"target-{service}"])
+            fallback_target = compose_container_identifier(service) or f"target-{service}"
+            fallback = run_fixed_command(["docker", "logs", f"--tail={tail}", fallback_target])
             logs[service] = "\n".join(line for line in [fallback["stdout"], fallback["stderr"]] if line)
         else:
             logs[service] = "\n".join(line for line in [result["stdout"], result["stderr"]] if line)
@@ -145,7 +153,7 @@ def http_check(path: str, *, timeout_seconds: int | None = None) -> dict[str, An
             "url": url,
             "ok": False,
             "status": status,
-            "body": body[:800],
+            "body": body[:4000],
             "error_type": "http_error",
             "timed_out": False,
             "timeout_seconds": effective_timeout,
@@ -157,7 +165,7 @@ def http_check(path: str, *, timeout_seconds: int | None = None) -> dict[str, An
             "url": url,
             "ok": False,
             "status": None,
-            "body": str(exc)[:800],
+            "body": str(exc)[:4000],
             "error_type": error_type,
             "timed_out": error_type == "timeout",
             "timeout_seconds": effective_timeout,
@@ -168,7 +176,7 @@ def http_check(path: str, *, timeout_seconds: int | None = None) -> dict[str, An
         "url": url,
         "ok": 200 <= status < 300,
         "status": status,
-        "body": body[:800],
+        "body": body[:4000],
         "error_type": "none",
         "timed_out": False,
         "timeout_seconds": effective_timeout,
@@ -264,16 +272,101 @@ def evaluate_port_contract_matches_baseline() -> dict[str, Any]:
     }
 
 
+def extract_dc_topology_payload(topology_result: dict[str, Any]) -> dict[str, Any]:
+    parsed = _parse_json_body(str(topology_result.get("body", "")))
+    if not isinstance(parsed, dict):
+        return {
+            "parsed": parsed,
+            "status": "unknown",
+            "checks": {},
+            "dependencies": {},
+        }
+    checks = parsed.get("checks", {})
+    dependencies = parsed.get("dependencies", {})
+    return {
+        "parsed": parsed,
+        "status": str(parsed.get("status", "unknown")),
+        "checks": checks if isinstance(checks, dict) else {},
+        "dependencies": dependencies if isinstance(dependencies, dict) else {},
+    }
+
+
+def evaluate_dc_topology_contract_ok(topology_result: dict[str, Any]) -> dict[str, Any]:
+    payload = extract_dc_topology_payload(topology_result)
+    checks = payload["checks"]
+    required_checks = [
+        "dependencies_reachable",
+        "expected_hosts_ok",
+        "expected_groups_ok",
+        "degraded_mode_ok",
+    ]
+    missing_checks = [check for check in required_checks if check not in checks]
+    failed_checks = [
+        check
+        for check in required_checks
+        if check in checks and not bool(checks.get(check))
+    ]
+    ok = (
+        topology_result.get("status") == 200
+        and payload["status"] == "ok"
+        and not missing_checks
+        and not failed_checks
+    )
+    return {
+        "check_name": "dc_topology_contract_ok",
+        "ok": ok,
+        "topology_status": payload["status"],
+        "required_checks": required_checks,
+        "missing_checks": missing_checks,
+        "failed_checks": failed_checks,
+        "dependencies": payload["dependencies"],
+        "status": topology_result.get("status"),
+    }
+
+
+def evaluate_dc_no_degraded_mode(topology_result: dict[str, Any]) -> dict[str, Any]:
+    payload = extract_dc_topology_payload(topology_result)
+    degraded_mode_ok = bool(payload["checks"].get("degraded_mode_ok"))
+    ok = topology_result.get("status") == 200 and degraded_mode_ok
+    return {
+        "check_name": "dc_no_degraded_mode",
+        "ok": ok,
+        "topology_status": payload["status"],
+        "degraded_mode_ok": degraded_mode_ok,
+        "status": topology_result.get("status"),
+    }
+
+
+def evaluate_dc_services_running(ps_snapshot: dict[str, Any]) -> dict[str, Any]:
+    required_services = ["cache", "queue", "worker", "metrics"]
+    service_status = {
+        service: service_running(ps_snapshot, service)
+        for service in required_services
+    }
+    return {
+        "check_name": "dc_services_running",
+        "ok": all(service_status.values()),
+        "required_services": required_services,
+        "service_status": service_status,
+    }
+
+
 def classify_front_most_failure(
     *,
     healthz: dict[str, Any],
     api_items: dict[str, Any],
+    topology: dict[str, Any] | None = None,
     service_logs: dict[str, str] | None = None,
     file_snippets: dict[str, str] | None = None,
 ) -> str:
     service_logs = service_logs or {}
     file_snippets = file_snippets or {}
     port_contract = evaluate_port_contract_matches_baseline()
+    topology_contract = (
+        evaluate_dc_topology_contract_ok(topology)
+        if topology
+        else {"ok": True, "failed_checks": []}
+    )
     app_text = "\n".join(
         [
             service_logs.get("app", ""),
@@ -290,6 +383,14 @@ def classify_front_most_failure(
         ]
     )
 
+    if (
+        healthz.get("status") == 200
+        and api_items.get("status") == 200
+        and evaluate_api_items_nonempty(api_items)["ok"]
+        and evaluate_api_items_schema_ok(api_items)["ok"]
+        and not topology_contract["ok"]
+    ):
+        return "dc_topology_contract_front"
     if (
         healthz.get("status") == 200
         and api_items.get("status") == 200
@@ -318,7 +419,7 @@ def classify_front_most_failure(
         or any(marker in nginx_text for marker in ["connect() failed", "no live upstreams", "502 Bad Gateway"])
     ):
         return "upstream_port_or_connectivity_front"
-    if any(marker in app_text for marker in ["Access denied", "using password: YES", "OperationalError"]):
+    if any(marker in app_text for marker in ["Access denied", "using password: YES", "OperationalError", "Can't connect", "Connection refused"]):
         return "db_auth_front"
     if healthz.get("status") == 200 and api_items.get("status") == 200 and not evaluate_api_items_nonempty(api_items)["ok"]:
         return "semantic_items_front"
@@ -358,7 +459,33 @@ def run_named_health_check(check_name: str) -> dict[str, Any]:
         }
     if check_name == "port_contract_matches_baseline":
         return evaluate_port_contract_matches_baseline()
+    if check_name == "dc_topology_contract_ok":
+        result = http_check("/api/topology")
+        return {
+            **result,
+            **evaluate_dc_topology_contract_ok(result),
+        }
+    if check_name == "dc_no_degraded_mode":
+        result = http_check("/api/topology")
+        return {
+            **result,
+            **evaluate_dc_no_degraded_mode(result),
+        }
+    if check_name == "dc_services_running":
+        ps_snapshot = docker_compose_ps()
+        return {
+            **evaluate_dc_services_running(ps_snapshot),
+            "compose_ps": ps_snapshot,
+        }
     if check_name in {"app_running", "nginx_running", "db_running"}:
+        service_name = check_name.removesuffix("_running")
+        ps_snapshot = docker_compose_ps()
+        return {
+            "check_name": check_name,
+            "ok": service_running(ps_snapshot, service_name),
+            "compose_ps": ps_snapshot,
+        }
+    if check_name in {"cache_running", "queue_running", "worker_running", "metrics_running"}:
         service_name = check_name.removesuffix("_running")
         ps_snapshot = docker_compose_ps()
         return {

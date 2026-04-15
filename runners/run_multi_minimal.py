@@ -1,20 +1,35 @@
 import argparse
 import hashlib
+import json
 import os
 import time
 from typing import Literal
 
 from langgraph.graph import END, START, StateGraph
 
+from agents.judge import judge_node, mock_judge_node
 from agents.mock_worker import mock_planner_node
 from agents.reviewer import mock_reviewer_node, reviewer_node
 from agents.sensor import additional_observation_node, sensor_node
 from agents.worker import planner_node
+from core.incident_blackboard import (
+    AGENT_ROLES,
+    initial_incident_blackboard,
+    merge_reviewer_guidance_into_triage,
+    record_judge,
+    record_execution,
+    record_observation,
+    record_repair_plan,
+    record_postcheck,
+    record_precheck,
+    record_review,
+    record_triage,
+    record_turn_summary,
+)
 from core.prompts import PROMPT_REGISTRY, get_prompt_spec
 from core.state import SingleAgentState
 from core.verifier import run_postcheck
 from runners.run_single import (
-    additional_observation_gate,
     already_healthy_node,
     executor_node,
     postcheck_node,
@@ -43,7 +58,11 @@ def _env_int(name: str, default: int) -> int:
 
 
 def multi_agent_max_turns() -> int:
-    return _env_int("MULTI_AGENT_MAX_TURNS", 3)
+    return _env_int("MULTI_AGENT_MAX_TURNS", 5)
+
+
+def multi_agent_max_additional_observations() -> int:
+    return _env_int("MULTI_AGENT_MAX_ADDITIONAL_OBSERVATIONS", 3)
 
 
 def healthy_end_node(state: SingleAgentState) -> SingleAgentState:
@@ -56,6 +75,51 @@ def healthy_end_node(state: SingleAgentState) -> SingleAgentState:
         "multi_agent_stop_reason": "already_healthy",
         "final_status": "success",
     }
+
+
+def _additional_observation_used_this_turn(state: SingleAgentState) -> bool:
+    turn = state.get("planner_turn", 1)
+    return any(
+        entry.get("turn") == turn
+        for entry in state.get("additional_observation_history", [])
+    )
+
+
+def multi_additional_observation_gate(state: SingleAgentState) -> Literal["healthy", "observe", "plan"]:
+    if state["initial_postcheck_result"].get("ok"):
+        return "healthy"
+    if (
+        state["recommended_next_observations"]
+        and state.get("additional_observation_count", 0) < multi_agent_max_additional_observations()
+        and not _additional_observation_used_this_turn(state)
+    ):
+        return "observe"
+    return "plan"
+
+
+def observer_agent_node(state: SingleAgentState) -> SingleAgentState:
+    return record_observation(sensor_node(state), source="sensor")
+
+
+def additional_observer_agent_node(state: SingleAgentState) -> SingleAgentState:
+    return record_observation(additional_observation_node(state), source="additional_observation")
+
+
+def triage_agent_node(state: SingleAgentState) -> SingleAgentState:
+    triaged = triage_node(state)
+    guided = merge_reviewer_guidance_into_triage(triaged)
+    worker_context_mode_hash = hashlib.sha256(
+        json.dumps(
+            guided.get("worker_visible_context", {}),
+            ensure_ascii=False,
+            sort_keys=True,
+        ).encode("utf-8")
+    ).hexdigest()[:16]
+    guided = {
+        **guided,
+        "worker_context_mode_hash": worker_context_mode_hash,
+    }
+    return record_triage(guided)
 
 
 def precheck_route(state: SingleAgentState) -> Literal["execute", "finalize"]:
@@ -98,6 +162,7 @@ def turn_summary_node(state: SingleAgentState) -> SingleAgentState:
         "summary": state.get("planner_summary", ""),
         "proposed_actions": state.get("proposed_actions", []),
         "validated_actions": state.get("verifier_precheck_result", {}).get("validated_actions", []),
+        "planner_attempts": state.get("planner_attempts", []),
         "precheck_ok": precheck_ok,
         "execution_ok": execution_ok,
         "postcheck_ok": postcheck_ok,
@@ -121,13 +186,14 @@ def turn_summary_node(state: SingleAgentState) -> SingleAgentState:
         }
     )
     print()
-    return {
+    updated_state = {
         **state,
         "planner_history": [*state.get("planner_history", []), planner_history_entry],
         "last_turn_success": last_turn_success,
         "multi_agent_stop_reason": stop_reason,
         "final_status": "success" if last_turn_success else "failure",
     }
+    return record_turn_summary(updated_state)
 
 
 def after_turn_gate(state: SingleAgentState) -> Literal["success", "review", "max_turns"]:
@@ -159,11 +225,27 @@ def after_review_gate(state: SingleAgentState) -> Literal["retry", "stop"]:
     return "stop"
 
 
+def after_judge_gate(state: SingleAgentState) -> Literal["retry", "stop"]:
+    if state.get("judge_decision") == "retry" and state.get("planner_turn", 1) < multi_agent_max_turns():
+        return "retry"
+    return "stop"
+
+
 def reviewer_stop_node(state: SingleAgentState) -> SingleAgentState:
     _section("🛑 [MULTI] REVIEWER STOP")
     print(state.get("review_feedback") or "Reviewer requested stop.")
     print()
     return _terminal_failure_cleanup(state, stop_reason="reviewer_stop")
+
+
+def judge_stop_node(state: SingleAgentState) -> SingleAgentState:
+    _section("🛑 [MULTI] JUDGE STOP")
+    reason = state.get("judge_reasoning") or "Judge requested stop."
+    if state.get("judge_override"):
+        reason = f"[OVERRIDE] {reason}"
+    print(reason)
+    print()
+    return _terminal_failure_cleanup(state, stop_reason="judge_stop")
 
 
 def prepare_replan_node(state: SingleAgentState) -> SingleAgentState:
@@ -199,6 +281,15 @@ def prepare_replan_node(state: SingleAgentState) -> SingleAgentState:
         "rollback_result": {},
         "rollback_used": False,
         "multi_agent_stop_reason": "",
+        "reviewer_invocation_failed": False,
+        "reviewer_invocation_retry_count": 0,
+        "reviewer_invocation_error": "",
+        "judge_decision": "",
+        "judge_output_raw": "",
+        "judge_reasoning": "",
+        "judge_override": False,
+        "judge_invocation_failed": False,
+        "judge_invocation_retry_count": 0,
     }
 
 
@@ -234,29 +325,52 @@ def _terminal_failure_cleanup(state: SingleAgentState, *, stop_reason: str) -> S
 
 def build_app(worker_mode: str):
     builder = StateGraph(SingleAgentState)
-    builder.add_node("sensor_node", sensor_node)
-    builder.add_node("triage_node", triage_node)
-    builder.add_node("additional_observation_node", additional_observation_node)
+    planner_impl = mock_planner_node if worker_mode == "mock" else planner_node
+    reviewer_impl = mock_reviewer_node if worker_mode == "mock" else reviewer_node
+    judge_impl = mock_judge_node if worker_mode == "mock" else judge_node
+
+    def repair_planner_agent_node(state: SingleAgentState) -> SingleAgentState:
+        return record_repair_plan(planner_impl(state))
+
+    def safety_precheck_node(state: SingleAgentState) -> SingleAgentState:
+        return record_precheck(precheck_node(state))
+
+    def action_executor_node(state: SingleAgentState) -> SingleAgentState:
+        return record_execution(executor_node(state))
+
+    def verification_postcheck_node(state: SingleAgentState) -> SingleAgentState:
+        return record_postcheck(postcheck_node(state))
+
+    def verification_reviewer_agent_node(state: SingleAgentState) -> SingleAgentState:
+        return record_review(reviewer_impl(state))
+
+    def safety_judge_agent_node(state: SingleAgentState) -> SingleAgentState:
+        return record_judge(judge_impl(state))
+
+    builder.add_node("sensor_node", observer_agent_node)
+    builder.add_node("triage_node", triage_agent_node)
+    builder.add_node("additional_observation_node", additional_observer_agent_node)
     builder.add_node("already_healthy_node", already_healthy_node)
     builder.add_node("healthy_end_node", healthy_end_node)
-    builder.add_node("planner_node", mock_planner_node if worker_mode == "mock" else planner_node)
-    builder.add_node("precheck_node", precheck_node)
+    builder.add_node("planner_node", repair_planner_agent_node)
+    builder.add_node("precheck_node", safety_precheck_node)
     builder.add_node("precheck_failure_node", precheck_failure_node)
-    builder.add_node("executor_node", executor_node)
-    builder.add_node("postcheck_node", postcheck_node)
+    builder.add_node("executor_node", action_executor_node)
+    builder.add_node("postcheck_node", verification_postcheck_node)
     builder.add_node("rollback_node", rollback_node)
     builder.add_node("turn_summary_node", turn_summary_node)
-    builder.add_node("reviewer_node", mock_reviewer_node if worker_mode == "mock" else reviewer_node)
+    builder.add_node("reviewer_node", verification_reviewer_agent_node)
+    builder.add_node("judge_node", safety_judge_agent_node)
     builder.add_node("success_end_node", success_end_node)
     builder.add_node("max_turns_end_node", max_turns_end_node)
-    builder.add_node("reviewer_stop_node", reviewer_stop_node)
+    builder.add_node("judge_stop_node", judge_stop_node)
     builder.add_node("prepare_replan_node", prepare_replan_node)
 
     builder.add_edge(START, "sensor_node")
     builder.add_edge("sensor_node", "triage_node")
     builder.add_conditional_edges(
         "triage_node",
-        additional_observation_gate,
+        multi_additional_observation_gate,
         {"healthy": "already_healthy_node", "observe": "additional_observation_node", "plan": "planner_node"},
     )
     builder.add_edge("additional_observation_node", "triage_node")
@@ -279,12 +393,13 @@ def build_app(worker_mode: str):
     )
     builder.add_edge("success_end_node", END)
     builder.add_edge("max_turns_end_node", END)
+    builder.add_edge("reviewer_node", "judge_node")
     builder.add_conditional_edges(
-        "reviewer_node",
-        after_review_gate,
-        {"retry": "prepare_replan_node", "stop": "reviewer_stop_node"},
+        "judge_node",
+        after_judge_gate,
+        {"retry": "prepare_replan_node", "stop": "judge_stop_node"},
     )
-    builder.add_edge("reviewer_stop_node", END)
+    builder.add_edge("judge_stop_node", END)
     builder.add_edge("prepare_replan_node", "sensor_node")
     return builder.compile()
 
@@ -293,7 +408,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run the minimal multi-agent recovery loop.")
     parser.add_argument(
         "--scenario",
-        choices=["auto", "a", "b", "c", "d", "e", "f", "g", "h", "i", "i2", "k", "l", "m", "n", "o", "p", "q", "r"],
+        choices=["auto", "a", "b", "c", "d", "e", "f", "g", "h", "i", "i2", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x"],
         default="auto",
         help="Internal benchmark scenario for forced-mode debugging, or auto for open-world triage.",
     )
@@ -309,13 +424,19 @@ def main(argv: list[str] | None = None) -> int:
         default="blind",
         help="Prompt mode for the planner.",
     )
+    parser.add_argument(
+        "--triage-mode",
+        choices=["rule", "llm"],
+        default="rule",
+        help="Triage mode: rule-based or LLM-based domain ranking.",
+    )
     args = parser.parse_args(argv)
 
     prompt_spec = get_prompt_spec(args.prompt_mode)
     system_prompt_hash = hashlib.sha256(prompt_spec["system_prompt"].encode("utf-8")).hexdigest()[:16]
     app = build_app(args.worker)
     state: SingleAgentState = {
-        "execution_mode": "multi_agent_minimal",
+        "execution_mode": "multi_agent",
         "requested_scenario": args.scenario,
         "scenario_source": "forced" if args.scenario != "auto" else "auto",
         "worker_mode": args.worker,
@@ -336,6 +457,7 @@ def main(argv: list[str] | None = None) -> int:
         "ambiguity_level": "high",
         "triage_summary": "",
         "triage_iterations": [],
+        "incident_blackboard": initial_incident_blackboard(),
         "scenario": args.scenario if args.scenario != "auto" else "unknown",
         "scenario_definition": {},
         "internal_scenario_definition": {},
@@ -345,6 +467,8 @@ def main(argv: list[str] | None = None) -> int:
         "surfaced_failure_sequence": [],
         "initial_postcheck_result": {},
         "additional_observation_used": False,
+        "additional_observation_count": 0,
+        "additional_observation_history": [],
         "planner_input_scope": {},
         "planner_error_type": "none",
         "planner_error_stage": "none",
@@ -381,10 +505,29 @@ def main(argv: list[str] | None = None) -> int:
         "reviewer_output_raw": "",
         "reviewer_recommended_scope": {},
         "reviewer_recommended_next_observations": [],
+        "reviewer_suspected_remaining_domains": [],
         "reviewer_provider": "",
         "reviewer_model": "",
+        "reviewer_token_usage": {},
+        "reviewer_invocation_failed": False,
+        "reviewer_invocation_retry_count": 0,
+        "reviewer_invocation_error": "",
+        "triage_mode": args.triage_mode,
+        "triage_provider": "",
+        "triage_model": "",
+        "triage_llm_fallback": False,
+        "judge_decision": "",
+        "judge_output_raw": "",
+        "judge_reasoning": "",
+        "judge_override": False,
+        "judge_provider": "",
+        "judge_model": "",
+        "judge_token_usage": {},
+        "judge_invocation_failed": False,
+        "judge_invocation_retry_count": 0,
+        "judge_history": [],
         "replan_count": 0,
-        "agent_role_trace": ["multi_agent_minimal"],
+        "agent_role_trace": ["multi_agent", *[role["role"] for role in AGENT_ROLES]],
         "role_model_trace": [],
         "last_turn_success": False,
         "multi_agent_stop_reason": "",

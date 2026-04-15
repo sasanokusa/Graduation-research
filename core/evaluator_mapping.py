@@ -1,3 +1,4 @@
+import re
 from typing import Any
 
 from core.policies import resolve_repo_path
@@ -16,6 +17,9 @@ AUTO_EVALUATION_DEFINITION = {
         "api_items_nonempty",
         "api_items_schema_ok",
         "port_contract_matches_baseline",
+        "dc_services_running",
+        "dc_topology_contract_ok",
+        "dc_no_degraded_mode",
     ],
     "failure_conditions": ["service_continuity_not_restored"],
 }
@@ -33,6 +37,9 @@ UNKNOWN_SCENARIO_DEFINITION = {
         "api_items_nonempty",
         "api_items_schema_ok",
         "port_contract_matches_baseline",
+        "dc_services_running",
+        "dc_topology_contract_ok",
+        "dc_no_degraded_mode",
     ],
     "failure_conditions": ["unsupported_fault_class"],
 }
@@ -96,7 +103,7 @@ def _rank_internal_scenarios(observation: dict[str, Any]) -> list[dict[str, Any]
 
     candidates = {
         key: {"scenario": key, "confidence": 0.0, "evidence": []}
-        for key in ["a", "b", "c", "d", "e", "f", "g", "h", "i", "i2", "k", "l", "m", "n", "o", "p", "q", "r"]
+        for key in ["a", "b", "c", "d", "e", "f", "g", "h", "i", "i2", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x"]
     }
     hidden = _hidden_benchmark_evidence()
 
@@ -199,6 +206,99 @@ def _rank_internal_scenarios(observation: dict[str, Any]) -> list[dict[str, Any]
         "older upstream connection failures" in item for item in historical_evidence + current_state_evidence
     ):
         _score_candidate(candidates, "l", 0.82, "current health checks contradict stale upstream errors in recent logs")
+
+    upstream_port_match = re.search(r"server\s+app:(\d+)\s+resolve;", hidden["nginx_conf"])
+    hidden_upstream_port = upstream_port_match.group(1) if upstream_port_match else None
+    hidden_app_env_lines = hidden["app_env"].splitlines()
+    hidden_app_port = None
+    hidden_db_host = None
+    hidden_cache_host = None
+    hidden_cache_expected_host = None
+    hidden_queue_host = None
+    hidden_queue_expected_host = None
+    hidden_degraded_mode = None
+    for line in hidden_app_env_lines:
+        if line.startswith("APP_PORT="):
+            hidden_app_port = line.split("=", 1)[1].strip()
+        if line.startswith("DB_HOST="):
+            hidden_db_host = line.split("=", 1)[1].strip()
+        if line.startswith("CACHE_HOST="):
+            hidden_cache_host = line.split("=", 1)[1].strip()
+        if line.startswith("CACHE_EXPECTED_HOST="):
+            hidden_cache_expected_host = line.split("=", 1)[1].strip()
+        if line.startswith("QUEUE_HOST="):
+            hidden_queue_host = line.split("=", 1)[1].strip()
+        if line.startswith("QUEUE_EXPECTED_HOST="):
+            hidden_queue_expected_host = line.split("=", 1)[1].strip()
+        if line.startswith("DEGRADED_MODE="):
+            hidden_degraded_mode = line.split("=", 1)[1].strip()
+    if (
+        hidden_upstream_port
+        and hidden_app_port
+        and hidden_upstream_port != "8000"
+        and hidden_app_port != "8000"
+        and hidden_upstream_port != hidden_app_port
+    ):
+        _score_candidate(
+            candidates,
+            "s",
+            0.99,
+            "hidden benchmark state shows bilateral port contract violation (nginx and app both deviate from baseline in different directions)",
+        )
+    if hidden_db_host and hidden_db_host not in ("db", ""):
+        _score_candidate(
+            candidates,
+            "t",
+            0.97,
+            f"hidden benchmark state shows DB_HOST={hidden_db_host} (network topology fault)",
+        )
+    if hidden_db_host and hidden_db_host not in ("db", "") and "FROM itemz ORDER BY id" in hidden["app_main"]:
+        _score_candidate(
+            candidates,
+            "u",
+            0.99,
+            "hidden benchmark state shows DB_HOST connectivity failure masking a downstream query bug",
+        )
+    if hidden_cache_host and hidden_cache_host in {"cache-missing", "cache-unreachable"}:
+        _score_candidate(
+            candidates,
+            "v",
+            0.99,
+            f"hidden benchmark state shows CACHE_HOST={hidden_cache_host} (cache service discovery fault)",
+        )
+    if (
+        hidden_cache_host
+        and hidden_cache_expected_host
+        and hidden_cache_host != hidden_cache_expected_host
+        and hidden_cache_host not in {"cache-missing", "cache-unreachable"}
+    ):
+        _score_candidate(
+            candidates,
+            "w",
+            0.98,
+            f"hidden benchmark state shows CACHE_HOST={hidden_cache_host} but expected {hidden_cache_expected_host}",
+        )
+    if (
+        hidden_cache_host
+        and hidden_queue_host
+        and hidden_cache_expected_host
+        and hidden_queue_expected_host
+        and hidden_cache_host == hidden_queue_expected_host
+        and hidden_queue_host == hidden_cache_expected_host
+    ):
+        _score_candidate(
+            candidates,
+            "x",
+            0.995,
+            "hidden benchmark state shows bilateral cache/queue target drift across the service topology",
+        )
+    if hidden_degraded_mode == "true":
+        _score_candidate(
+            candidates,
+            "x",
+            0.99,
+            "hidden benchmark state shows degraded mode enabled in app-side topology settings",
+        )
 
     ranked = sorted(
         (candidate for candidate in candidates.values() if candidate["confidence"] > 0),

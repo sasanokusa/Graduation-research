@@ -27,7 +27,7 @@ def _hinted_operational_hints(candidate_files: list[str]) -> list[str]:
         )
     if "app/app.env" in candidate_files:
         hints.append(
-            "Environment mismatches can affect startup-time behavior and backend connectivity. Prefer restore_from_base over guessing unseen secret values."
+            "Environment mismatches can affect startup-time behavior, backend connectivity, and DC topology contracts. Prefer restore_from_base over guessing unseen secret values."
         )
     return hints
 

@@ -23,6 +23,7 @@ class SingleAgentState(TypedDict):
     ambiguity_level: str
     triage_summary: str
     triage_iterations: list[dict[str, Any]]
+    incident_blackboard: dict[str, Any]
     scenario: str
     scenario_definition: dict[str, Any]
     internal_scenario_definition: dict[str, Any]
@@ -32,6 +33,8 @@ class SingleAgentState(TypedDict):
     surfaced_failure_sequence: list[str]
     initial_postcheck_result: dict[str, Any]
     additional_observation_used: bool
+    additional_observation_count: int
+    additional_observation_history: list[dict[str, Any]]
     planner_input_scope: dict[str, Any]
     planner_error_type: str
     planner_error_stage: str
@@ -68,8 +71,27 @@ class SingleAgentState(TypedDict):
     reviewer_output_raw: str
     reviewer_recommended_scope: dict[str, Any]
     reviewer_recommended_next_observations: list[str]
+    reviewer_suspected_remaining_domains: list[str]
     reviewer_provider: str
     reviewer_model: str
+    reviewer_token_usage: dict[str, Any]
+    reviewer_invocation_failed: bool
+    reviewer_invocation_retry_count: int
+    reviewer_invocation_error: str
+    triage_mode: str
+    triage_provider: str
+    triage_model: str
+    triage_llm_fallback: bool
+    judge_decision: str
+    judge_output_raw: str
+    judge_reasoning: str
+    judge_override: bool
+    judge_provider: str
+    judge_model: str
+    judge_token_usage: dict[str, Any]
+    judge_invocation_failed: bool
+    judge_invocation_retry_count: int
+    judge_history: list[dict[str, Any]]
     replan_count: int
     agent_role_trace: list[str]
     role_model_trace: list[dict[str, str]]

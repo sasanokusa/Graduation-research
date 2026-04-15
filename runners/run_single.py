@@ -13,11 +13,13 @@ from agents.sensor import additional_observation_node, sensor_node
 from agents.worker import worker_node
 from core.evaluator_mapping import resolve_internal_scenario
 from core.executor import execute_plan, rollback_with_refresh
+from core.incident_blackboard import AGENT_ROLES, initial_incident_blackboard
+from core.llm_usage import collect_llm_usage
 from core.policies import RESULTS_DIR, SCENARIO_DEFINITIONS_PATH
 from core.prompts import PROMPT_REGISTRY, get_prompt_spec
 from core.scenario_context import build_worker_visible_context, get_worker_context_mode_name
 from core.state import SingleAgentState
-from core.triage import build_triage_result
+from core.triage import build_triage_result, build_triage_result_llm
 from core.verifier import run_postcheck, run_precheck
 
 
@@ -35,7 +37,11 @@ def load_scenario_definitions() -> dict[str, dict]:
 
 def triage_node(state: SingleAgentState) -> SingleAgentState:
     scenario_definitions = load_scenario_definitions()
-    triage = build_triage_result(state["observation"])
+    triage_mode = state.get("triage_mode", "rule")
+    if triage_mode == "llm":
+        triage = build_triage_result_llm(state["observation"])
+    else:
+        triage = build_triage_result(state["observation"])
     evaluator_mapping = resolve_internal_scenario(
         requested_scenario=state["requested_scenario"],
         scenario_definitions=scenario_definitions,
@@ -61,6 +67,7 @@ def triage_node(state: SingleAgentState) -> SingleAgentState:
         "recommended_next_observations": triage["recommended_next_observations"],
         "ambiguity_level": triage["ambiguity_level"],
         "triage_summary": triage["triage_summary"],
+        "token_usage": triage.get("triage_token_usage", {}),
     }
     _section("🧭 [PHASE 2] TRIAGE")
     print(
@@ -101,6 +108,10 @@ def triage_node(state: SingleAgentState) -> SingleAgentState:
         "worker_context_mode": get_worker_context_mode_name(state["prompt_mode"]),
         "worker_context_mode_hash": worker_context_mode_hash,
         "worker_visible_context": worker_visible_context,
+        "triage_mode": triage.get("triage_mode", "rule"),
+        "triage_provider": triage.get("triage_provider", ""),
+        "triage_model": triage.get("triage_model", ""),
+        "triage_llm_fallback": triage.get("triage_llm_fallback", False),
     }
 
 
@@ -298,6 +309,9 @@ def save_result(state: SingleAgentState) -> str:
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     result_path = RESULTS_DIR / f"{timestamp}_{state['scenario']}.json"
     elapsed_seconds = round(time.time() - state["start_time"], 3)
+    llm_usage = collect_llm_usage(state)
+    llm_totals = llm_usage["totals"]
+    llm_by_role = llm_usage["by_role"]
     payload = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "execution_mode": state.get("execution_mode", "single_agent"),
@@ -311,12 +325,16 @@ def save_result(state: SingleAgentState) -> str:
         "detection_evidence": state["detection_evidence"],
         "triage_summary": state["triage_summary"],
         "triage_iterations": state["triage_iterations"],
+        "incident_blackboard": state.get("incident_blackboard", {}),
+        "agent_roles": state.get("incident_blackboard", {}).get("agent_roles", AGENT_ROLES),
         "suspected_domains": state["suspected_domains"],
         "candidate_scope": state["candidate_scope"],
         "missing_evidence": state["missing_evidence"],
         "recommended_next_observations": state["recommended_next_observations"],
         "ambiguity_level": state["ambiguity_level"],
         "additional_observation_used": state["additional_observation_used"],
+        "additional_observation_count": state.get("additional_observation_count", 0),
+        "additional_observation_history": state.get("additional_observation_history", []),
         "planner_input_scope": state["planner_input_scope"],
         "worker_mode": state["worker_mode"],
         "prompt_mode": state["prompt_mode"],
@@ -389,8 +407,38 @@ def save_result(state: SingleAgentState) -> str:
         "reviewer_output_raw": state.get("reviewer_output_raw", ""),
         "reviewer_recommended_scope": state.get("reviewer_recommended_scope", {}),
         "reviewer_recommended_next_observations": state.get("reviewer_recommended_next_observations", []),
+        "reviewer_suspected_remaining_domains": state.get("reviewer_suspected_remaining_domains", []),
         "reviewer_provider": state.get("reviewer_provider", ""),
         "reviewer_model": state.get("reviewer_model", ""),
+        "reviewer_invocation_failed": state.get("reviewer_invocation_failed", False),
+        "reviewer_invocation_retry_count": state.get("reviewer_invocation_retry_count", 0),
+        "reviewer_invocation_error": state.get("reviewer_invocation_error", ""),
+        "judge_history": state.get("judge_history", []),
+        "judge_decision": state.get("judge_decision", ""),
+        "judge_output_raw": state.get("judge_output_raw", ""),
+        "judge_reasoning": state.get("judge_reasoning", ""),
+        "judge_override": state.get("judge_override", False),
+        "judge_provider": state.get("judge_provider", ""),
+        "judge_model": state.get("judge_model", ""),
+        "judge_invocation_failed": state.get("judge_invocation_failed", False),
+        "judge_invocation_retry_count": state.get("judge_invocation_retry_count", 0),
+        "llm_usage": llm_usage,
+        "llm_input_tokens": llm_totals["input_tokens"],
+        "llm_output_tokens": llm_totals["output_tokens"],
+        "llm_total_tokens": llm_totals["total_tokens"],
+        "llm_reasoning_tokens": llm_totals["reasoning_tokens"],
+        "planner_input_tokens": llm_by_role["planner"]["input_tokens"],
+        "planner_output_tokens": llm_by_role["planner"]["output_tokens"],
+        "planner_total_tokens": llm_by_role["planner"]["total_tokens"],
+        "reviewer_input_tokens": llm_by_role["reviewer"]["input_tokens"],
+        "reviewer_output_tokens": llm_by_role["reviewer"]["output_tokens"],
+        "reviewer_total_tokens": llm_by_role["reviewer"]["total_tokens"],
+        "judge_input_tokens": llm_by_role["judge"]["input_tokens"],
+        "judge_output_tokens": llm_by_role["judge"]["output_tokens"],
+        "judge_total_tokens": llm_by_role["judge"]["total_tokens"],
+        "triage_input_tokens": llm_by_role["triage"]["input_tokens"],
+        "triage_output_tokens": llm_by_role["triage"]["output_tokens"],
+        "triage_total_tokens": llm_by_role["triage"]["total_tokens"],
         "replan_count": state["replan_count"],
         "agent_role_trace": state["agent_role_trace"],
         "role_model_trace": state.get("role_model_trace", []),
@@ -472,7 +520,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run the safe single-agent recovery baseline.")
     parser.add_argument(
         "--scenario",
-        choices=["auto", "a", "b", "c", "d", "e", "f", "g", "h", "i", "i2", "k", "l", "m", "n", "o", "p", "q", "r"],
+        choices=["auto", "a", "b", "c", "d", "e", "f", "g", "h", "i", "i2", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x"],
         default="auto",
         help="Internal benchmark scenario for forced-mode debugging, or auto for open-world triage.",
     )
@@ -487,6 +535,12 @@ def main(argv: list[str] | None = None) -> int:
         choices=sorted(PROMPT_REGISTRY.keys()),
         default="blind",
         help="System prompt mode for the LLM worker.",
+    )
+    parser.add_argument(
+        "--triage-mode",
+        choices=["rule", "llm"],
+        default="rule",
+        help="Triage mode: rule-based or LLM-based domain ranking.",
     )
     args = parser.parse_args(argv)
 
@@ -515,6 +569,7 @@ def main(argv: list[str] | None = None) -> int:
         "ambiguity_level": "high",
         "triage_summary": "",
         "triage_iterations": [],
+        "incident_blackboard": initial_incident_blackboard(),
         "scenario": args.scenario if args.scenario != "auto" else "unknown",
         "scenario_definition": {},
         "internal_scenario_definition": {},
@@ -524,6 +579,8 @@ def main(argv: list[str] | None = None) -> int:
         "surfaced_failure_sequence": [],
         "initial_postcheck_result": {},
         "additional_observation_used": False,
+        "additional_observation_count": 0,
+        "additional_observation_history": [],
         "planner_input_scope": {},
         "planner_error_type": "none",
         "planner_error_stage": "none",
@@ -560,8 +617,27 @@ def main(argv: list[str] | None = None) -> int:
         "reviewer_output_raw": "",
         "reviewer_recommended_scope": {},
         "reviewer_recommended_next_observations": [],
+        "reviewer_suspected_remaining_domains": [],
         "reviewer_provider": "",
         "reviewer_model": "",
+        "reviewer_token_usage": {},
+        "reviewer_invocation_failed": False,
+        "reviewer_invocation_retry_count": 0,
+        "reviewer_invocation_error": "",
+        "triage_mode": args.triage_mode,
+        "triage_provider": "",
+        "triage_model": "",
+        "triage_llm_fallback": False,
+        "judge_decision": "",
+        "judge_output_raw": "",
+        "judge_reasoning": "",
+        "judge_override": False,
+        "judge_provider": "",
+        "judge_model": "",
+        "judge_token_usage": {},
+        "judge_invocation_failed": False,
+        "judge_invocation_retry_count": 0,
+        "judge_history": [],
         "replan_count": 0,
         "agent_role_trace": ["single_agent"],
         "role_model_trace": [],

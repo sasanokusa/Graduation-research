@@ -24,7 +24,8 @@ set -euo pipefail
 #   - --scenario-mode forced を付けると各シナリオを明示指定して実行
 #   - observations/<timestamp>/ 以下に run ごとのログと summary.csv を保存
 
-SCENARIOS_DEFAULT=(a b c d e f g h i i2 k l m n o)
+SCENARIOS_STANDARD=(a b c d e f g h i i2 k l m n o p q r s t u v w x)
+SCENARIOS_SHORT=(a c d h i2 p q r t u v w x)
 
 WORKER="llm"
 PROMPT_MODE="blind"
@@ -40,6 +41,8 @@ usage() {
   cat <<'EOF'
 使い方:
   ./observe_runs.sh all [options]
+  ./observe_runs.sh standard [options]
+  ./observe_runs.sh short [options]
   ./observe_runs.sh a b c [options]
 
 オプション:
@@ -57,6 +60,7 @@ usage() {
 
 例:
   ./observe_runs.sh all --worker llm --prompt-mode blind --repeat 3 --python ./.venv/bin/python
+  ./observe_runs.sh short --worker mock --scenario-mode forced --python ./.venv/bin/python
   ./observe_runs.sh d f h --worker llm --prompt-mode blind
   ./observe_runs.sh e --worker llm --keep-failed-env
   ./observe_runs.sh a b c --worker mock --scenario-mode forced
@@ -136,8 +140,11 @@ parse_args() {
         usage
         exit 0
         ;;
-      all)
-        scenarios=("${SCENARIOS_DEFAULT[@]}")
+      all|standard)
+        scenarios=("${SCENARIOS_STANDARD[@]}")
+        ;;
+      short|smoke)
+        scenarios=("${SCENARIOS_SHORT[@]}")
         ;;
       [a-z0-9]|[a-z][a-z0-9]*)
         scenarios+=("$1")
@@ -150,7 +157,7 @@ parse_args() {
   done
 
   if [[ "${#scenarios[@]}" -eq 0 ]]; then
-    scenarios=("${SCENARIOS_DEFAULT[@]}")
+    scenarios=("${SCENARIOS_STANDARD[@]}")
   fi
 
   # 重複除去しつつ順序保持
@@ -206,7 +213,7 @@ make_obs_dir() {
 
   SUMMARY_CSV="$OBS_DIR/summary.csv"
   cat > "$SUMMARY_CSV" <<'EOF'
-run_id,started_at_utc,scenario,repeat_index,worker,prompt_mode,scenario_mode,break_ok,agent_exit_code,final_status,detected_fault_class,elapsed_seconds,additional_observation_used,result_json,planner_error_type,planner_error_stage,planner_retry_count,planner_attempt_count,planner_transport_failure,planner_reasoning_failure,planner_fallback_used,planner_fallback_type,restore_from_base_used,restore_from_base_blocked,minimal_patch_used,rollback_used,rollback_actions,rollback_postcheck_ok,postcheck_retry_attempts,postcheck_used_retry_window,system_prompt_hash,precheck_ok,postcheck_ok,planner_summary,triage_summary
+run_id,started_at_utc,scenario,repeat_index,worker,prompt_mode,scenario_mode,break_ok,agent_exit_code,final_status,detected_fault_class,elapsed_seconds,additional_observation_used,result_json,planner_error_type,planner_error_stage,planner_retry_count,planner_attempt_count,planner_transport_failure,planner_reasoning_failure,planner_fallback_used,planner_fallback_type,restore_from_base_used,restore_from_base_blocked,minimal_patch_used,rollback_used,rollback_actions,rollback_postcheck_ok,postcheck_retry_attempts,postcheck_used_retry_window,system_prompt_hash,precheck_ok,postcheck_ok,planner_summary,triage_summary,llm_input_tokens,llm_output_tokens,llm_total_tokens,llm_reasoning_tokens,planner_total_tokens,reviewer_total_tokens,judge_total_tokens,triage_total_tokens
 EOF
 }
 
@@ -294,6 +301,14 @@ append_summary_row() {
   local postcheck_ok=""
   local planner_summary=""
   local triage_summary=""
+  local llm_input_tokens=""
+  local llm_output_tokens=""
+  local llm_total_tokens=""
+  local llm_reasoning_tokens=""
+  local planner_total_tokens=""
+  local reviewer_total_tokens=""
+  local judge_total_tokens=""
+  local triage_total_tokens=""
 
   if [[ -n "$result_json" && -f "$result_json" ]]; then
     final_status="$(json_field "$result_json" "final_status")"
@@ -321,6 +336,14 @@ append_summary_row() {
     postcheck_ok="$(json_field "$result_json" "verifier_postcheck_result.ok")"
     planner_summary="$(json_field "$result_json" "planner_summary")"
     triage_summary="$(json_field "$result_json" "triage_summary")"
+    llm_input_tokens="$(json_field "$result_json" "llm_input_tokens")"
+    llm_output_tokens="$(json_field "$result_json" "llm_output_tokens")"
+    llm_total_tokens="$(json_field "$result_json" "llm_total_tokens")"
+    llm_reasoning_tokens="$(json_field "$result_json" "llm_reasoning_tokens")"
+    planner_total_tokens="$(json_field "$result_json" "planner_total_tokens")"
+    reviewer_total_tokens="$(json_field "$result_json" "reviewer_total_tokens")"
+    judge_total_tokens="$(json_field "$result_json" "judge_total_tokens")"
+    triage_total_tokens="$(json_field "$result_json" "triage_total_tokens")"
   fi
 
   {
@@ -358,7 +381,15 @@ append_summary_row() {
     escape_csv "$precheck_ok"; printf ","
     escape_csv "$postcheck_ok"; printf ","
     escape_csv "$planner_summary"; printf ","
-    escape_csv "$triage_summary"; printf "\n"
+    escape_csv "$triage_summary"; printf ","
+    escape_csv "$llm_input_tokens"; printf ","
+    escape_csv "$llm_output_tokens"; printf ","
+    escape_csv "$llm_total_tokens"; printf ","
+    escape_csv "$llm_reasoning_tokens"; printf ","
+    escape_csv "$planner_total_tokens"; printf ","
+    escape_csv "$reviewer_total_tokens"; printf ","
+    escape_csv "$judge_total_tokens"; printf ","
+    escape_csv "$triage_total_tokens"; printf "\n"
   } >> "$SUMMARY_CSV"
 }
 

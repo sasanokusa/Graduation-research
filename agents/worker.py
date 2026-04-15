@@ -5,6 +5,7 @@ from typing import Any
 from core.actions import format_actions, parse_plan_text
 from core.agent_factory import build_chat_model_binding
 from core.agent_roles import AgentRole
+from core.llm_usage import extract_token_usage
 from core.prompts import get_prompt_spec
 from core.state import SingleAgentState
 
@@ -198,6 +199,7 @@ def _runtime_guidance(state: SingleAgentState) -> str:
         "- If an editable env or config line appears wrong but the corrected value is not directly visible in the evidence, prefer restore_from_base over guessing.",
         "- If you edit startup-time settings such as app/app.env, prefer rebuild_compose_service for app instead of restart_compose_service.",
         "- If you edit app/main.py, prefer rebuild_compose_service for app so the running process reloads the changed code.",
+        "- For topology contract faults, app/app.env is the source of app-visible dependency targets such as CACHE_HOST, QUEUE_HOST, METRICS_HOST, and DEGRADED_MODE.",
         "- Avoid initial restore_from_base for app/main.py when a smaller replace_text patch is directly supported by the evidence.",
         "- If you choose restore_from_base, include a short reason in the summary.",
         "- Distinguish reference layers. In nginx, a proxy_pass target can be an upstream group name, while server entries inside that upstream block can be backend hosts or Docker services.",
@@ -237,6 +239,14 @@ def _runtime_guidance(state: SingleAgentState) -> str:
                 "- Prefer restoring the app-side startup setting or another evidence-backed direct edit before generic restarts.",
             ]
         )
+    if any(key in env_snippet for key in ["CACHE_HOST=", "QUEUE_HOST=", "METRICS_HOST=", "DEGRADED_MODE="]):
+        guidance_lines.extend(
+            [
+                "- The visible environment snippet includes DC topology contract settings.",
+                "- If a dependency host differs from its EXPECTED_HOST, restore the app-side topology contract and rebuild app.",
+                "- If DEGRADED_MODE=true is visible, restore degraded mode to false and rebuild app.",
+            ]
+        )
     if (
         "nginx_reference_note" in static_observations
         and "upstream backend" in nginx_snippet
@@ -265,10 +275,20 @@ def _planner_history_context(state: SingleAgentState) -> str:
         sections.append(f"Latest reviewer decision: {state['review_decision']}")
     if state.get("reviewer_recommended_scope"):
         sections.append(f"Reviewer recommended scope adjustment: {state['reviewer_recommended_scope']}")
+    if state.get("reviewer_suspected_remaining_domains"):
+        sections.append(f"Reviewer suspected remaining domains: {state['reviewer_suspected_remaining_domains']}")
     if state.get("reviewer_recommended_next_observations"):
         sections.append(
             "Reviewer recommended next observations: "
             f"{state['reviewer_recommended_next_observations']}"
+        )
+    blackboard = state.get("incident_blackboard", {})
+    if blackboard:
+        sections.append(
+            "Shared incident blackboard snapshot: "
+            f"active_scope={blackboard.get('active_scope', {})}; "
+            f"active_remaining_domains={blackboard.get('active_remaining_domains', [])}; "
+            f"recent_failures={blackboard.get('failure_history', [])[-3:]}"
         )
     return "\n".join(sections)
 
@@ -383,6 +403,7 @@ def _run_planner_with_role(state: SingleAgentState, role: AgentRole) -> SingleAg
             )
             elapsed_seconds = round(time.time() - attempt_started_at, 3)
             planner_output_raw = response.content if isinstance(response.content, str) else str(response.content)
+            token_usage = extract_token_usage(response)
             plan, parse_errors = parse_plan_text(
                 planner_output_raw,
                 forbidden_action_types={"show_file"},
@@ -398,6 +419,7 @@ def _run_planner_with_role(state: SingleAgentState, role: AgentRole) -> SingleAg
                     "error_type": "none",
                     "exception_class": "",
                     "message": "",
+                    "token_usage": token_usage,
                 }
             )
             if parse_errors and not plan["actions"]:
@@ -428,6 +450,7 @@ def _run_planner_with_role(state: SingleAgentState, role: AgentRole) -> SingleAg
                     "error_type": planner_error_type,
                     "exception_class": exc.__class__.__name__,
                     "message": str(exc),
+                    "token_usage": {},
                 }
             )
             if not retriable or attempt == planner_settings.max_attempts:

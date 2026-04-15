@@ -20,7 +20,7 @@ ALLOWED_ACTION_TYPES = {
     "run_health_check",
     "show_file",
 }
-ALLOWED_SERVICES = {"nginx", "app", "db"}
+ALLOWED_SERVICES = {"nginx", "app", "db", "cache", "queue", "worker", "metrics"}
 ALLOWED_CONFIG_TEST_TARGETS = {"compose", "nginx"}
 SUPPORTED_SUCCESS_CHECKS = {
     "healthz_200",
@@ -28,15 +28,22 @@ SUPPORTED_SUCCESS_CHECKS = {
     "api_items_nonempty",
     "api_items_schema_ok",
     "port_contract_matches_baseline",
+    "dc_services_running",
+    "dc_topology_contract_ok",
+    "dc_no_degraded_mode",
     "app_running",
     "nginx_running",
     "db_running",
+    "cache_running",
+    "queue_running",
+    "worker_running",
+    "metrics_running",
 }
 ALLOWED_HEALTH_CHECKS = SUPPORTED_SUCCESS_CHECKS
 MAX_CHANGED_LINES = 20
 MAX_ACTIONS_PER_PLAN = 6
 CODE_FILES = {"app/main.py"}
-HARD_SCENARIO_IDS = {"i2", "m", "n", "o", "r"}
+HARD_SCENARIO_IDS = {"i2", "m", "n", "o", "r", "u"}
 ROLLBACK_REFRESH_POLICY: dict[str, list[dict[str, str]]] = {
     "nginx/nginx.conf": [
         {"type": "run_config_test", "target": "nginx"},

@@ -15,6 +15,9 @@ from core.healthchecks import (
     docker_compose_ps,
     evaluate_api_items_nonempty,
     evaluate_api_items_schema_ok,
+    evaluate_dc_no_degraded_mode,
+    evaluate_dc_services_running,
+    evaluate_dc_topology_contract_ok,
     evaluate_port_contract_matches_baseline,
     http_check,
     service_running,
@@ -100,6 +103,7 @@ def _evaluate_success_check(
     ps_snapshot: dict[str, Any],
     healthz: dict[str, Any],
     api_items: dict[str, Any],
+    topology: dict[str, Any],
 ) -> bool:
     if check_id == "healthz_200":
         return healthz.get("status") == 200
@@ -111,12 +115,18 @@ def _evaluate_success_check(
         return evaluate_api_items_schema_ok(api_items).get("ok", False)
     if check_id == "port_contract_matches_baseline":
         return evaluate_port_contract_matches_baseline().get("ok", False)
+    if check_id == "dc_services_running":
+        return evaluate_dc_services_running(ps_snapshot).get("ok", False)
+    if check_id == "dc_topology_contract_ok":
+        return evaluate_dc_topology_contract_ok(topology).get("ok", False)
+    if check_id == "dc_no_degraded_mode":
+        return evaluate_dc_no_degraded_mode(topology).get("ok", False)
     if check_id == "app_running":
         return service_running(ps_snapshot, "app")
     if check_id == "nginx_running":
         return service_running(ps_snapshot, "nginx")
-    if check_id == "db_running":
-        return service_running(ps_snapshot, "db")
+    if check_id in {"db_running", "cache_running", "queue_running", "worker_running", "metrics_running"}:
+        return service_running(ps_snapshot, check_id.removesuffix("_running"))
     return False
 
 
@@ -274,7 +284,8 @@ def _collect_postcheck_snapshot(scenario_definition: dict[str, Any]) -> dict[str
     ps_snapshot = docker_compose_ps()
     healthz = http_check("/healthz")
     api_items = http_check("/api/items")
-    recent_logs = collect_service_logs(["nginx", "app", "db"], tail=20)
+    topology = http_check("/api/topology")
+    recent_logs = collect_service_logs(["nginx", "app", "db", "cache", "queue", "worker", "metrics"], tail=20)
 
     suspicious_patterns = {
         "nginx": ["connect() failed", "502 Bad Gateway"],
@@ -299,6 +310,7 @@ def _collect_postcheck_snapshot(scenario_definition: dict[str, Any]) -> dict[str
             ps_snapshot=ps_snapshot,
             healthz=healthz,
             api_items=api_items,
+            topology=topology,
         )
         if check_id == "api_items_nonempty":
             check_details[check_id] = evaluate_api_items_nonempty(api_items)
@@ -306,6 +318,12 @@ def _collect_postcheck_snapshot(scenario_definition: dict[str, Any]) -> dict[str
             check_details[check_id] = evaluate_api_items_schema_ok(api_items)
         elif check_id == "port_contract_matches_baseline":
             check_details[check_id] = evaluate_port_contract_matches_baseline()
+        elif check_id == "dc_services_running":
+            check_details[check_id] = evaluate_dc_services_running(ps_snapshot)
+        elif check_id == "dc_topology_contract_ok":
+            check_details[check_id] = evaluate_dc_topology_contract_ok(topology)
+        elif check_id == "dc_no_degraded_mode":
+            check_details[check_id] = evaluate_dc_no_degraded_mode(topology)
 
     ok = all(evaluated_checks.values()) if evaluated_checks and not success_check_validation_errors else False
     warnings: list[str] = []
@@ -323,6 +341,7 @@ def _collect_postcheck_snapshot(scenario_definition: dict[str, Any]) -> dict[str
         "compose_ps": ps_snapshot,
         "healthz": healthz,
         "api_items": api_items,
+        "topology": topology,
         "recent_logs": recent_logs,
         "suspicious_hits": suspicious_hits,
         "warnings": warnings,
@@ -330,6 +349,7 @@ def _collect_postcheck_snapshot(scenario_definition: dict[str, Any]) -> dict[str
         "front_most_failure": classify_front_most_failure(
             healthz=healthz,
             api_items=api_items,
+            topology=topology,
             service_logs=recent_logs,
         ),
     }

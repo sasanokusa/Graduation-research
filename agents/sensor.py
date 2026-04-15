@@ -8,6 +8,8 @@ from core.healthchecks import (
     docker_compose_ps,
     evaluate_api_items_nonempty,
     evaluate_api_items_schema_ok,
+    evaluate_dc_no_degraded_mode,
+    evaluate_dc_topology_contract_ok,
     evaluate_port_contract_matches_baseline,
     http_check,
     nginx_config_test,
@@ -36,11 +38,13 @@ def _tail(text: str, count: int = 8) -> str:
     return "...\n" + "\n".join(lines[-count:])
 
 
-def _summarize_symptoms(logs: dict[str, str], healthz: dict, api_items: dict) -> list[str]:
+def _summarize_symptoms(logs: dict[str, str], healthz: dict, api_items: dict, topology: dict) -> list[str]:
     symptoms: list[str] = []
     api_body = str(api_items.get("body", ""))
     api_nonempty = evaluate_api_items_nonempty(api_items)
     api_schema_ok = evaluate_api_items_schema_ok(api_items)
+    topology_contract = evaluate_dc_topology_contract_ok(topology)
+    no_degraded_mode = evaluate_dc_no_degraded_mode(topology)
     if healthz.get("status") != 200:
         symptoms.append(f"/healthz returned {healthz.get('status')}")
     if api_items.get("status") != 200:
@@ -49,6 +53,10 @@ def _summarize_symptoms(logs: dict[str, str], healthz: dict, api_items: dict) ->
         symptoms.append("/api/items returned 200 but the payload was empty")
     if api_items.get("status") == 200 and api_nonempty["ok"] and not api_schema_ok["ok"]:
         symptoms.append("/api/items returned 200 but the item schema was degraded")
+    if topology.get("status") == 200 and not topology_contract["ok"]:
+        symptoms.append("/api/topology returned 200 but the DC topology contract was degraded")
+    if topology.get("status") == 200 and not no_degraded_mode["ok"]:
+        symptoms.append("the topology endpoint reports degraded mode or a degraded topology state")
 
     nginx_log = logs.get("nginx", "")
     app_log = logs.get("app", "")
@@ -59,7 +67,9 @@ def _summarize_symptoms(logs: dict[str, str], healthz: dict, api_items: dict) ->
     if "ModuleNotFoundError" in app_log or "uvicorn: not found" in app_log:
         symptoms.append("application dependency or startup failure observed")
     if "database error" in app_log or "Access denied" in app_log:
-        symptoms.append("database connectivity failure observed")
+        symptoms.append("database authentication failure observed")
+    if "Can't connect" in app_log or "Connection refused" in app_log:
+        symptoms.append("database connectivity failure observed (host unreachable)")
     if "opaque_items_failure" in app_log:
         symptoms.append("application emitted an opaque API failure marker")
     baseline_app_port = get_baseline_app_port()
@@ -217,7 +227,7 @@ def _has_db_auth_blocker(service_logs: dict[str, str], healthz: dict[str, Any], 
     )
     return any(
         marker in combined_text
-        for marker in ["Access denied", "using password: YES", "database error", "OperationalError"]
+        for marker in ["Access denied", "using password: YES", "database error", "OperationalError", "Can't connect", "Connection refused"]
     )
 
 
@@ -267,6 +277,8 @@ def _collect_suspicious_patterns(
             "Unknown column",
             "doesn't exist",
             "opaque_items_failure",
+            "Can't connect",
+            "Connection refused",
             "Uvicorn running on http://0.0.0.0:",
         ],
         "http": [
@@ -303,6 +315,31 @@ def _collect_static_observations(service_logs: dict[str, str], file_snippets: di
         for line in file_snippets["app/app.env"].splitlines():
             if line.startswith("APP_PORT="):
                 observations["app_env_port"] = line.split("=", 1)[1].strip()
+    topology_env_keys = [
+        "CACHE_HOST",
+        "CACHE_EXPECTED_HOST",
+        "CACHE_HOST_GROUP",
+        "CACHE_EXPECTED_GROUP",
+        "QUEUE_HOST",
+        "QUEUE_EXPECTED_HOST",
+        "QUEUE_HOST_GROUP",
+        "QUEUE_EXPECTED_GROUP",
+        "METRICS_HOST",
+        "METRICS_EXPECTED_HOST",
+        "METRICS_HOST_GROUP",
+        "METRICS_EXPECTED_GROUP",
+        "APP_HOST_GROUP",
+        "DEGRADED_MODE",
+    ]
+    topology_env: dict[str, str] = {}
+    for line in file_snippets.get("app/app.env", "").splitlines():
+        if "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        if key in topology_env_keys:
+            topology_env[key] = value.strip()
+    if topology_env:
+        observations["dc_topology_env"] = topology_env
 
     nginx_text = resolve_repo_path("nginx/nginx.conf").read_text()
     upstream_groups = re.findall(r"upstream\s+([A-Za-z0-9_-]+)\s*{", nginx_text)
@@ -322,7 +359,12 @@ def _collect_static_observations(service_logs: dict[str, str], file_snippets: di
     return observations
 
 
-def _app_env_needles(service_logs: dict[str, str], healthz: dict[str, Any], api_items: dict[str, Any]) -> list[str]:
+def _app_env_needles(
+    service_logs: dict[str, str],
+    healthz: dict[str, Any],
+    api_items: dict[str, Any],
+    topology: dict[str, Any] | None = None,
+) -> list[str]:
     needles: list[str] = []
     app_log = service_logs.get("app", "")
     nginx_log = service_logs.get("nginx", "")
@@ -339,8 +381,33 @@ def _app_env_needles(service_logs: dict[str, str], healthz: dict[str, Any], api_
         marker in http_text for marker in ["Access denied", "database error", "using password: YES"]
     ):
         needles.append("DB_PASSWORD=")
+    if any(marker in app_log for marker in ["Can't connect", "Connection refused"]) or any(
+        marker in http_text for marker in ["Can't connect", "Connection refused"]
+    ):
+        needles.append("DB_HOST=")
+    topology = topology or {}
+    topology_contract = evaluate_dc_topology_contract_ok(topology)
+    if topology.get("status") == 200 and not topology_contract["ok"]:
+        needles.extend(
+            [
+                "CACHE_HOST=",
+                "CACHE_EXPECTED_HOST=",
+                "CACHE_HOST_GROUP=",
+                "CACHE_EXPECTED_GROUP=",
+                "QUEUE_HOST=",
+                "QUEUE_EXPECTED_HOST=",
+                "QUEUE_HOST_GROUP=",
+                "QUEUE_EXPECTED_GROUP=",
+                "METRICS_HOST=",
+                "METRICS_EXPECTED_HOST=",
+                "METRICS_HOST_GROUP=",
+                "METRICS_EXPECTED_GROUP=",
+                "APP_HOST_GROUP=",
+                "DEGRADED_MODE=",
+            ]
+        )
 
-    return needles or ["APP_PORT="]
+    return needles or ["APP_PORT=", "CACHE_HOST=", "QUEUE_HOST=", "METRICS_HOST=", "DEGRADED_MODE="]
 
 
 def _app_main_needles(service_logs: dict[str, str], healthz: dict[str, Any], api_items: dict[str, Any]) -> list[str]:
@@ -363,6 +430,7 @@ def _build_temporal_evidence(
     service_logs: dict[str, str],
     healthz: dict[str, Any],
     api_items: dict[str, Any],
+    topology: dict[str, Any],
     file_snippets: dict[str, str],
     relevant_log_excerpts: dict[str, str],
 ) -> tuple[list[str], list[str]]:
@@ -371,9 +439,12 @@ def _build_temporal_evidence(
     api_nonempty = evaluate_api_items_nonempty(api_items)
     api_schema_ok = evaluate_api_items_schema_ok(api_items)
     port_contract = evaluate_port_contract_matches_baseline()
+    topology_contract = evaluate_dc_topology_contract_ok(topology)
+    no_degraded_mode = evaluate_dc_no_degraded_mode(topology)
 
     current_state_evidence.append(f"/healthz currently returns {healthz.get('status')}")
     current_state_evidence.append(f"/api/items currently returns {api_items.get('status')}")
+    current_state_evidence.append(f"/api/topology currently returns {topology.get('status')}")
 
     nginx_excerpt = relevant_log_excerpts.get("nginx", "")
     app_excerpt = relevant_log_excerpts.get("app", "")
@@ -389,12 +460,47 @@ def _build_temporal_evidence(
                     )
     if "DB_PASSWORD=wrongpassword" in file_snippets.get("app/app.env", ""):
         current_state_evidence.append("visible app env snippet shows a non-baseline DB password")
+    if "DB_HOST=" in app_env_snippet:
+        for line in app_env_snippet.splitlines():
+            if line.startswith("DB_HOST="):
+                current_db_host = line.split("=", 1)[1].strip()
+                if current_db_host not in ("db", ""):
+                    current_state_evidence.append(
+                        f"visible app env snippet shows a non-baseline DB_HOST={current_db_host}"
+                    )
+    for dependency_name in ["CACHE", "QUEUE", "METRICS"]:
+        host_key = f"{dependency_name}_HOST"
+        expected_host_key = f"{dependency_name}_EXPECTED_HOST"
+        group_key = f"{dependency_name}_HOST_GROUP"
+        expected_group_key = f"{dependency_name}_EXPECTED_GROUP"
+        env_values: dict[str, str] = {}
+        for line in app_env_snippet.splitlines():
+            if "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            if key in {host_key, expected_host_key, group_key, expected_group_key}:
+                env_values[key] = value.strip()
+        if host_key in env_values and expected_host_key in env_values and env_values[host_key] != env_values[expected_host_key]:
+            current_state_evidence.append(
+                f"visible app env snippet shows {host_key}={env_values[host_key]} but expected {expected_host_key}={env_values[expected_host_key]}"
+            )
+        if group_key in env_values and expected_group_key in env_values and env_values[group_key] != env_values[expected_group_key]:
+            current_state_evidence.append(
+                f"visible app env snippet shows {group_key}={env_values[group_key]} but expected {expected_group_key}={env_values[expected_group_key]}"
+            )
+    if "DEGRADED_MODE=true" in app_env_snippet:
+        current_state_evidence.append("visible app env snippet enables degraded mode")
     if "server app:8001" in file_snippets.get("nginx/nginx.conf", ""):
         current_state_evidence.append("visible nginx snippet shows an upstream port mismatch")
     if "server backend:8000" in file_snippets.get("nginx/nginx.conf", ""):
         current_state_evidence.append("visible nginx snippet shows an upstream host mismatch")
     if "K_ITEMS_QUERY" in file_snippets.get("app/main.py", ""):
         current_state_evidence.append("visible app code snippet references an indirect query constant")
+    if (
+        file_snippets.get("app/requirements.txt")
+        and "uvicorn[standard]" not in file_snippets.get("app/requirements.txt", "")
+    ):
+        current_state_evidence.append("visible requirements snippet is missing uvicorn")
     if "itemz" in file_snippets.get("app/main.py", ""):
         current_state_evidence.append("visible app code snippet references a non-existent table name")
     if "details" in file_snippets.get("app/main.py", ""):
@@ -407,6 +513,11 @@ def _build_temporal_evidence(
         current_state_evidence.append("the items API currently returns HTTP 200 but an invalid or degraded item schema")
     if not port_contract["ok"]:
         current_state_evidence.append("the current app/nginx port contract has drifted away from the baseline")
+    if topology.get("status") == 200 and not topology_contract["ok"]:
+        failed_checks = ", ".join(topology_contract.get("failed_checks", [])) or "unknown checks"
+        current_state_evidence.append(f"the DC topology contract is degraded: {failed_checks}")
+    if topology.get("status") == 200 and not no_degraded_mode["ok"]:
+        current_state_evidence.append("the DC semantic check does not allow degraded mode")
     if "opaque_items_failure" in app_excerpt:
         current_state_evidence.append("current app excerpt shows an opaque API failure marker")
     if any(marker in app_excerpt for marker in ["Unknown column", "doesn't exist", "Access denied", "ModuleNotFoundError"]):
@@ -435,12 +546,13 @@ def _build_temporal_evidence(
     return current_state_evidence, historical_evidence
 
 
-def _collect_observation_snapshot() -> tuple[dict[str, str], dict, dict, dict]:
-    service_logs = collect_service_logs(["nginx", "app", "db"], tail=50)
+def _collect_observation_snapshot() -> tuple[dict[str, str], dict, dict, dict, dict]:
+    service_logs = collect_service_logs(["nginx", "app", "db", "cache", "queue", "worker", "metrics"], tail=50)
     compose_ps = docker_compose_ps()
     healthz = http_check("/healthz")
     api_items = http_check("/api/items")
-    return service_logs, compose_ps, healthz, api_items
+    topology = http_check("/api/topology")
+    return service_logs, compose_ps, healthz, api_items, topology
 
 
 def _should_stabilize_observation(service_logs: dict[str, str], healthz: dict, api_items: dict) -> bool:
@@ -454,6 +566,8 @@ def _should_stabilize_observation(service_logs: dict[str, str], healthz: dict, a
         "Error loading ASGI app",
         "Access denied",
         "OperationalError",
+        "Can't connect",
+        "Connection refused",
         "Unknown column",
         "doesn't exist",
     )
@@ -472,6 +586,7 @@ def _base_file_snippets(
     service_logs: dict[str, str],
     healthz: dict[str, Any],
     api_items: dict[str, Any],
+    topology: dict[str, Any],
 ) -> dict[str, str]:
     app_main_snippet = (
         _masked_app_main_snippet()
@@ -492,7 +607,7 @@ def _base_file_snippets(
         ),
         "app/app.env": _extract_relevant_snippet(
             "app/app.env",
-            _app_env_needles(service_logs, healthz, api_items),
+            _app_env_needles(service_logs, healthz, api_items, topology),
             context=0,
         ),
     }
@@ -517,6 +632,8 @@ def _base_log_excerpts(service_logs: dict[str, str]) -> dict[str, str]:
                 "Unknown column",
                 "doesn't exist",
                 "opaque_items_failure",
+                "Can't connect",
+                "Connection refused",
                 "Uvicorn running on http://0.0.0.0:",
             ],
         ),
@@ -528,13 +645,15 @@ def _build_observation(
     compose_ps: dict[str, Any],
     healthz: dict[str, Any],
     api_items: dict[str, Any],
+    topology: dict[str, Any],
 ) -> dict[str, Any]:
-    file_snippets = _base_file_snippets(service_logs, healthz, api_items)
+    file_snippets = _base_file_snippets(service_logs, healthz, api_items, topology)
     relevant_log_excerpts = _base_log_excerpts(service_logs)
     current_state_evidence, historical_evidence = _build_temporal_evidence(
         service_logs,
         healthz,
         api_items,
+        topology,
         file_snippets,
         relevant_log_excerpts,
     )
@@ -544,6 +663,7 @@ def _build_observation(
         "health_checks": {
             "healthz": healthz,
             "api_items": api_items,
+            "topology": topology,
         },
         "file_snippets": file_snippets,
         "relevant_log_excerpts": relevant_log_excerpts,
@@ -555,6 +675,7 @@ def _build_observation(
         "front_most_failure": classify_front_most_failure(
             healthz=healthz,
             api_items=api_items,
+            topology=topology,
             service_logs=service_logs,
             file_snippets=file_snippets,
         ),
@@ -570,7 +691,18 @@ def _narrower_snippet(
     needle_map = {
         "nginx/nginx.conf": ["upstream backend", "server app:8001", "server backend:8000", "server app:8000", "proxy_pass http://backend", "location /"],
         "app/main.py": ["itemz", "details", "SELECT missing FROM health_checks", "cursor.execute(", "K_ITEMS_QUERY"],
-        "app/app.env": ["APP_PORT=", "DB_PASSWORD="],
+        "app/app.env": [
+            "APP_PORT=",
+            "DB_PASSWORD=",
+            "DB_HOST=",
+            "CACHE_HOST=",
+            "CACHE_EXPECTED_HOST=",
+            "QUEUE_HOST=",
+            "QUEUE_EXPECTED_HOST=",
+            "METRICS_HOST=",
+            "METRICS_EXPECTED_HOST=",
+            "DEGRADED_MODE=",
+        ],
     }
     if path_value == "app/main.py" and _should_mask_app_main_query_snippet(service_logs, healthz, api_items):
         return _masked_app_main_snippet()
@@ -580,6 +712,7 @@ def _narrower_snippet(
 def additional_observation_node(state: SingleAgentState) -> SingleAgentState:
     requested = state.get("recommended_next_observations", [])
     collected: dict[str, Any] = {}
+    count = state.get("additional_observation_count", 0) + 1
     observation = {
         **state["observation"],
         "file_snippets": dict(state["observation"].get("file_snippets", {})),
@@ -597,6 +730,8 @@ def additional_observation_node(state: SingleAgentState) -> SingleAgentState:
                 "Unknown column",
                 "doesn't exist",
                 "opaque_items_failure",
+                "Can't connect",
+                "Connection refused",
                 "500 Internal Server Error",
                 "Uvicorn running on http://0.0.0.0:",
             ],
@@ -649,6 +784,8 @@ def additional_observation_node(state: SingleAgentState) -> SingleAgentState:
     observation["additional_observation"] = {
         "requested": requested,
         "collected": collected,
+        "count": count,
+        "turn": state.get("planner_turn", 1),
     }
 
     _section("🛰️ [PHASE 2.5] ADDITIONAL OBSERVATION")
@@ -664,21 +801,31 @@ def additional_observation_node(state: SingleAgentState) -> SingleAgentState:
         **state,
         "observation": observation,
         "additional_observation_used": True,
+        "additional_observation_count": count,
+        "additional_observation_history": [
+            *state.get("additional_observation_history", []),
+            {
+                "turn": state.get("planner_turn", 1),
+                "count": count,
+                "requested": requested,
+                "collected": collected,
+            },
+        ],
     }
 
 
 def sensor_node(state: SingleAgentState) -> SingleAgentState:
-    service_logs, compose_ps, healthz, api_items = _collect_observation_snapshot()
+    service_logs, compose_ps, healthz, api_items, topology = _collect_observation_snapshot()
     attempts = 0
     while attempts < OBSERVATION_STABILIZATION_ATTEMPTS and _should_stabilize_observation(
         service_logs, healthz, api_items
     ):
         attempts += 1
         time.sleep(OBSERVATION_STABILIZATION_SECONDS)
-        service_logs, compose_ps, healthz, api_items = _collect_observation_snapshot()
+        service_logs, compose_ps, healthz, api_items, topology = _collect_observation_snapshot()
 
-    observation = _build_observation(service_logs, compose_ps, healthz, api_items)
-    observed_symptoms = _summarize_symptoms(service_logs, healthz, api_items)
+    observation = _build_observation(service_logs, compose_ps, healthz, api_items, topology)
+    observed_symptoms = _summarize_symptoms(service_logs, healthz, api_items, topology)
 
     _section("🤖 [PHASE 1] SENSOR")
     print("Observed symptoms:")
