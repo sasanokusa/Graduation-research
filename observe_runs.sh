@@ -13,6 +13,7 @@ set -euo pipefail
 #   ./observe_runs.sh d f h --worker llm --prompt-mode blind
 #   ./observe_runs.sh e --worker llm --keep-failed-env
 #   ./observe_runs.sh a b c --worker mock --scenario-mode forced
+#   ./observe_runs.sh m n --agent-entrypoint self_critique_agent.py --worker llm --scenario-mode forced
 #
 # 前提:
 #   - カレントディレクトリがリポジトリルート
@@ -31,6 +32,7 @@ WORKER="llm"
 PROMPT_MODE="blind"
 REPEAT=1
 PYTHON_BIN=""
+AGENT_ENTRYPOINT="agent.py"
 KEEP_FAILED_ENV=0
 SCENARIO_MODE="auto"   # auto | forced
 OBS_ROOT="observations"
@@ -50,6 +52,7 @@ usage() {
   --prompt-mode <mode>        prompt mode (default: blind)
   --repeat <N>                各シナリオの反復回数 (default: 1)
   --python <path>             使用するPython実行ファイル (default: auto-detect)
+  --agent-entrypoint <path>   実行する agent entrypoint (default: agent.py)
   --keep-failed-env           失敗時に reset せず環境を残す
   --scenario-mode <auto|forced>
                               auto:  agent.py に --scenario を渡さない
@@ -118,6 +121,11 @@ parse_args() {
         [[ $# -gt 0 ]] || die "--python の値が必要です"
         PYTHON_BIN="$1"
         ;;
+      --agent-entrypoint)
+        shift
+        [[ $# -gt 0 ]] || die "--agent-entrypoint の値が必要です"
+        AGENT_ENTRYPOINT="$1"
+        ;;
       --keep-failed-env)
         KEEP_FAILED_ENV=1
         ;;
@@ -177,7 +185,7 @@ parse_args() {
 require_prereqs() {
   need_file "./reset.sh"
   need_file "./break.sh"
-  need_file "./agent.py"
+  need_file "./$AGENT_ENTRYPOINT"
   [[ -d "./results" ]] || mkdir -p ./results
 
   if [[ -z "$PYTHON_BIN" ]]; then
@@ -438,7 +446,7 @@ run_one() {
   before_latest="$(find_latest_result_json || true)"
 
   echo "[observe] agent..."
-  local agent_cmd=("$PYTHON_BIN" "agent.py" "--worker" "$WORKER" "--prompt-mode" "$PROMPT_MODE")
+  local agent_cmd=("$PYTHON_BIN" "$AGENT_ENTRYPOINT" "--worker" "$WORKER" "--prompt-mode" "$PROMPT_MODE")
   if [[ "$SCENARIO_MODE" == "forced" ]]; then
     agent_cmd+=("--scenario" "$scenario")
   fi
@@ -516,7 +524,7 @@ main() {
   make_obs_dir
 
   echo "[observe] scenarios: $(join_by ' ' "${SCENARIOS[@]}")"
-  echo "[observe] worker=$WORKER prompt_mode=$PROMPT_MODE repeat=$REPEAT scenario_mode=$SCENARIO_MODE python=$PYTHON_BIN"
+  echo "[observe] worker=$WORKER prompt_mode=$PROMPT_MODE repeat=$REPEAT scenario_mode=$SCENARIO_MODE python=$PYTHON_BIN agent=$AGENT_ENTRYPOINT"
   echo "[observe] output=$OBS_DIR"
 
   local scenario

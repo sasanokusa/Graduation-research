@@ -65,6 +65,7 @@ def test_readme_phase0_docs_are_synced() -> None:
         "./observe_runs.sh short",
         "./.venv/bin/python -m pytest -q",
         "./check.sh",
+        "./check.sh --all",
     ]:
         assert snippet in text
 
@@ -79,3 +80,5 @@ def test_check_script_uses_repo_venv_pytest() -> None:
     text = (ROOT_DIR / "check.sh").read_text(encoding="utf-8")
     assert ".venv/bin/python" in text
     assert "-m pytest -q" in text
+    assert "not integration" in text
+    assert "--all" in text

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -146,12 +146,26 @@ class MinecraftServiceConfig:
 
 
 @dataclass(frozen=True)
+class RunbookConfig:
+    id: str
+    command: list[str]
+    summary: str
+    expected_impact: str
+    risk_class: str = "low"
+    allowed_kinds: list[str] = field(default_factory=lambda: ["runbook"])
+    rollback_runbook_id: str = ""
+    verification: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class ActionsConfig:
     mode: str
     allowed_restart_services: list[str]
     restart_command_prefix: list[str]
     dangerous_action_policy: str
     max_auto_actions_per_incident: int
+    allowed_runbooks: dict[str, RunbookConfig] = field(default_factory=dict)
+    approval_dir: Path | None = None
 
 
 @dataclass(frozen=True)
@@ -179,6 +193,14 @@ class EscalationConfig:
 
 
 @dataclass(frozen=True)
+class BackupConfig:
+    provider: str = "none"
+    snapshot_paths: list[Path] = field(default_factory=list)
+    max_age_seconds: int = 86400
+    minimum_count: int = 1
+
+
+@dataclass(frozen=True)
 class ProductionPocConfig:
     path: Path
     host: HostConfig
@@ -189,6 +211,45 @@ class ProductionPocConfig:
     notifications: NotificationConfig
     llm: LlmConfig
     escalation: EscalationConfig
+    backup: BackupConfig = field(default_factory=BackupConfig)
+
+
+def _to_runbook_configs(values: Any) -> dict[str, RunbookConfig]:
+    if not values:
+        return {}
+    if isinstance(values, dict):
+        raw_items = []
+        for runbook_id, payload in values.items():
+            if isinstance(payload, dict):
+                raw_items.append({"id": runbook_id, **payload})
+    elif isinstance(values, list):
+        raw_items = [item for item in values if isinstance(item, dict)]
+    else:
+        return {}
+
+    runbooks: dict[str, RunbookConfig] = {}
+    for item in raw_items:
+        runbook_id = str(item.get("id", "")).strip()
+        command = [str(part) for part in (item.get("command") or item.get("args") or []) if str(part).strip()]
+        if not runbook_id or not command:
+            continue
+        allowed_kinds = [
+            str(kind).strip()
+            for kind in (item.get("allowed_kinds") or item.get("kinds") or ["runbook"])
+            if str(kind).strip()
+        ]
+        runbooks[runbook_id] = RunbookConfig(
+            id=runbook_id,
+            command=command,
+            summary=str(item.get("summary", "")).strip() or f"Run allowlisted runbook {runbook_id}",
+            expected_impact=str(item.get("expected_impact", "")).strip()
+            or "Executes a fixed allowlisted operational runbook.",
+            risk_class=str(item.get("risk_class", "low")).strip().lower() or "low",
+            allowed_kinds=allowed_kinds or ["runbook"],
+            rollback_runbook_id=str(item.get("rollback_runbook_id", "")).strip(),
+            verification=dict(item.get("verification") or {}),
+        )
+    return runbooks
 
 
 def load_config(config_path: str | Path, *, env_file: str | Path | None = None) -> ProductionPocConfig:
@@ -210,6 +271,7 @@ def load_config(config_path: str | Path, *, env_file: str | Path | None = None) 
     notification_payload = payload.get("notifications", {})
     llm_payload = payload.get("llm", {})
     escalation_payload = payload.get("escalation", {})
+    backup_payload = payload.get("backup", {})
 
     host = HostConfig(
         host_label=str(host_payload.get("host_label") or os.getenv("HOSTNAME", "unknown-host")),
@@ -256,6 +318,8 @@ def load_config(config_path: str | Path, *, env_file: str | Path | None = None) 
         restart_command_prefix=[str(item) for item in (action_payload.get("restart_command_prefix") or []) if str(item).strip()],
         dangerous_action_policy=str(action_payload.get("dangerous_action_policy", "require-human-approval")),
         max_auto_actions_per_incident=_to_int(action_payload.get("max_auto_actions_per_incident"), 1),
+        allowed_runbooks=_to_runbook_configs(action_payload.get("allowed_runbooks")),
+        approval_dir=_to_optional_path(action_payload.get("approval_dir"), base_dir=base_dir),
     )
     notifications = NotificationConfig(
         discord_webhook_url=str(notification_payload.get("discord_webhook_url", "")).strip(),
@@ -281,6 +345,12 @@ def load_config(config_path: str | Path, *, env_file: str | Path | None = None) 
             True,
         ),
     )
+    backup = BackupConfig(
+        provider=str(backup_payload.get("provider", "none")).strip().lower() or "none",
+        snapshot_paths=_to_path_list(backup_payload.get("snapshot_paths") or [], base_dir=base_dir),
+        max_age_seconds=_to_int(backup_payload.get("max_age_seconds"), 86400),
+        minimum_count=max(1, _to_int(backup_payload.get("minimum_count"), 1)),
+    )
     return ProductionPocConfig(
         path=config_path,
         host=host,
@@ -291,4 +361,5 @@ def load_config(config_path: str | Path, *, env_file: str | Path | None = None) 
         notifications=notifications,
         llm=llm,
         escalation=escalation,
+        backup=backup,
     )

@@ -23,8 +23,8 @@ from experimental.production_poc.adapters.service_probes import (
     tcp_probe,
 )
 from experimental.production_poc.notifications.discord import Notifier
-from experimental.production_poc.runtime_prod.config import ProductionPocConfig
-from experimental.production_poc.runtime_prod.models import DiscoverySnapshot, Finding, MonitorOutcome, utc_now_iso
+from experimental.production_poc.runtime_prod.config import ProductionPocConfig, RunbookConfig
+from experimental.production_poc.runtime_prod.models import DiscoverySnapshot, Finding, MonitorOutcome, ProposedAction, utc_now_iso
 from experimental.production_poc.runtime_prod.persistence import StateStore, build_snapshot_markdown
 
 
@@ -100,7 +100,15 @@ class ProductionPocController:
         if executable is not None:
             execution = self._guard.execute(executable)
             execution_results.append(execution)
-            verification = self._verify_after_action(snapshot, executable.action)
+            verification = (
+                self._verify_after_action(snapshot, executable.action)
+                if execution.ok
+                else {"ok": False, "skipped": True, "reason": "action execution failed before verification"}
+            )
+            if not execution.ok or not verification.get("ok"):
+                rollback = self._attempt_rollback(snapshot, executable.action, reason=execution.details.get("stderr", "verification_failed"))
+                if rollback.get("attempted"):
+                    verification["rollback"] = rollback
             if not execution.ok:
                 escalated = True
                 escalation_reason = execution.details.get("stderr") or "Automatic action execution failed."
@@ -449,17 +457,27 @@ class ProductionPocController:
         }
 
     def _verify_after_action(self, snapshot: DiscoverySnapshot, action: Any) -> dict[str, Any]:
-        if action.kind == "restart_service" and action.service in {
+        verification = self._verification_config_for_action(action)
+        verification_kind = str(verification.get("kind", "")).strip()
+        service_name = str(verification.get("service", "") or action.service).strip()
+
+        if verification_kind == "service_active" and service_name:
+            result = systemd_is_active(self._runner, service_name, timeout_seconds=5)
+            return {"ok": bool(result.get("ok")), "target": service_name, "service_active": result}
+
+        is_web_restart = action.kind == "restart_service" and action.service in {
             snapshot.detected_web.get("service_name"),
             self._config.web.service_name,
-        }:
+        }
+        if is_web_restart or verification_kind == "web":
             web_details = self._probe_web(snapshot)
             ok = bool(web_details.get("service_active", {}).get("ok")) and bool(web_details.get("http_result", {}).get("ok"))
-            return {"ok": ok, "target": action.service, "web": web_details}
-        if action.kind == "restart_service" and action.service in {
+            return {"ok": ok, "target": service_name or action.service, "web": web_details}
+        is_minecraft_restart = action.kind == "restart_service" and action.service in {
             snapshot.detected_minecraft.get("service_name"),
             self._config.minecraft.service_name,
-        }:
+        }
+        if is_minecraft_restart or verification_kind == "minecraft":
             minecraft_details = self._probe_minecraft(snapshot)
             management_mode = str(minecraft_details.get("management_mode", "auto"))
             if management_mode == "systemd":
@@ -468,8 +486,61 @@ class ProductionPocController:
                 )
             else:
                 ok = bool(minecraft_details.get("process_present")) and bool(minecraft_details.get("tcp_result", {}).get("ok"))
-            return {"ok": ok, "target": action.service, "minecraft": minecraft_details}
+            return {"ok": ok, "target": service_name or action.service, "minecraft": minecraft_details}
+        if action.kind == "runbook" and not verification:
+            return {"ok": True, "skipped": True, "target": action.service, "reason": "runbook has no verification configured"}
         return {"ok": False, "target": action.service, "reason": "No verification routine matched the action target."}
+
+    def _attempt_rollback(self, snapshot: DiscoverySnapshot, action: ProposedAction, *, reason: str) -> dict[str, Any]:
+        rollback_runbook_id = self._rollback_runbook_id_for_action(action)
+        if not rollback_runbook_id:
+            return {
+                "attempted": False,
+                "reason": "no rollback_runbook_id configured",
+                "fallback_safe_mode": True,
+            }
+
+        rollback_action = ProposedAction(
+            kind="runbook",
+            service=action.service,
+            reason=f"Rollback after failed action {action.kind}: {reason}",
+            expected_impact="Runs the configured rollback runbook and then verifies the target again.",
+            evidence=action.evidence,
+            metadata={"runbook_id": rollback_runbook_id},
+        )
+        guarded = self._guard.evaluate(rollback_action)
+        execution = self._guard.execute(guarded)
+        verification = (
+            self._verify_after_action(snapshot, rollback_action)
+            if execution.ok
+            else {"ok": False, "skipped": True, "reason": "rollback execution failed before verification"}
+        )
+        return {
+            "attempted": True,
+            "guard": guarded.to_dict(),
+            "execution": execution.to_dict(),
+            "verification": verification,
+            "fallback_safe_mode": not bool(execution.ok and verification.get("ok")),
+        }
+
+    def _verification_config_for_action(self, action: Any) -> dict[str, Any]:
+        runbook = self._runbook_for_action(action)
+        if runbook is None:
+            return {}
+        return runbook.verification
+
+    def _rollback_runbook_id_for_action(self, action: Any) -> str:
+        metadata_id = str(getattr(action, "metadata", {}).get("rollback_runbook_id", "")).strip()
+        if metadata_id:
+            return metadata_id
+        runbook = self._runbook_for_action(action)
+        return runbook.rollback_runbook_id if runbook else ""
+
+    def _runbook_for_action(self, action: Any) -> RunbookConfig | None:
+        runbook_id = str(getattr(action, "metadata", {}).get("runbook_id", "")).strip()
+        if not runbook_id:
+            return None
+        return self._config.actions.allowed_runbooks.get(runbook_id)
 
     def _memory_used_percent(self) -> float:
         meminfo = Path("/proc/meminfo")

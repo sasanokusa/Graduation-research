@@ -253,7 +253,7 @@ def record_judge(state: dict[str, Any]) -> dict[str, Any]:
 
 
 def merge_reviewer_guidance_into_triage(state: dict[str, Any]) -> dict[str, Any]:
-    if state.get("execution_mode") != "multi_agent" or state.get("review_decision") != "retry":
+    if state.get("execution_mode") not in {"multi_agent", "single_agent_self_critique"} or state.get("review_decision") != "retry":
         return state
 
     candidate_scope = deepcopy(state.get("candidate_scope", {}))

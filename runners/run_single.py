@@ -13,6 +13,7 @@ from agents.sensor import additional_observation_node, sensor_node
 from agents.worker import worker_node
 from core.evaluator_mapping import resolve_internal_scenario
 from core.executor import execute_plan, rollback_with_refresh
+from core.hypothesis import append_hypothesis_log, compute_hypothesis_metrics
 from core.incident_blackboard import AGENT_ROLES, initial_incident_blackboard
 from core.llm_usage import collect_llm_usage
 from core.policies import RESULTS_DIR, SCENARIO_DEFINITIONS_PATH
@@ -312,6 +313,17 @@ def save_result(state: SingleAgentState) -> str:
     llm_usage = collect_llm_usage(state)
     llm_totals = llm_usage["totals"]
     llm_by_role = llm_usage["by_role"]
+    hypothesis_log = state.get("hypothesis_log", [])
+    if not hypothesis_log and state.get("planner_summary"):
+        hypothesis_state = append_hypothesis_log(
+            {
+                **state,
+                "last_turn_success": state.get("final_status") == "success",
+                "hypothesis_log": [],
+            }
+        )
+        hypothesis_log = hypothesis_state.get("hypothesis_log", [])
+    hypothesis_metrics = compute_hypothesis_metrics(hypothesis_log)
     payload = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "execution_mode": state.get("execution_mode", "single_agent"),
@@ -413,6 +425,10 @@ def save_result(state: SingleAgentState) -> str:
         "reviewer_invocation_failed": state.get("reviewer_invocation_failed", False),
         "reviewer_invocation_retry_count": state.get("reviewer_invocation_retry_count", 0),
         "reviewer_invocation_error": state.get("reviewer_invocation_error", ""),
+        "baseline_condition": state.get("baseline_condition", state.get("execution_mode", "single_agent")),
+        "hypothesis_log": hypothesis_log,
+        "hypothesis_metrics": hypothesis_metrics,
+        "self_critique_history": state.get("self_critique_history", []),
         "judge_history": state.get("judge_history", []),
         "judge_decision": state.get("judge_decision", ""),
         "judge_output_raw": state.get("judge_output_raw", ""),
@@ -628,6 +644,10 @@ def main(argv: list[str] | None = None) -> int:
         "triage_provider": "",
         "triage_model": "",
         "triage_llm_fallback": False,
+        "hypothesis_log": [],
+        "hypothesis_metrics": {},
+        "baseline_condition": "single_agent_one_shot",
+        "self_critique_history": [],
         "judge_decision": "",
         "judge_output_raw": "",
         "judge_reasoning": "",

@@ -9,6 +9,7 @@ from typing import Any
 
 from core.agent_factory import build_chat_model_binding
 from core.agent_roles import AgentRole
+from core.hypothesis import annotate_latest_hypothesis
 from core.llm_usage import extract_token_usage
 from core.state import SingleAgentState
 
@@ -155,7 +156,7 @@ def mock_judge_node(state: SingleAgentState) -> SingleAgentState:
         "override": judge_result["override"],
         "reasoning": judge_result["reasoning"],
     }
-    return {
+    updated = {
         **state,
         "judge_decision": judge_result["decision"],
         "judge_output_raw": raw_output,
@@ -172,6 +173,7 @@ def mock_judge_node(state: SingleAgentState) -> SingleAgentState:
             model="mock-judge",
         ),
     }
+    return annotate_latest_hypothesis(updated, judge_decision=judge_result["decision"])
 
 
 def judge_node(state: SingleAgentState) -> SingleAgentState:
@@ -253,7 +255,7 @@ def judge_node(state: SingleAgentState) -> SingleAgentState:
         "invocation_failed": invocation_failed,
         "invocation_retry_count": invocation_retry_count,
     }
-    return {
+    updated = {
         **state,
         "judge_decision": judge_result["decision"],
         "judge_output_raw": raw_output,
@@ -268,3 +270,4 @@ def judge_node(state: SingleAgentState) -> SingleAgentState:
         "agent_role_trace": agent_role_trace,
         "role_model_trace": role_model_trace,
     }
+    return annotate_latest_hypothesis(updated, judge_decision=judge_result["decision"])

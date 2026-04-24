@@ -70,6 +70,47 @@ actions:
   restart_command_prefix: []
   dangerous_action_policy: require-human-approval
   max_auto_actions_per_incident: 1
+  # medium-risk action を実行する場合、人間がこのディレクトリに
+  # <approval_id>.approved を作成して承認します。approval_id は通知と incident JSON に出ます。
+  approval_dir: /var/lib/infra-production-poc/approvals
+  # restart 以外の修復は、固定 argv の allowlisted runbook としてだけ扱います。
+  # 例: nginx config reload は restart より低リスクな限定操作として execute できます。
+  allowed_runbooks:
+    - id: reload_nginx_config
+      command:
+        - systemctl
+        - reload
+        - nginx
+      risk_class: low
+      kinds:
+        - runbook
+      summary: Reload nginx configuration
+      expected_impact: Applies an already validated nginx configuration without a full service restart.
+      verification:
+        kind: web
+        service: nginx
+    # medium-risk の例。実環境の runbook を用意し、backup と approval が揃うまで実行されません。
+    # - id: failover_web_to_standby
+    #   command: [/usr/local/sbin/failover-web, --to, standby]
+    #   risk_class: medium
+    #   kinds: [service_failover]
+    #   rollback_runbook_id: failover_web_to_primary
+    #   summary: Fail over web traffic to standby
+    #   expected_impact: Switches traffic to the preconfigured standby target.
+    #   verification:
+    #     kind: web
+    #     service: nginx
+
+backup:
+  # none | local-snapshot
+  provider: none
+  # medium-risk action を許可する前に、ここで指定した snapshot marker の鮮度を確認します。
+  # provider: local-snapshot
+  # snapshot_paths:
+  #   - /var/backups/infra/latest
+  snapshot_paths: []
+  max_age_seconds: 86400
+  minimum_count: 1
 
 notifications:
   discord_webhook_url: ${DISCORD_WEBHOOK_URL}

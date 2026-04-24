@@ -1,1 +1,0 @@
-[observe] command: ./.venv/bin/python agent.py --worker llm --prompt-mode blind

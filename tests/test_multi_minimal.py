@@ -8,6 +8,7 @@ import pytest
 
 from agents.reviewer import parse_reviewer_text
 from runners.run_multi_minimal import after_review_gate, after_turn_gate
+from runners.run_self_critique import build_app as build_self_critique_app
 from runners.run_single import build_app as build_single_app
 
 
@@ -120,6 +121,10 @@ def test_single_agent_app_still_builds() -> None:
     assert build_single_app("mock") is not None
 
 
+def test_self_critique_app_builds() -> None:
+    assert build_self_critique_app("mock") is not None
+
+
 def _run_mock_multi_scenario(scenario: str) -> dict:
     subprocess.run(["bash", "./reset.sh"], cwd=ROOT_DIR, check=True, timeout=180)
     subprocess.run(["bash", "./break.sh", scenario], cwd=ROOT_DIR, check=True, timeout=180)
@@ -149,6 +154,7 @@ def _run_mock_multi_scenario(scenario: str) -> dict:
         subprocess.run(["bash", "./reset.sh"], cwd=ROOT_DIR, check=True, timeout=180)
 
 
+@pytest.mark.integration
 @pytest.mark.skipif(not _docker_available(), reason="docker compose is not available")
 def test_mock_multi_i2_two_turn_success() -> None:
     payload = _run_mock_multi_scenario("i2")
@@ -163,6 +169,7 @@ def test_mock_multi_i2_two_turn_success() -> None:
     assert payload["incident_blackboard"]["reviewer_guidance"]
 
 
+@pytest.mark.integration
 @pytest.mark.skipif(not _docker_available(), reason="docker compose is not available")
 def test_mock_multi_n_two_turn_success() -> None:
     payload = _run_mock_multi_scenario("n")
@@ -175,6 +182,7 @@ def test_mock_multi_n_two_turn_success() -> None:
     assert payload["reviewer_suspected_remaining_domains"] == ["query_or_code_bug"]
 
 
+@pytest.mark.integration
 @pytest.mark.skipif(not _docker_available(), reason="docker compose is not available")
 @pytest.mark.parametrize(
     ("scenario", "expected_turns", "expected_replans"),

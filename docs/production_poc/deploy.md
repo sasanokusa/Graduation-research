@@ -129,6 +129,58 @@ Minecraft の log が `/home/<user>/...` 配下にある場合は、監視実行
 `actions.allowed_restart_services` には、`systemd` で安全に再起動できる service だけを入れてください。
 `tmux` や `shell script` 管理の Minecraft をここへ入れても自動実行対象にはしないでください。
 
+restart 以外の修復は `actions.allowed_runbooks` に固定 argv として登録します。
+ここには任意 shell 文字列ではなく、必ず list 形式の command を入れてください。
+
+```yaml
+actions:
+  allowed_runbooks:
+    - id: reload_nginx_config
+      command:
+        - systemctl
+        - reload
+        - nginx
+      risk_class: low
+      kinds:
+        - runbook
+      summary: Reload nginx configuration
+      expected_impact: Applies an already validated nginx configuration without a full service restart.
+      verification:
+        kind: web
+        service: nginx
+```
+
+`service_failover`、`config_toggle_rollback`、`dependency_rollback` のような medium-risk 操作も、
+実体は `allowed_runbooks` の固定 command として登録します。
+medium-risk action は、fresh snapshot と approval file が揃うまで実行されません。
+
+```yaml
+backup:
+  provider: local-snapshot
+  snapshot_paths:
+    - /var/backups/infra/latest
+  max_age_seconds: 86400
+  minimum_count: 1
+
+actions:
+  approval_dir: /var/lib/infra-production-poc/approvals
+  allowed_runbooks:
+    - id: failover_web_to_standby
+      command: [/usr/local/sbin/failover-web, --to, standby]
+      risk_class: medium
+      kinds: [service_failover]
+      rollback_runbook_id: failover_web_to_primary
+      summary: Fail over web traffic to standby
+      expected_impact: Switches traffic to the preconfigured standby target.
+      verification:
+        kind: web
+        service: nginx
+```
+
+medium-risk action が提案されると、通知または incident JSON の guard reason に approval file path が出ます。
+内容を確認したうえで、その path に空ファイルまたは短いメモを書いた `.approved` ファイルを作ると承認扱いになります。
+承認 file は実験後に削除してください。
+
 `execute` モードで非 root ユーザーから `systemctl restart` を実行する場合は、`actions.restart_command_prefix` を使います。
 
 ```yaml
@@ -349,4 +401,6 @@ tail -n 100 /path/to/minecraft/logs/latest.log
 
 - 既定は `propose-only` のままにする
 - `execute` は明示的な実験モードとして扱う
-- 実 snapshot 機構が入るまで、config edit、package 管理、file delete、host-wide change を allowlist に追加しない
+- `backup.provider: none` のままでは medium-risk action は実行されない
+- `local-snapshot` は snapshot marker の存在と鮮度だけを確認する。snapshot 作成自体は既存のバックアップ運用側で行う
+- 実 snapshot 機構が入るまで、package 管理、file delete、host-wide change を allowlist に追加しない

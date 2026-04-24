@@ -19,6 +19,15 @@ SUPPORTED_ACTION_KINDS = {
     "http_health_check",
     "tcp_port_check",
     "listen_port_check",
+    "disk_usage_check",
+    "memory_pressure_check",
+    "failed_units_check",
+    "journal_keyword_search",
+    "file_stat",
+    "runbook",
+    "service_failover",
+    "config_toggle_rollback",
+    "dependency_rollback",
 }
 
 
@@ -278,12 +287,13 @@ class LangChainIncidentAnalyzer:
             "You are a cautious incident triage assistant for a personal Ubuntu server.\n"
             "Return JSON only.\n"
             "Never suggest package upgrades, file edits, firewall changes, reboot, chmod, chown, rm, database changes, or arbitrary shell.\n"
+            "Runbook-style actions must reference metadata.runbook_id; the guard will execute only fixed commands from the local allowlist.\n"
             "Use only these action kinds when strictly justified: "
             + ", ".join(sorted(SUPPORTED_ACTION_KINDS))
             + ".\n"
             "If no safe action fits, return an empty proposed_actions list and explain the escalation_reason.\n"
             "Output schema:\n"
-            '{"summary":"...","likely_causes":[{"cause":"...","confidence":"low|medium|high","evidence":["..."]}],"proposed_actions":[{"kind":"restart_service","service":"nginx","reason":"...","expected_impact":"...","evidence":["..."],"metadata":{}}],"escalation_reason":"..."}\n'
+            '{"summary":"...","likely_causes":[{"cause":"...","confidence":"low|medium|high","evidence":["..."]}],"proposed_actions":[{"kind":"restart_service","service":"nginx","reason":"...","expected_impact":"...","evidence":["..."],"metadata":{"runbook_id":"optional_allowlisted_id"}}],"escalation_reason":"..."}\n'
             "Incident context:\n"
             + json.dumps(payload, ensure_ascii=False, indent=2)
         )

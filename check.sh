@@ -11,4 +11,13 @@ if [[ ! -x "${PYTHON_BIN}" ]]; then
   exit 1
 fi
 
+if [[ "${1:-}" == "--all" ]]; then
+  shift
+  exec "${PYTHON_BIN}" -m pytest -q "$@"
+fi
+
+if [[ "$#" -eq 0 ]]; then
+  exec "${PYTHON_BIN}" -m pytest -q -m "not integration"
+fi
+
 exec "${PYTHON_BIN}" -m pytest -q "$@"

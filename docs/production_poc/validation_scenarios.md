@@ -60,3 +60,33 @@
    - restart 試行が 1 回だけ記録される
    - 直後に検証が走る
    - 検証失敗時に連鎖自動操作が走らない
+
+## シナリオ 6: restart 以外の low-risk runbook を確認
+
+1. `allowed_runbooks` に `reload_nginx_config` のような固定 argv runbook を登録する
+2. analyzer から `kind: runbook`, `metadata.runbook_id: reload_nginx_config` の action が出る条件で `monitor-once` を実行する
+3. 次を確認
+   - `command_preview.args` が YAML に登録した固定 argv と一致する
+   - `risk_class: low` として扱われる
+   - `execute` モードでは最大 1 回だけ実行される
+   - 実行後に `verification.kind` に対応した確認が走る
+
+## シナリオ 7: medium-risk action の backup / approval gate を確認
+
+1. `backup.provider: local-snapshot` と `snapshot_paths` を設定する
+2. fresh snapshot marker が無い状態で `service_failover` などの medium-risk runbook を提案させる
+3. backup 不足で実行されないことを確認する
+4. snapshot marker を用意し、再度 `monitor-once` を実行する
+5. incident JSON または通知に出る approval id を確認し、`approval_dir/<approval_id>.approved` を作る
+6. 再度実行し、承認済みの場合だけ command が実行可能になることを確認する
+
+## シナリオ 8: rollback runbook を確認
+
+1. low-risk または approved medium-risk runbook に `rollback_runbook_id` を設定する
+2. 検証が失敗するよう、一時的に health endpoint を失敗先へ向ける
+3. `monitor-once` を実行する
+4. 次を確認
+   - primary runbook 実行後に verification が失敗する
+   - rollback runbook が 1 段だけ実行される
+   - `verification.rollback` に guard / execution / verification が保存される
+   - rollback 後も復旧確認に失敗する場合は `fallback_safe_mode: true` になり、手動対応へ進む

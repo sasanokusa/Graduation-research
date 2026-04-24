@@ -15,6 +15,7 @@ from experimental.production_poc.runtime_prod.config import (
     MonitoringConfig,
     NotificationConfig,
     ProductionPocConfig,
+    RunbookConfig,
     WebServiceConfig,
 )
 from experimental.production_poc.runtime_prod.controller import ProductionPocController
@@ -337,3 +338,86 @@ def test_controller_escalates_for_shell_script_managed_minecraft_without_auto_re
     assert "start-server.sh" in outcome.analysis.escalation_reason
     assert outcome.execution_results == []
     assert runner.calls == []
+
+
+def test_controller_attempts_configured_runbook_rollback_after_verification_failure(monkeypatch, tmp_path: Path) -> None:
+    runner = _Runner()
+    notifier = _Notifier()
+    base_config = _config(tmp_path, mode="execute")
+    config = ProductionPocConfig(
+        path=base_config.path,
+        host=base_config.host,
+        monitoring=base_config.monitoring,
+        web=base_config.web,
+        minecraft=base_config.minecraft,
+        actions=ActionsConfig(
+            mode="execute",
+            allowed_restart_services=[],
+            restart_command_prefix=[],
+            dangerous_action_policy="require-human-approval",
+            max_auto_actions_per_incident=1,
+            allowed_runbooks={
+                "reload_nginx": RunbookConfig(
+                    id="reload_nginx",
+                    command=["systemctl", "reload", "nginx"],
+                    summary="Reload nginx",
+                    expected_impact="Applies nginx config without a full restart.",
+                    risk_class="low",
+                    rollback_runbook_id="rollback_nginx",
+                ),
+                "rollback_nginx": RunbookConfig(
+                    id="rollback_nginx",
+                    command=["systemctl", "reload", "nginx"],
+                    summary="Rollback nginx reload",
+                    expected_impact="Refreshes nginx after reverting to the known-safe config.",
+                    risk_class="low",
+                ),
+            },
+        ),
+        notifications=base_config.notifications,
+        llm=base_config.llm,
+        escalation=base_config.escalation,
+    )
+    controller = ProductionPocController(
+        config=config,
+        runner=runner,
+        observer=_Observer(runner),
+        analyzer=_Analyzer(ProposedAction(kind="runbook", service="nginx", metadata={"runbook_id": "reload_nginx"})),
+        guard=ActionGuard(config.actions, runner),
+        notifier=notifier,
+        store=StateStore(config.host.state_dir),
+        backup_provider=NullBackupProvider(),
+    )
+    monkeypatch.setattr(controller, "_load_or_refresh_snapshot", _snapshot)
+    monkeypatch.setattr(
+        controller,
+        "_run_rule_based_probes",
+        lambda snapshot: (
+            [
+                Finding(
+                    id="web_http_failed",
+                    severity="critical",
+                    service="nginx",
+                    title="HTTP health check failed",
+                    summary="nginx is unhealthy",
+                )
+            ],
+            {"web": {}},
+            {},
+        ),
+    )
+
+    def _verify_after_action(snapshot, action):  # noqa: ANN001
+        if action.metadata.get("runbook_id") == "rollback_nginx":
+            return {"ok": True, "target": "nginx"}
+        return {"ok": False, "target": "nginx"}
+
+    monkeypatch.setattr(controller, "_verify_after_action", _verify_after_action)
+
+    outcome = controller.run_monitor_once()
+
+    assert outcome.escalated is True
+    assert outcome.verification["ok"] is False
+    assert outcome.verification["rollback"]["attempted"] is True
+    assert outcome.verification["rollback"]["verification"]["ok"] is True
+    assert runner.calls == [["systemctl", "reload", "nginx"], ["systemctl", "reload", "nginx"]]

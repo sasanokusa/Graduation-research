@@ -7,6 +7,11 @@ from typing import Any
 
 from core.agent_factory import build_chat_model_binding
 from core.agent_roles import AgentRole
+from core.hypothesis import (
+    annotate_latest_hypothesis,
+    categorize_reviewer_feedback,
+    reviewer_changed_hypothesis,
+)
 from core.llm_usage import extract_token_usage
 from core.state import SingleAgentState
 
@@ -330,7 +335,7 @@ def mock_reviewer_node(state: SingleAgentState) -> SingleAgentState:
         "recommended_scope_adjustment": review["recommended_scope_adjustment"],
         "recommended_next_observations": review["recommended_next_observations"],
     }
-    return {
+    updated = {
         **state,
         "review_feedback": review["feedback_for_planner"],
         "review_decision": review["decision"],
@@ -349,6 +354,11 @@ def mock_reviewer_node(state: SingleAgentState) -> SingleAgentState:
             model="mock-reviewer",
         ),
     }
+    return annotate_latest_hypothesis(
+        updated,
+        reviewer_feedback_category=categorize_reviewer_feedback(review),
+        changed_after_critique=reviewer_changed_hypothesis(updated, review),
+    )
 
 
 def reviewer_node(state: SingleAgentState) -> SingleAgentState:
@@ -453,7 +463,7 @@ def reviewer_node(state: SingleAgentState) -> SingleAgentState:
         "invocation_failed": invocation_failed,
         "invocation_retry_count": invocation_retry_count,
     }
-    return {
+    updated = {
         **state,
         "review_feedback": review["feedback_for_planner"],
         "review_decision": review["decision"],
@@ -471,3 +481,8 @@ def reviewer_node(state: SingleAgentState) -> SingleAgentState:
         "agent_role_trace": agent_role_trace,
         "role_model_trace": role_model_trace,
     }
+    return annotate_latest_hypothesis(
+        updated,
+        reviewer_feedback_category=categorize_reviewer_feedback(review),
+        changed_after_critique=reviewer_changed_hypothesis(updated, review),
+    )

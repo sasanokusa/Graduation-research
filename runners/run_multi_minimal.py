@@ -12,6 +12,7 @@ from agents.mock_worker import mock_planner_node
 from agents.reviewer import mock_reviewer_node, reviewer_node
 from agents.sensor import additional_observation_node, sensor_node
 from agents.worker import planner_node
+from core.hypothesis import append_hypothesis_log
 from core.incident_blackboard import (
     AGENT_ROLES,
     initial_incident_blackboard,
@@ -193,6 +194,7 @@ def turn_summary_node(state: SingleAgentState) -> SingleAgentState:
         "multi_agent_stop_reason": stop_reason,
         "final_status": "success" if last_turn_success else "failure",
     }
+    updated_state = append_hypothesis_log(updated_state)
     return record_turn_summary(updated_state)
 
 
@@ -516,6 +518,10 @@ def main(argv: list[str] | None = None) -> int:
         "triage_provider": "",
         "triage_model": "",
         "triage_llm_fallback": False,
+        "hypothesis_log": [],
+        "hypothesis_metrics": {},
+        "baseline_condition": "multi_agent_single_planner",
+        "self_critique_history": [],
         "judge_decision": "",
         "judge_output_raw": "",
         "judge_reasoning": "",

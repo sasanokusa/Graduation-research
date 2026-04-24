@@ -22,6 +22,17 @@ def test_load_config_expands_env_and_resolves_paths(monkeypatch, tmp_path: Path)
                 "    startup_script_path: minecraft-server/start-server.sh",
                 "notifications:",
                 "  discord_webhook_url: ${DISCORD_WEBHOOK_URL}",
+                "actions:",
+                "  approval_dir: approvals",
+                "  allowed_runbooks:",
+                "    - id: reload_nginx",
+                "      command: [systemctl, reload, nginx]",
+                "      risk_class: low",
+                "backup:",
+                "  provider: local-snapshot",
+                "  snapshot_paths:",
+                "    - snapshots",
+                "  max_age_seconds: 120",
             ]
         ),
         encoding="utf-8",
@@ -38,3 +49,8 @@ def test_load_config_expands_env_and_resolves_paths(monkeypatch, tmp_path: Path)
     assert config.minecraft.startup_script_path == (tmp_path / "minecraft-server" / "start-server.sh").resolve()
     assert config.notifications.discord_webhook_url == "https://example.invalid/webhook"
     assert config.actions.mode == "propose-only"
+    assert config.actions.approval_dir == (tmp_path / "approvals").resolve()
+    assert config.actions.allowed_runbooks["reload_nginx"].command == ["systemctl", "reload", "nginx"]
+    assert config.backup.provider == "local-snapshot"
+    assert config.backup.snapshot_paths == [(tmp_path / "snapshots").resolve()]
+    assert config.backup.max_age_seconds == 120

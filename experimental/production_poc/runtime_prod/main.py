@@ -4,7 +4,8 @@ import argparse
 import json
 
 from experimental.production_poc.adapters.action_guard import ActionGuard
-from experimental.production_poc.adapters.backup_provider import NullBackupProvider
+from experimental.production_poc.adapters.approval_store import FileApprovalStore, NullApprovalStore
+from experimental.production_poc.adapters.backup_provider import build_backup_provider
 from experimental.production_poc.adapters.command_runner import SubprocessCommandRunner
 from experimental.production_poc.adapters.host_observer import HostObserver
 from experimental.production_poc.adapters.llm_analyzer import build_incident_analyzer
@@ -23,7 +24,9 @@ def build_controller(config_path: str, *, env_file: str | None = None) -> Produc
         username=config.notifications.username,
     )
     observer = HostObserver(runner)
-    guard = ActionGuard(config.actions, runner)
+    backup_provider = build_backup_provider(config.backup)
+    approval_store = FileApprovalStore(config.actions.approval_dir) if config.actions.approval_dir else NullApprovalStore()
+    guard = ActionGuard(config.actions, runner, backup_provider=backup_provider, approval_store=approval_store)
     analyzer = build_incident_analyzer(config.llm)
     return ProductionPocController(
         config=config,
@@ -33,7 +36,7 @@ def build_controller(config_path: str, *, env_file: str | None = None) -> Produc
         guard=guard,
         notifier=notifier,
         store=store,
-        backup_provider=NullBackupProvider(),
+        backup_provider=backup_provider,
     )
 
 

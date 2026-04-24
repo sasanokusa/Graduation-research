@@ -82,6 +82,10 @@ class SingleAgentState(TypedDict):
     triage_provider: str
     triage_model: str
     triage_llm_fallback: bool
+    hypothesis_log: list[dict[str, Any]]
+    hypothesis_metrics: dict[str, Any]
+    baseline_condition: str
+    self_critique_history: list[dict[str, Any]]
     judge_decision: str
     judge_output_raw: str
     judge_reasoning: str

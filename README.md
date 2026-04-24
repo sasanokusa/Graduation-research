@@ -56,15 +56,15 @@
 │   └── verifier.py               # pre/post check
 ├── scenarios
 │   └── definitions.yaml          # シナリオ定義
-├── tests                         # pytest ベースの unit test
-├── results                       # 実験結果 JSON と backup
+├── tests                         # pytest ベースの unit / integration test
+├── results                       # 実験結果 JSON と backup（ローカル生成物）
 ├── multi_agent.py                # blackboard-driven multi-agent runner の薄い入口
 ├── docker-compose.yml
 ├── break.sh
 └── reset.sh
 ```
 
-`agent.py` が single-agent 主系、`multi_agent.py` が blackboard を共有する multi-agent orchestration の入口である。現時点では observer / triage / repair planner / verification reviewer / safety judge を直列に回す構成であり、並列協調やサービス別 agent まではまだ扱わない。
+`agent.py` が single-agent one-shot 主系、`self_critique_agent.py` が single-agent iterative self-critique baseline、`multi_agent.py` が blackboard を共有する multi-agent orchestration の入口である。現時点では observer / triage / repair planner / verification reviewer / safety judge を直列に回す構成であり、並列協調やサービス別 agent まではまだ扱わない。
 
 ## 現在のフロー
 
@@ -90,7 +90,7 @@ multi-agent mode は single-agent の安全機構をそのまま使い、`observ
 - Safety judge agent:
   reviewer decision を安全性と証拠の観点から受理または override する
 - 最大ターン:
-  `MULTI_AGENT_MAX_TURNS` で制御し、既定は 3 ターン
+  `MULTI_AGENT_MAX_TURNS` で制御し、既定は 5 ターン
 - 追加観測上限:
   `MULTI_AGENT_MAX_ADDITIONAL_OBSERVATIONS` で制御し、既定は 3 回
 
@@ -220,6 +220,7 @@ cp .env.example .env
 ```
 
 `.env` に API key と role ごとの provider/model を記入する。`.env` は [`.gitignore`](.gitignore) で除外し、`.env.example` だけをリポジトリに残す。
+API key がログ、チャット、Git 履歴などに露出した可能性がある場合は、各 provider 側で key を revoke / rotate してから新しい値を `.env` に入れ直す。
 
 最小構成の例:
 
@@ -229,7 +230,7 @@ SINGLE_AGENT_PROVIDER=google
 SINGLE_AGENT_MODEL=gemini-3-flash-preview
 SINGLE_AGENT_TIMEOUT_SECONDS=75
 SINGLE_AGENT_THINKING_LEVEL=low
-MULTI_AGENT_MAX_TURNS=3
+MULTI_AGENT_MAX_TURNS=5
 COMMAND_TIMEOUT_SECONDS=20
 HTTP_TIMEOUT_SECONDS=3
 POSTCHECK_RETRY_ATTEMPTS=15
@@ -512,6 +513,12 @@ python multi_agent.py --worker llm --prompt-mode blind
 python multi_agent.py --worker mock --prompt-mode blind
 ```
 
+single-agent self-critique baseline を forced mode で見る場合:
+
+```bash
+python self_critique_agent.py --scenario m --worker llm --prompt-mode blind
+```
+
 hard scenario を forced mode で見る場合:
 
 ```bash
@@ -537,6 +544,12 @@ python multi_agent.py --scenario i2 --worker mock --prompt-mode blind
 
 ```bash
 ./.venv/bin/python aggregate_observations.py observations/<timestamp>/summary.csv --group-by scenario --show-overall
+```
+
+仮説遷移メトリクスを集計する場合:
+
+```bash
+./.venv/bin/python aggregate_hypothesis_metrics.py observations/<timestamp>/summary.csv --output observations/<timestamp>/hypothesis_metrics.csv
 ```
 
 ### 完全リセット
@@ -630,11 +643,18 @@ python multi_agent.py --scenario i2 --worker mock --prompt-mode blind
 
 ## テスト
 
-最低限の基盤テストはプロジェクトの `.venv` から回す。
+最低限の基盤テストはプロジェクトの `.venv` から回す。`./check.sh` は既定で Docker Compose を使う重い integration test を除外する。
 
 ```bash
-./.venv/bin/python -m pytest -q
 ./check.sh
+./.venv/bin/python -m pytest -q -m "not integration"
+```
+
+Docker Compose を使う mock multi-agent の end-to-end 検証まで含めたい場合は、明示的に full / integration を指定する。
+
+```bash
+./check.sh --all
+./check.sh -m integration
 ```
 
 現在の主な対象は以下である。
@@ -646,6 +666,7 @@ python multi_agent.py --scenario i2 --worker mock --prompt-mode blind
 - rollback 対象ファイルからの refresh action 選択
 - `service_running` の統一ロジック
 - `show_file` の単一 runner での reject
+- Docker Compose を伴う multi-agent mock cascade は `integration` marker 付きで分離
 
 ## 実装上の要点
 
@@ -682,9 +703,9 @@ python multi_agent.py --scenario i2 --worker mock --prompt-mode blind
 
 ## 既知の制約
 
-- 現状のシングルエージェントは 1 回の計画で復旧を試みる。自己反省ループはまだない
+- single-agent one-shot は 1 回の計画で復旧を試みる。比較用に iterative self-critique baseline も実装済みである
 - multi-agent orchestration は shared blackboard と reviewer/judge 分離を持つが、まだ直列制御であり、並列協調やサービス別 agent は未実装である
-- multi-agent orchestration の loop は既定で最大 3 ターンで止まる
+- multi-agent orchestration の loop は既定で最大 5 ターンで止まる
 - `restore_from_base` は完全禁止ではなく last resort であり、特に hard scenario の code file では初手利用を verifier が拒否する
 - postcheck のログ判定は簡易的であり、履歴ログ由来のノイズを含むことがある
 - `rebuild_compose_service` は現状 `docker compose up -d --force-recreate <service>` を指す
