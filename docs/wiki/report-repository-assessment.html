@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>リポジトリ調査レポート — Safe Emergency Recovery Wiki</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="layout">
+  <header class="topbar">
+    <div class="brand">
+      <a href="index.html">Safe Emergency Recovery</a>
+      <span class="sub">研究ドキュメント Wiki</span>
+    </div>
+    <nav class="topnav">
+      <a href="index.html">ホーム</a>
+      <a href="overview.html">概要</a>
+      <a href="roadmap-revised.html">最新ロードマップ</a>
+    </nav>
+  </header>
+  <aside class="sidebar">
+    <div class="group">
+      <div class="group-title">スタート</div>
+      <ul>
+        <li><a href="index.html" data-id="index">Wiki トップ</a></li>
+        <li><a href="overview.html" data-id="overview">プロジェクト概要 (README)</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">ロードマップ</div>
+      <ul>
+        <li><a href="roadmap-initial.html" data-id="roadmap-initial">初版ロードマップ (2026-03-16)</a></li>
+        <li><a href="roadmap-revised.html" data-id="roadmap-revised">改訂版ロードマップ (2026-04-15)</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">調査・レポート</div>
+      <ul>
+        <li><a href="report-repository-assessment.html" data-id="report-repository-assessment">リポジトリ調査レポート</a></li>
+        <li><a href="report-analysis.html" data-id="report-analysis">設計レビュー・改善提案</a></li>
+        <li><a href="report-phase1-cost.html" data-id="report-phase1-cost">Phase 1 比較実験コスト</a></li>
+        <li><a href="report-local-experiment-cost.html" data-id="report-local-experiment-cost">局所実験コスト</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">評価</div>
+      <ul>
+        <li><a href="evaluation-hypothesis-transition.html" data-id="evaluation-hypothesis-transition">仮説遷移評価 (Phase 4.5)</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">Production PoC</div>
+      <ul>
+        <li><a href="poc-architecture.html" data-id="poc-architecture">アーキテクチャ</a></li>
+        <li><a href="poc-deploy.html" data-id="poc-deploy">導入手順</a></li>
+        <li><a href="poc-validation-scenarios.html" data-id="poc-validation-scenarios">実機検証シナリオ</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">シナリオ</div>
+      <ul>
+        <li><a href="scenario-ictsc5023.html" data-id="scenario-ictsc5023">ICTSC 5023</a></li>
+      </ul>
+    </div>
+  </aside>
+  <main class="content">
+    <div class="breadcrumb"><a href="index.html">Wiki</a> / レポート / リポジトリ調査</div>
+    <h1 id="リポジトリ調査レポート">リポジトリ調査レポート</h1>
+    <p>作成日: 2026-03-16<br />
+    対象: <code>/Users/ryoike/Documents/Graduation Research</code>
+    の現在のワーキングツリー</p>
+    <h2 id="1-調査の前提">1. 調査の前提</h2>
+    <ul>
+    <li>本レポートは <code>HEAD</code>
+    ではなく、未コミット変更を含む現在のワーキングツリーを対象にした。</li>
+    <li>主要に確認したもの:
+    <ul>
+    <li><code>README.md</code></li>
+    <li><code>runners/</code>, <code>agents/</code>,
+    <code>core/</code></li>
+    <li><code>experimental/production_poc/</code></li>
+    <li><code>docs/production_poc/</code></li>
+    <li><code>scenarios/definitions.yaml</code></li>
+    <li><code>tests/</code></li>
+    <li><code>results/</code>, <code>observations/</code></li>
+    </ul></li>
+    <li>ワーキングツリーは dirty であり、<code>agents/judge.py</code>,
+    <code>agents/triage_agent.py</code>,
+    <code>tests/test_judge.py</code>,
+    <code>tests/test_triage_agent.py</code>
+    などの追加・変更が存在する。したがって本評価は「今このディレクトリにある実装」の評価である。</li>
+    </ul>
+    <h2 id="2-総評">2. 総評</h2>
+    <p>このリポジトリは、現時点では <strong>「LLM
+    を用いた安全な応急復旧の研究評価基盤」</strong>
+    としてかなりよく整理されている。特に、構造化アクション、事前検証、事後検証、ロールバック、シナリオ化された障害注入、結果保存までが一連の実験フローとして成立している点は強い。</p>
+    <p>一方で、卒業研究案である
+    <strong>「LLMマルチエージェント協調を用いたDCインフラ応急修復システム」</strong>
+    という題目に対しては、現状はまだ <strong>「安全な復旧実験基盤 +
+    低リスク本番PoC」</strong> の段階であり、<strong>本格的な DC
+    インフラ応急修復システムそのもの</strong>
+    と言うには不足がある。特に不足しているのは、<code>DCインフラらしさ</code>、<code>本格的なマルチエージェント協調</code>、<code>本番環境での実修復能力の広さ</code>
+    である。</p>
+    <h2 id="3-リポジトリの現状整理">3. リポジトリの現状整理</h2>
+    <h3 id="31-主系-docker-compose-上の安全な応急復旧実験基盤">3.1 主系:
+    Docker Compose 上の安全な応急復旧実験基盤</h3>
+    <p>主系は <code>agent.py</code> / <code>runners/run_single.py</code>
+    から起動する単一エージェント型の評価基盤である。全体フローは以下の通り。</p>
+    <ol type="1">
+    <li><code>sensor</code> が <code>docker compose ps</code>、HTTP
+    チェック、ログ、設定ファイル断片を収集する</li>
+    <li><code>triage</code> が open-world
+    の故障ドメイン仮説と修復スコープを生成する</li>
+    <li>必要時のみ追加観測を 1 回実施する</li>
+    <li><code>worker</code> が構造化アクションの修復計画を返す</li>
+    <li><code>verifier</code>
+    がスコープ逸脱や危険操作を事前検証する</li>
+    <li><code>executor</code> が許可されたアクションのみ実行する</li>
+    <li><code>postcheck</code> と必要時の <code>rollback</code>
+    を実施する</li>
+    </ol>
+    <p>この系は自由な shell 実行ではなく、<code>edit_file</code>,
+    <code>restart_compose_service</code>,
+    <code>rebuild_compose_service</code>, <code>run_config_test</code>,
+    <code>run_health_check</code> などの
+    <strong>構造化アクションのみ</strong>
+    を許可している。安全性を研究テーマの中心に据えた設計である。</p>
+    <h3 id="32-マルチエージェント系-minimal-loop">3.2
+    マルチエージェント系: minimal loop</h3>
+    <p><code>multi_agent.py</code> /
+    <code>runners/run_multi_minimal.py</code>
+    では、単一エージェントの安全機構をそのまま使いながら、</p>
+    <ul>
+    <li><code>planner</code></li>
+    <li><code>reviewer</code></li>
+    <li><code>judge</code></li>
+    </ul>
+    <p>を直列に回す最小ループが実装されている。流れは概ね</p>
+    <p><code>planner -&gt; precheck/execute/postcheck -&gt; reviewer -&gt; judge -&gt; replan</code></p>
+    <p>であり、最大ターン数も設定可能である。</p>
+    <p>ただし、これは <strong>本格的な分業型マルチエージェント</strong>
+    というより、<strong>逐次的な再計画ループ</strong>
+    に近い。専門エージェントの並列協調、役割間の交渉、共有知識ベース、サブタスク分解、複数サービス横断の協調制御はまだない。</p>
+    <h3 id="33-実機寄り-poc-experimentalproduction_poc">3.3 実機寄り
+    PoC: <code>experimental/production_poc/</code></h3>
+    <p>別系統として、Ubuntu 実ホスト向けの <code>production_poc</code>
+    が存在する。これは</p>
+    <ul>
+    <li>startup snapshot (<code>discover</code>)</li>
+    <li>ルールベース監視 (<code>monitor-once</code>)</li>
+    <li>異常時のみ LLM 解析</li>
+    <li><code>ActionGuard</code> による行動制限</li>
+    <li>Discord 通知</li>
+    <li><code>systemd</code> timer による定期実行</li>
+    </ul>
+    <p>を備えた、安全寄りの PoC である。</p>
+    <p>この PoC
+    は「本番向け」と言っても、設計思想はかなり保守的であり、<strong>デフォルトは
+    <code>propose-only</code></strong>、自動実行できるのは
+    <strong>allowlist 済み service restart を最大 1 回</strong>
+    に限られる。つまり、実態としては <strong>監視 + 提案 +
+    ごく低リスクな初動</strong> の段階である。</p>
+    <h2 id="4-強み">4. 強み</h2>
+    <h3 id="41-安全設計が一貫している">4.1 安全設計が一貫している</h3>
+    <ul>
+    <li>任意 shell を LLM に返させない</li>
+    <li>編集対象ファイルが限定されている</li>
+    <li><code>replace_text</code> の 1 箇所一致制約がある</li>
+    <li>precheck で差分量・スコープ・許可アクションを検査する</li>
+    <li>postcheck と rollback がある</li>
+    <li>rollback 後に refresh action を伴う</li>
+    </ul>
+    <p>この一連の設計は、「LLM
+    をそのまま危険な実行主体にしない」という研究上の重要論点にしっかり応えている。</p>
+    <h3 id="42-シナリオ設計が研究向き">4.2 シナリオ設計が研究向き</h3>
+    <p><code>scenarios/definitions.yaml</code> には A-U
+    の障害シナリオがあり、単純故障だけでなく、</p>
+    <ul>
+    <li>stale log による誤誘導</li>
+    <li>opaque 500</li>
+    <li>visible green / hidden red</li>
+    <li>competing repair choice</li>
+    <li>masked cascade</li>
+    <li>non-commutative な多段障害</li>
+    </ul>
+    <p>まで含まれている。これは卒論で「なぜ multi-agent や verifier
+    が必要か」を議論する材料として非常に良い。</p>
+    <h3 id="43-実験ログ集計基盤がある">4.3 実験ログ・集計基盤がある</h3>
+    <p><code>results/</code> に試行 JSON
+    が保存され、<code>observe_runs.sh</code> と
+    <code>aggregate_observations.py</code>
+    によって観測・集計ができる。研究として再現可能性や比較実験を組み立てやすい。</p>
+    <h3 id="44-本番pocも完全に机上ではない">4.4
+    本番PoCも完全に机上ではない</h3>
+    <p><code>production_poc</code> では、実ホストに対して</p>
+    <ul>
+    <li>systemd service の状態</li>
+    <li>process / port / HTTP / TCP</li>
+    <li>disk / memory / CPU</li>
+    <li>journal</li>
+    <li>Minecraft 運用形態の差異</li>
+    </ul>
+    <p>まで見ており、実際の運用系へ接続する導線は用意されている。</p>
+    <h2 id="5-弱み不足">5. 弱み・不足</h2>
+    <h3 id="51-dcインフラ-としては対象が狭い">5.1
+    <code>DCインフラ</code> としては対象が狭い</h3>
+    <p>主系は Docker Compose の <code>nginx -&gt; app -&gt; db</code> 3
+    層構成であり、production PoC 側も Web service, Minecraft, host
+    resource
+    監視が中心である。したがって、データセンターインフラに典型的な</p>
+    <ul>
+    <li>複数ホスト協調</li>
+    <li>ネットワーク機器や経路制御</li>
+    <li>ストレージ障害</li>
+    <li>クラスタ/フェイルオーバ</li>
+    <li>電源・冷却・BMC 連携</li>
+    <li>運用手順や承認フローとの連携</li>
+    </ul>
+    <p>は未対応である。<br />
+    現状は
+    <strong>「DCインフラ」より「単一ホスト/単一スタックの応急復旧研究基盤」</strong>
+    に近い。</p>
+    <h3 id="52-マルチエージェント協調はまだ浅い">5.2
+    マルチエージェント協調はまだ浅い</h3>
+    <p><code>planner</code>, <code>reviewer</code>, <code>judge</code>
+    は存在するが、</p>
+    <ul>
+    <li>並列協調</li>
+    <li>専門分化した agent 群</li>
+    <li>agent 間の役割交渉</li>
+    <li>shared memory / blackboard 的な世界モデル</li>
+    <li>サービス別担当 agent</li>
+    <li>根本原因解析 agent と修復 agent の分業</li>
+    </ul>
+    <p>はまだ実装されていない。<br />
+    したがって「マルチエージェント協調」というより、<strong>再計画を伴う直列
+    multi-turn 制御</strong> と評価するのが妥当である。</p>
+    <h3 id="53-実修復能力は安全優先で狭い">5.3
+    実修復能力は安全優先で狭い</h3>
+    <p>主系でも編集できるのは限られた数ファイルのみであり、production
+    PoC では実質的に <strong>自動実行できるのは allowlist 済み
+    restart_service だけ</strong> である。</p>
+    <p>つまり本番PoCは、</p>
+    <ul>
+    <li>config 修正</li>
+    <li>package rollback</li>
+    <li>traffic switching</li>
+    <li>failover</li>
+    <li>service migration</li>
+    <li>multi-host remediation</li>
+    <li>runbook 自動実行</li>
+    </ul>
+    <p>には進んでいない。<br />
+    このため、題目に含まれる <strong>「応急修復システム」</strong>
+    という言葉に対しては、現状は
+    <strong>「安全な初動対応システム」</strong> の方が近い。</p>
+    <h3 id="54-バックアップスナップショットの本実装がない">5.4
+    バックアップ/スナップショットの本実装がない</h3>
+    <p><code>experimental/production_poc/adapters/backup_provider.py</code>
+    は stub であり、<code>NullBackupProvider</code> が返る。<br />
+    研究として安全性を強調するには妥当だが、本番応急修復システムとしては大きな弱点である。</p>
+    <h3 id="55-実証範囲に偏りがある">5.5 実証範囲に偏りがある</h3>
+    <p><code>observations/</code> に残る 47
+    試行をみると、少なくとも記録済み範囲では:</p>
+    <ul>
+    <li><code>a</code>: 5/5 成功</li>
+    <li><code>b</code>: 5/5 成功</li>
+    <li><code>c</code>: 5/5 成功</li>
+    <li><code>d</code>: 3/5 成功</li>
+    <li><code>e</code>: 3/3 成功</li>
+    <li><code>f</code>: 3/3 成功</li>
+    <li><code>g</code>: 3/3 成功</li>
+    <li><code>h</code>: 2/3 成功</li>
+    <li><code>i</code>: 1/1 成功</li>
+    <li><code>k</code>: 1/1 成功</li>
+    <li><code>l</code>: 1/1 成功</li>
+    <li><code>i2</code>: 0/3 成功</li>
+    <li><code>m</code>: 0/3 成功</li>
+    <li><code>n</code>: 0/3 成功</li>
+    <li><code>o</code>: 0/3 成功</li>
+    </ul>
+    <p>となっている。</p>
+    <p>ここから言えるのは、</p>
+    <ul>
+    <li>単純故障・局所故障には強い</li>
+    <li>多段障害・マスク障害・再計画前提の難シナリオにはまだ弱い</li>
+    </ul>
+    <p>ということである。<br />
+    題目が「マルチエージェント協調」を含む以上、本来は
+    <code>i2/m/n/o/r/u</code>
+    のようなケースで優位性を示したいが、現状その部分はまだ発展途上である。</p>
+    <h3 id="56-評価パイプラインに軽いドリフトがある">5.6
+    評価パイプラインに軽いドリフトがある</h3>
+    <p>シナリオ定義は <code>A-U</code>
+    まで拡張されている一方で、評価まわりにはまだ追随しきれていない箇所がある。</p>
+    <ul>
+    <li><code>tests/test_scenarios.py</code> では <code>p/q/r</code> と
+    <code>s/t/u</code> の存在を確認している</li>
+    <li>しかし <code>observe_runs.sh</code> のデフォルト sweep には
+    <code>p/q/r</code> が含まれていない</li>
+    <li><code>aggregate_observations.py</code> の期待ドメイン対応表は
+    <code>r</code> までで止まっており、<code>s/t/u</code> が未反映</li>
+    <li><code>README.md</code> でも一部に <code>A-R</code>
+    前提の説明が残っている</li>
+    </ul>
+    <p>つまり、<strong>実装・シナリオ・観測集計・文書が完全同期しているとはまだ言えない</strong>。<br />
+    卒論ではこの種のズレが「評価範囲はどこまでか」という読者の不安に直結するため、早めに揃える価値が高い。</p>
+    <h2 id="6-テストと検証状況">6. テストと検証状況</h2>
+    <h3 id="61-テスト数">6.1 テスト数</h3>
+    <p><code>tests/</code> には 67 件のテスト関数が存在した。</p>
+    <h3 id="62-実行結果">6.2 実行結果</h3>
+    <p>今回の確認では以下の結果だった。</p>
+    <ul>
+    <li>システム Python の <code>pytest -q</code>:
+    <ul>
+    <li><code>python-dotenv</code> 不足により collection error</li>
+    </ul></li>
+    <li><code>.venv/bin/python -m pytest -q</code>:
+    <ul>
+    <li><strong>65 passed, 2 failed</strong></li>
+    </ul></li>
+    </ul>
+    <h3 id="63-失敗内容">6.3 失敗内容</h3>
+    <p>失敗した 2 件は <code>tests/test_multi_minimal.py</code> の
+    multi-agent mock
+    シナリオで、アルゴリズム自体というより、<code>reset.sh</code>
+    実行時に Docker コンテナ名 <code>/target-db</code>
+    が既存コンテナと衝突して復旧環境を作れなかったことによるものであった。</p>
+    <p>したがって、</p>
+    <ul>
+    <li>単体テスト・PoCテストはかなり整っている</li>
+    <li>ただし Docker
+    実験環境のクリーンアップ前提には改善余地がある</li>
+    </ul>
+    <p>と評価できる。</p>
+    <h3 id="64-検証強度のまとめ">6.4 検証強度のまとめ</h3>
+    <p>検証基盤そのものはしっかりしているが、強さには濃淡がある。</p>
+    <ul>
+    <li>単純〜中程度の故障に対しては、テスト・観測ログ・結果 JSON
+    が揃っており、かなり説得力がある</li>
+    <li>hard scenario に対しては、検出精度よりも
+    <strong>最終復旧成功率</strong> がまだ不足している</li>
+    <li>production PoC は unit test
+    と手動検証シナリオが中心で、長期実運用ログや live-run
+    の蓄積はまだ薄い</li>
+    </ul>
+    <p>したがって現状の検証は、<strong>「研究プロトタイプとしては十分強いが、完成システムの実証としてはまだ中程度」</strong>
+    とみなすのが妥当である。</p>
+    <h2 id="7-卒業研究案との適合性評価">7. 卒業研究案との適合性評価</h2>
+    <p>評価対象の題目:
+    <strong>「LLMマルチエージェント協調を用いたDCインフラ応急修復システム」</strong></p>
+    <h3 id="71-要件分解と判定">7.1 要件分解と判定</h3>
+    <table>
+    <thead>
+    <tr>
+    <th>観点</th>
+    <th>判定</th>
+    <th>コメント</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>LLM を用いた診断・計画</td>
+    <td>高</td>
+    <td>single-agent worker、planner、reviewer、judge、triage
+    の役割分離が入り始めている</td>
+    </tr>
+    <tr>
+    <td>マルチエージェント協調</td>
+    <td>中</td>
+    <td>minimal loop はあるが、本格的な協調・分業・並列化はまだ弱い</td>
+    </tr>
+    <tr>
+    <td>応急修復能力</td>
+    <td>中</td>
+    <td>実験環境では成立。production PoC では restart 中心で限定的</td>
+    </tr>
+    <tr>
+    <td>安全性・検証・ロールバック</td>
+    <td>高</td>
+    <td>このリポジトリの最も強い部分</td>
+    </tr>
+    <tr>
+    <td>DCインフラ適用性</td>
+    <td>低〜中</td>
+    <td>単一ホスト/単一スタック寄りで、DC 特有の複雑性はまだ薄い</td>
+    </tr>
+    <tr>
+    <td>実験・再現・評価基盤</td>
+    <td>高</td>
+    <td>シナリオ、結果保存、集計、テストがある</td>
+    </tr>
+    <tr>
+    <td>実運用PoCとしての完成度</td>
+    <td>中</td>
+    <td>監視・通知・低リスク初動はあるが、本格修復系ではない</td>
+    </tr>
+    </tbody>
+    </table>
+    <h3 id="72-総合点">7.2 総合点</h3>
+    <p>以下の 2 つに分けて評価するのが妥当である。</p>
+    <h4 id="a-卒論の研究基盤としての完成度">A.
+    卒論の「研究基盤」としての完成度</h4>
+    <p><strong>78/100</strong></p>
+    <p>理由:</p>
+    <ul>
+    <li>LLM を安全に使う設計が明確</li>
+    <li>実験シナリオと評価基盤が充実</li>
+    <li>単一エージェントから multi-agent minimal への発展線が見える</li>
+    <li>実機PoCもあり、研究としての具体性が高い</li>
+    </ul>
+    <h4 id="b-題目どおりのdcインフラ応急修復システムとしての完成度">B.
+    題目どおりの「DCインフラ応急修復システム」としての完成度</h4>
+    <p><strong>58/100</strong></p>
+    <p>理由:</p>
+    <ul>
+    <li>「LLM」は十分ある</li>
+    <li>「応急修復」も研究環境では成立している</li>
+    <li>ただし「マルチエージェント協調」はまだ最小構成</li>
+    <li>「DCインフラ」と呼ぶには対象領域がまだ狭い</li>
+    <li>実機側は safe monitoring / guarded restart PoC の色が強い</li>
+    </ul>
+    <h3 id="73-最終判定">7.3 最終判定</h3>
+    <p><strong>現状のリポジトリは、卒業研究案を「完全には満たしていない」が、「卒論として十分に成立しうる中核実装」には到達している。</strong></p>
+    <p>より正確には、</p>
+    <ul>
+    <li><strong>題目の完成形そのもの</strong> ではない</li>
+    <li>しかし <strong>「LLM
+    を用いた安全な応急復旧実験基盤と、そのマルチエージェント化・実機PoCへの拡張」</strong>
+    としてはかなり良い状態</li>
+    </ul>
+    <p>である。</p>
+    <p>卒論本文では、現状システムを</p>
+    <blockquote>
+    <p>提案システムの第一段階実装<br />
+    もしくは<br />
+    DCインフラ応急修復システムに向けた安全な研究基盤・要素実証</p>
+    </blockquote>
+    <p>と位置付けると、内容と題目の整合が取りやすい。</p>
+    <h2 id="8-題目に近づけるための優先課題">8.
+    題目に近づけるための優先課題</h2>
+    <p>優先度順に挙げると、次の 5 点が重要である。</p>
+    <ol type="1">
+    <li><p><strong>マルチエージェントの本格化</strong><br />
+    planner/reviewer/judge
+    の直列ループから進めて、観測担当、根因推定担当、修復候補担当、検証担当などの専門化を行う。</p></li>
+    <li><p><strong>DCインフラらしい対象の追加</strong><br />
+    単一 Docker Compose
+    だけでなく、複数ノード、ネットワーク設定、冗長化、フェイルオーバ、ストレージ、監視系を含む構成へ拡張する。</p></li>
+    <li><p><strong>production PoC の修復アクション拡張</strong><br />
+    restart だけでなく、低リスクな設定切替、runbook
+    実行、代替経路切替、切り戻しなどを段階的に導入する。</p></li>
+    <li><p><strong>バックアップ/承認フローの実装</strong><br />
+    snapshot provider、human approval、段階的 rollback
+    を本実装し、研究上の安全性主張を強める。</p></li>
+    <li><p><strong>hard scenario の multi-agent 実証</strong><br />
+    <code>i2/m/n/o/r/u</code> で single-agent
+    を上回ることを定量的に示す。ここが卒論の最も説得力のある比較実験になる。</p></li>
+    </ol>
+    <h2 id="9-結論">9. 結論</h2>
+    <p>このリポジトリは、現状では <strong>「安全な LLM
+    応急復旧研究基盤」</strong>
+    としては強い。一方で、<strong>「LLMマルチエージェント協調を用いたDCインフラ応急修復システム」</strong>
+    という題目に対しては、まだ
+    <strong>要素実証から統合システムへ向かう途中段階</strong>
+    にある。</p>
+    <p>したがって最も妥当な評価は、</p>
+    <ul>
+    <li><strong>研究基盤としては高評価</strong></li>
+    <li><strong>題目の完成形としては中程度</strong></li>
+    <li><strong>卒論としては十分戦えるが、主張の置き方を少し丁寧にするべき</strong></li>
+    </ul>
+    <p>である。</p>
+    <div class="footer">
+      <span>Safe Emergency Recovery Experiment — Research Wiki</span>
+      <span>ソース: <a href="../reports/repository_assessment_20260316.md">../reports/repository_assessment_20260316.md</a></span>
+    </div>
+  </main>
+</div>
+<script src="wiki.js"></script>
+</body>
+</html>

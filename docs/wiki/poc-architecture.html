@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Production PoC
+アーキテクチャ — Safe Emergency Recovery Wiki</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="layout">
+  <header class="topbar">
+    <div class="brand">
+      <a href="index.html">Safe Emergency Recovery</a>
+      <span class="sub">研究ドキュメント Wiki</span>
+    </div>
+    <nav class="topnav">
+      <a href="index.html">ホーム</a>
+      <a href="overview.html">概要</a>
+      <a href="roadmap-revised.html">最新ロードマップ</a>
+    </nav>
+  </header>
+  <aside class="sidebar">
+    <div class="group">
+      <div class="group-title">スタート</div>
+      <ul>
+        <li><a href="index.html" data-id="index">Wiki トップ</a></li>
+        <li><a href="overview.html" data-id="overview">プロジェクト概要 (README)</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">ロードマップ</div>
+      <ul>
+        <li><a href="roadmap-initial.html" data-id="roadmap-initial">初版ロードマップ (2026-03-16)</a></li>
+        <li><a href="roadmap-revised.html" data-id="roadmap-revised">改訂版ロードマップ (2026-04-15)</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">調査・レポート</div>
+      <ul>
+        <li><a href="report-repository-assessment.html" data-id="report-repository-assessment">リポジトリ調査レポート</a></li>
+        <li><a href="report-analysis.html" data-id="report-analysis">設計レビュー・改善提案</a></li>
+        <li><a href="report-phase1-cost.html" data-id="report-phase1-cost">Phase 1 比較実験コスト</a></li>
+        <li><a href="report-local-experiment-cost.html" data-id="report-local-experiment-cost">局所実験コスト</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">評価</div>
+      <ul>
+        <li><a href="evaluation-hypothesis-transition.html" data-id="evaluation-hypothesis-transition">仮説遷移評価 (Phase 4.5)</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">Production PoC</div>
+      <ul>
+        <li><a href="poc-architecture.html" data-id="poc-architecture">アーキテクチャ</a></li>
+        <li><a href="poc-deploy.html" data-id="poc-deploy">導入手順</a></li>
+        <li><a href="poc-validation-scenarios.html" data-id="poc-validation-scenarios">実機検証シナリオ</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">シナリオ</div>
+      <ul>
+        <li><a href="scenario-ictsc5023.html" data-id="scenario-ictsc5023">ICTSC 5023</a></li>
+      </ul>
+    </div>
+  </aside>
+  <main class="content">
+    <div class="breadcrumb"><a href="index.html">Wiki</a> / Production PoC / アーキテクチャ</div>
+    <h1 id="production-poc-アーキテクチャ">Production PoC
+    アーキテクチャ</h1>
+    <h2 id="目的">目的</h2>
+    <ul>
+    <li>既存の Docker Compose ベース evaluation flow を変更しない</li>
+    <li>Ubuntu 実ホスト向け PoC
+    を隔離追加し、観測、異常検知、安全な提案、低リスク初動だけを扱う</li>
+    <li>常時コストを抑えるため、平常時はルールベース監視、異常時のみ LLM
+    を使う</li>
+    </ul>
+    <h2 id="ディレクトリ構成">ディレクトリ構成</h2>
+    <pre class="text"><code>experimental/production_poc/
+  runtime_prod/
+    config.py
+    controller.py
+    main.py
+    models.py
+    persistence.py
+  adapters/
+    action_guard.py
+    backup_provider.py
+    command_runner.py
+    host_observer.py
+    llm_analyzer.py
+    service_probes.py
+  notifications/
+    discord.py
+  config/
+    production_poc.example.yaml
+  deploy/
+    production-poc-monitor.service
+    production-poc-monitor.timer</code></pre>
+    <h2 id="実行フロー">実行フロー</h2>
+    <ol type="1">
+    <li><code>discover</code> でホスト構成を収集し、JSON
+    スナップショット、Markdown サマリ、軽量 LLM context を保存する</li>
+    <li><code>monitor-once</code> で
+    Web、Minecraft、ホスト資源を軽量ルールベースで確認する</li>
+    <li>異常時のみ、controller が関連ログと probe
+    結果を追加収集する</li>
+    <li>analyzer
+    が短い状況要約、原因候補、安全な構造化アクション案を返す</li>
+    <li><code>ActionGuard</code> が risk を <code>read-only</code> /
+    <code>low</code> / <code>medium</code> / <code>blocked</code>
+    に分類し、allowlist 外や危険操作を遮断する</li>
+    <li><code>execute</code> モードでも、自動実行は allowlist
+    済み低リスク操作を最大 1 回に制限する</li>
+    <li>medium-risk action は snapshot provider が ready で、かつ
+    approval file が存在する場合だけ実行可能にする</li>
+    <li>実行後は対象 probe を再実行して検証し、検証失敗時は設定済み
+    rollback runbook を 1 段だけ試す</li>
+    <li>Discord には相関 ID 付きで要約通知と必要時の詳細通知を送る</li>
+    </ol>
+    <h2 id="安全境界">安全境界</h2>
+    <ul>
+    <li>既定モードは <code>propose-only</code></li>
+    <li>受け付けるのは構造化アクションのみ。任意 shell、package
+    upgrade、file edit、delete、chmod/chown、firewall 変更、reboot
+    は拒否</li>
+    <li><code>restart_service</code> は
+    <code>allowed_restart_services</code> に登録された service
+    のみ許可</li>
+    <li>restart 以外の修復は <code>allowed_runbooks</code>
+    に登録された固定 argv だけを実行する</li>
+    <li>low-risk runbook は <code>execute</code>
+    モードで自動実行できるが、medium-risk runbook は fresh snapshot と
+    file approval が揃うまで実行されない</li>
+    <li><code>service_failover</code>、<code>config_toggle_rollback</code>、<code>dependency_rollback</code>
+    は runbook-backed action として扱い、runbook allowlist
+    なしでは拒否する</li>
+    <li>検証失敗時は自動連鎖操作を止め、必ずエスカレーション</li>
+    <li>backup provider は既定 <code>none</code> のほか、local snapshot
+    marker の存在と鮮度を確認する <code>local-snapshot</code>
+    を使える</li>
+    </ul>
+    <h2 id="低コスト化">低コスト化</h2>
+    <ul>
+    <li><code>monitor-once</code> を systemd timer
+    から定期起動する前提で、常駐 loop を避ける</li>
+    <li>discovery snapshot は長めの周期で再収集する</li>
+    <li>ログは通知前、LLM 入力前の両方で切り詰める</li>
+    <li>サンプル設定では LLM を既定で無効化している</li>
+    </ul>
+    <div class="footer">
+      <span>Safe Emergency Recovery Experiment — Research Wiki</span>
+      <span>ソース: <a href="../production_poc/architecture.md">../production_poc/architecture.md</a></span>
+    </div>
+  </main>
+</div>
+<script src="wiki.js"></script>
+</body>
+</html>

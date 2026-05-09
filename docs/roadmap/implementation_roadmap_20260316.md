@@ -1,7 +1,7 @@
 # 実装ロードマップ
 
 作成日: 2026-03-16  
-基礎資料: `repository_assessment_20260316.md`
+基礎資料: [`../reports/repository_assessment_20260316.md`](../reports/repository_assessment_20260316.md)
 
 ## 1. 目的
 

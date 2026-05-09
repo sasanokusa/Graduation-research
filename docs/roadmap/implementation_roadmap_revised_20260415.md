@@ -2,7 +2,7 @@
 
 作成日: 2026-04-15  
 前提: **Phase 0〜2 は完了している**ものとして、以降の進め方を再設計する。  
-基礎資料: `implementation_roadmap_20260316.md`, `phase1_compare_cost_report_20260414.md`
+基礎資料: [`implementation_roadmap_20260316.md`](implementation_roadmap_20260316.md), [`../reports/phase1_compare_cost_report_20260414.md`](../reports/phase1_compare_cost_report_20260414.md)
 
 ---
 

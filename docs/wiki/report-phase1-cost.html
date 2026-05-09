@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phase 1 比較実験コスト — Safe Emergency Recovery Wiki</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="layout">
+  <header class="topbar">
+    <div class="brand">
+      <a href="index.html">Safe Emergency Recovery</a>
+      <span class="sub">研究ドキュメント Wiki</span>
+    </div>
+    <nav class="topnav">
+      <a href="index.html">ホーム</a>
+      <a href="overview.html">概要</a>
+      <a href="roadmap-revised.html">最新ロードマップ</a>
+    </nav>
+  </header>
+  <aside class="sidebar">
+    <div class="group">
+      <div class="group-title">スタート</div>
+      <ul>
+        <li><a href="index.html" data-id="index">Wiki トップ</a></li>
+        <li><a href="overview.html" data-id="overview">プロジェクト概要 (README)</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">ロードマップ</div>
+      <ul>
+        <li><a href="roadmap-initial.html" data-id="roadmap-initial">初版ロードマップ (2026-03-16)</a></li>
+        <li><a href="roadmap-revised.html" data-id="roadmap-revised">改訂版ロードマップ (2026-04-15)</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">調査・レポート</div>
+      <ul>
+        <li><a href="report-repository-assessment.html" data-id="report-repository-assessment">リポジトリ調査レポート</a></li>
+        <li><a href="report-analysis.html" data-id="report-analysis">設計レビュー・改善提案</a></li>
+        <li><a href="report-phase1-cost.html" data-id="report-phase1-cost">Phase 1 比較実験コスト</a></li>
+        <li><a href="report-local-experiment-cost.html" data-id="report-local-experiment-cost">局所実験コスト</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">評価</div>
+      <ul>
+        <li><a href="evaluation-hypothesis-transition.html" data-id="evaluation-hypothesis-transition">仮説遷移評価 (Phase 4.5)</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">Production PoC</div>
+      <ul>
+        <li><a href="poc-architecture.html" data-id="poc-architecture">アーキテクチャ</a></li>
+        <li><a href="poc-deploy.html" data-id="poc-deploy">導入手順</a></li>
+        <li><a href="poc-validation-scenarios.html" data-id="poc-validation-scenarios">実機検証シナリオ</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">シナリオ</div>
+      <ul>
+        <li><a href="scenario-ictsc5023.html" data-id="scenario-ictsc5023">ICTSC 5023</a></li>
+      </ul>
+    </div>
+  </aside>
+  <main class="content">
+    <div class="breadcrumb"><a href="index.html">Wiki</a> / レポート / Phase 1 比較コスト</div>
+    <h1 id="phase-1-比較実験概算コストレポート">Phase 1
+    比較実験・概算コストレポート</h1>
+    <p>作成日: 2026-04-14</p>
+    <p>対象は <code>i2/m/n/o/r/u</code> の6シナリオで、single-agent と
+    multi-agent
+    を各1回ずつ走らせる比較実験である。ここでの「1回あたり」は、この6シナリオ比較実験1セットあたりを指す。</p>
+    <h2 id="前提">前提</h2>
+    <ul>
+    <li>実験結果は、再試行した
+    <code>observations/20260414T105754Z_phase1_compare_retry_once/summary.csv</code>
+    を主結果として扱う。</li>
+    <li>トークン量はユーザー提供値を使用し、OpenAI / Gemini / Claude
+    いずれも2セット分の合算として計算する。</li>
+    <li>料金は各社APIの標準オンデマンド単価を用いたUSD概算であり、税、為替、無料枠、キャッシュ、Batch/Flex/Priority、リージョン上乗せは含めない。</li>
+    <li>OpenAIは無料デイリートークンがあるため、実支払い額は下のOpenAI分より低くなる可能性がある。表では比較用に定価換算も残す。</li>
+    <li>Geminiの <code>2.62k + 2.73k + 69.26k tokens</code>
+    は、<code>2.62k</code> を入力、<code>2.73k + 69.26k</code>
+    を出力/思考トークンとして扱った。Googleの料金表では出力価格に
+    thinking tokens が含まれるため、この扱いで計算している。</li>
+    </ul>
+    <h2 id="現在のモデルと単価">現在のモデルと単価</h2>
+    <table>
+    <thead>
+    <tr>
+    <th>役割</th>
+    <th>Provider</th>
+    <th>Model</th>
+    <th>単価</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>single-agent / planner / triage</td>
+    <td>Google Gemini</td>
+    <td><code>gemini-3-flash-preview</code></td>
+    <td>入力 $0.50 / 1M tokens、出力 $3.00 / 1M tokens</td>
+    </tr>
+    <tr>
+    <td>reviewer</td>
+    <td>Anthropic Claude</td>
+    <td><code>claude-sonnet-4-6</code></td>
+    <td>入力 $3.00 / 1M tokens、出力 $15.00 / 1M tokens</td>
+    </tr>
+    <tr>
+    <td>judge</td>
+    <td>OpenAI</td>
+    <td><code>gpt-5.4-mini</code></td>
+    <td>入力 $0.75 / 1M tokens、出力 $4.50 / 1M tokens</td>
+    </tr>
+    </tbody>
+    </table>
+    <h2 id="コスト概算">コスト概算</h2>
+    <table>
+    <thead>
+    <tr>
+    <th>Provider / model</th>
+    <th style="text-align: right;">2セット合算 tokens</th>
+    <th style="text-align: right;">2セット合算コスト</th>
+    <th style="text-align: right;">1セットあたり</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>OpenAI <code>gpt-5.4-mini</code></td>
+    <td style="text-align: right;">input 51,089 / output 1,793</td>
+    <td style="text-align: right;">$0.0464</td>
+    <td style="text-align: right;">$0.0232</td>
+    </tr>
+    <tr>
+    <td>Gemini <code>gemini-3-flash-preview</code></td>
+    <td style="text-align: right;">input 2,620 / output+thinking
+    71,990</td>
+    <td style="text-align: right;">$0.2173</td>
+    <td style="text-align: right;">$0.1086</td>
+    </tr>
+    <tr>
+    <td>Claude <code>claude-sonnet-4-6</code></td>
+    <td style="text-align: right;">input 36,550 / output 4,298</td>
+    <td style="text-align: right;">$0.1741</td>
+    <td style="text-align: right;">$0.0871</td>
+    </tr>
+    <tr>
+    <td>合計</td>
+    <td style="text-align: right;">-</td>
+    <td style="text-align: right;">$0.4378</td>
+    <td style="text-align: right;">$0.2189</td>
+    </tr>
+    </tbody>
+    </table>
+    <p>OpenAI分が無料デイリートークンで全額相殺される場合、実支払いベースの目安は
+    Gemini + Claude のみで、2セット合算 $0.3914、1セットあたり $0.1957
+    になる。</p>
+    <h2 id="再試行結果">再試行結果</h2>
+    <table>
+    <thead>
+    <tr>
+    <th>Scenario</th>
+    <th>single-agent</th>
+    <th>multi-agent</th>
+    <th>multi-agent の補足</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td><code>i2</code></td>
+    <td>failure</td>
+    <td>success</td>
+    <td>turn 2、replan 1</td>
+    </tr>
+    <tr>
+    <td><code>m</code></td>
+    <td>failure</td>
+    <td>failure</td>
+    <td>turn 2、replan 1、<code>judge_stop</code></td>
+    </tr>
+    <tr>
+    <td><code>n</code></td>
+    <td>failure</td>
+    <td>success</td>
+    <td>turn 2、replan 1</td>
+    </tr>
+    <tr>
+    <td><code>o</code></td>
+    <td>failure</td>
+    <td>success</td>
+    <td>turn 2、replan 1</td>
+    </tr>
+    <tr>
+    <td><code>r</code></td>
+    <td>failure</td>
+    <td>success</td>
+    <td>turn 3、replan 2</td>
+    </tr>
+    <tr>
+    <td><code>u</code></td>
+    <td>failure</td>
+    <td>success</td>
+    <td>turn 2、replan 1</td>
+    </tr>
+    </tbody>
+    </table>
+    <p>成功率は single-agent が 0/6、multi-agent が 5/6
+    だった。今回の対象シナリオでは、multi-agent
+    構成が1回目の修復失敗後に観測・再計画を挟むことで、single-agent
+    より明確に復旧できている。</p>
+    <p>一方で <code>m</code> は multi-agent
+    でも失敗した。ログ上は1段目の問題を修復したあと、残存するDB認証/接続系の問題に進んだが、judge
+    が <code>judge_stop</code>
+    で停止している。今後の残タスクとしては、judge の stop / retry
+    判定を「下流の未修復障害が残る場合は retry
+    に倒す」方向へ寄せると、このケースの改善余地が大きい。</p>
+    <h2 id="所感">所感</h2>
+    <p>今回の比較実験1セットの定価換算は約 $0.219
+    で、卒論向けの追加検証を数セット回す程度なら比較的低コストに収まる。内訳では
+    Gemini が約半分を占めており、理由は thinking tokens
+    を含む出力側トークンが大きいためである。Claude は reviewer
+    として呼び出し回数自体は限定的だが、出力単価が高いため全体の約4割を占める。OpenAI
+    judge は <code>gpt-5.4-mini</code>
+    に切り替えたことで、今回の定価換算では全体の約1割に収まっている。</p>
+    <p>結果面では、Phase 1 の主張として「single-agent
+    は対象6ケースすべてで失敗したが、multi-agent
+    は5ケースで復旧できた」と整理できる。特に <code>r</code>
+    のように3ターン目まで進むケースでは、単発修復ではなく再観測と再計画を持つ構成の価値が見えやすい。</p>
+    <h2 id="価格ソース">価格ソース</h2>
+    <ul>
+    <li>OpenAI: <a
+    href="https://developers.openai.com/api/docs/models/gpt-5.4-mini">GPT-5.4
+    mini model page</a></li>
+    <li>Google Gemini: <a
+    href="https://ai.google.dev/gemini-api/docs/pricing">Gemini
+    Developer API pricing</a></li>
+    <li>Anthropic Claude: <a
+    href="https://platform.claude.com/docs/en/about-claude/pricing">Claude
+    API pricing</a></li>
+    </ul>
+    <h2 id="追記-シナリオ別の模範解答とai判断ログ">追記:
+    シナリオ別の模範解答とAI判断ログ</h2>
+    <p>ここでは <code>break.sh</code> の故障注入内容と baseline
+    ファイルから整理した模範解答と、今回の再試行結果 JSON に残った
+    <code>planner_history</code> / <code>judge_history</code>
+    の判断ログを併記する。これはAIの内部推論そのものではなく、実験ログに保存された要約・判断理由を卒論向けに読みやすく整理したものである。</p>
+    <p>今回の特徴として、verification reviewer の raw output
+    自体は多くのケースで妥当な <code>decision=retry</code>
+    の内容を返していた。ただし Claude は ```json
+    のコードフェンス付きで返しており、現行の
+    <code>parse_reviewer_text()</code> がそれを剥がせないため JSON parse
+    に失敗した。さらに <code>i2</code> と <code>n</code> では
+    <code>doesn\'t</code>
+    のようなJSONとして不正なエスケープも混ざっていた。その結果、reviewer
+    は保存済み履歴上 <code>stop</code> 扱いになり、multi-turn
+    修復を継続させていたのは safety judge の override
+    だった。成功した5ケースでは judge
+    が「初段の修復で下流障害が露出した」と判断して retry
+    に倒した。失敗した <code>m</code> では、2回目の judge reasoning は
+    retry を支持している一方で decision が <code>stop</code>
+    になっており、ここが停止原因になった。</p>
+    <h3 id="i2"><code>i2</code></h3>
+    <ul>
+    <li>模範解答: <code>app/app.env</code> の <code>APP_PORT=9000</code>
+    を baseline の <code>APP_PORT=8000</code> に戻して app を rebuild
+    する。その後、隠れていた <code>app/main.py</code> の SQL テーブル名
+    <code>itemz</code> を <code>items</code> に戻し、再度 app を rebuild
+    する。</li>
+    <li>AI判断ログ: 1ターン目は「app は 9000 番で listen しているが
+    nginx は 8000
+    番を見ている」と判断し、<code>APP_PORT=9000 -&gt; APP_PORT=8000</code>
+    と app rebuild を実行した。raw の reviewer は <code>/healthz</code>
+    は 200 だが <code>/api/items</code> が失敗しており masked query bug
+    が露出した、として retry を返していた。しかし parser
+    がコードフェンス付きJSONを読めず stop 扱いになったため、judge が
+    retry に override した。2ターン目は <code>app/main.py</code> の
+    <code>itemz -&gt; items</code> を実行し、成功した。</li>
+    <li>評価: 模範解答と同じ2段階復旧になっている。multi-agent
+    の再観測・再計画が効いた代表例である。</li>
+    </ul>
+    <h3 id="m"><code>m</code></h3>
+    <ul>
+    <li>模範解答: まず <code>nginx/nginx.conf</code> の upstream host を
+    <code>backend:8000</code> から <code>app:8000</code> に戻して nginx
+    config test と restart を行う。次に <code>app/app.env</code> の
+    <code>DB_PASSWORD=wrongpassword</code> を baseline に戻して app を
+    rebuild する。最後に <code>app/main.py</code> の <code>itemz</code>
+    を <code>items</code> に戻して app を rebuild する。</li>
+    <li>AI判断ログ: 1ターン目は nginx の service name mismatch
+    と判断し、<code>server backend:8000 resolve; -&gt; server app:8000 resolve;</code>、nginx
+    config test、nginx restart を実行した。postcheck で front-most
+    failure が DB auth に移り、raw の reviewer は retry
+    相当の方針を返していたが、parser 失敗により stop 扱いになったため
+    judge が retry に override した。2ターン目は
+    <code>DB_PASSWORD=wrongpassword</code>
+    による認証失敗と判断し、<code>app/app.env</code> を base から
+    restore して app rebuild した。</li>
+    <li>評価: 模範解答の3段階のうち2段階目までは到達したが、最後の query
+    bug 修復に進む前に <code>judge_stop</code> で停止した。特に2回目の
+    judge reasoning は「query bug が露出しており retry
+    すべき」と読める内容だが、decision が <code>stop</code>
+    になっている。この矛盾が今回の唯一の multi-agent failure
+    である。</li>
+    </ul>
+    <h3 id="n"><code>n</code></h3>
+    <ul>
+    <li>模範解答: <code>app/requirements.txt</code> に baseline と同じ
+    <code>uvicorn[standard]==0.35.0</code> を戻して app を rebuild
+    する。その後、隠れていた <code>app/main.py</code> の
+    <code>itemz</code> を <code>items</code> に戻して app を rebuild
+    する。</li>
+    <li>AI判断ログ: 1ターン目は app log の
+    <code>uvicorn: not found</code> と requirements snippet
+    から依存関係欠落と判断し、requirements に
+    <code>uvicorn==0.32.0</code> を追加して app rebuild した。baseline
+    と完全一致ではないが、app startup は復旧した。postcheck で
+    <code>/healthz</code> が 200、<code>/api/items</code> が 500
+    になり、raw の reviewer は <code>app/main.py</code> の
+    <code>itemz</code> を <code>items</code>
+    に直すべきだと返していた。parser 失敗により履歴上は stop
+    扱いになったため、judge が retry に override した。2ターン目は
+    <code>app/main.py</code> の <code>itemz -&gt; items</code>
+    を実行し、成功した。</li>
+    <li>評価: 方針は模範解答と一致する。依存バージョン・extra は
+    baseline
+    と完全一致ではないため、厳密な構成復元を評価したい場合はここを減点観点にできる。</li>
+    </ul>
+    <h3 id="o"><code>o</code></h3>
+    <ul>
+    <li>模範解答: stale な nginx upstream failure log
+    に引っ張られず、現在の front-most failure である DB auth
+    を優先する。<code>app/app.env</code> の
+    <code>DB_PASSWORD=wrongpassword</code> を baseline に戻して app を
+    rebuild し、その後 <code>app/main.py</code> の <code>itemz</code> を
+    <code>items</code> に戻して app を rebuild する。</li>
+    <li>AI判断ログ: 1ターン目は nginx ではなく DB access denied
+    を主因と判断し、<code>app/app.env</code> を base から restore して
+    app rebuild した。postcheck 後、<code>/healthz</code> は通るが
+    <code>/api/items</code> が <code>query_bug_front</code>
+    で失敗し、raw の reviewer も query bug 修復の retry
+    を返していた。parser 失敗により stop 扱いになったため、judge が
+    retry に override した。2ターン目は <code>itemz -&gt; items</code>
+    を実行し、成功した。</li>
+    <li>評価: stale evidence を無視して現在の DB auth
+    に集中できており、模範解答と一致する。ログの古い nginx
+    エラーに誤誘導されなかった点が良い。</li>
+    </ul>
+    <h3 id="r"><code>r</code></h3>
+    <ul>
+    <li>模範解答: 非可換な3段 cascade
+    として、順番に復旧する必要がある。まず
+    <code>app/requirements.txt</code> に
+    <code>uvicorn[standard]==0.35.0</code> を戻して app startup
+    を復旧する。次に <code>app/app.env</code> の
+    <code>DB_PASSWORD=wrongpassword</code> を baseline に戻す。最後に
+    <code>app/main.py</code> の <code>itemz</code> を <code>items</code>
+    に戻す。各段階で app rebuild と再観測を行う。</li>
+    <li>AI判断ログ: 1ターン目は <code>uvicorn: not found</code> から
+    dependency failure と判断し、requirements に
+    <code>uvicorn==0.32.0</code> を追加して app rebuild した。postcheck
+    で DB auth が露出し、raw の reviewer
+    は次段の修復が必要だと返していたが、parser 失敗により stop
+    扱いになったため judge が retry に override した。2ターン目は
+    <code>DB_PASSWORD=wrongpassword</code> を根拠に
+    <code>app/app.env</code> を base restore して app rebuild した。再度
+    postcheck で <code>/healthz</code> は 200 だが
+    <code>/api/items</code> が失敗し、raw の reviewer は query bug
+    修復を返していた。ここも parser 失敗後に judge が retry に override
+    した。3ターン目で <code>itemz -&gt; items</code>
+    を実行し、成功した。</li>
+    <li>評価: multi-agent
+    の価値が最も見えやすいケースで、模範解答と同じ3段階の露出順を辿っている。<code>n</code>
+    と同様に uvicorn の戻し方は baseline
+    完全一致ではないが、段階的復旧の判断は正しい。</li>
+    </ul>
+    <h3 id="u"><code>u</code></h3>
+    <ul>
+    <li>模範解答: <code>app/app.env</code> の
+    <code>DB_HOST=127.0.0.1</code> を Docker Compose 内の service name
+    である <code>DB_HOST=db</code> に戻して app を rebuild
+    する。その後、隠れていた <code>app/main.py</code> の
+    <code>itemz</code> を <code>items</code> に戻して app を rebuild
+    する。</li>
+    <li>AI判断ログ: 1ターン目は <code>127.0.0.1</code> が app container
+    自身を指してしまい DB container
+    に到達できないと判断し、<code>DB_HOST=127.0.0.1 -&gt; DB_HOST=db</code>
+    と app rebuild を実行した。postcheck 後に <code>/healthz</code> は
+    200 だが <code>/api/items</code> が失敗し、raw の reviewer は masked
+    query bug が露出したとして retry を返していた。parser 失敗により
+    stop 扱いになったため、judge が retry に override した。2ターン目は
+    <code>itemz -&gt; items</code> を実行し、成功した。</li>
+    <li>評価: 模範解答と一致する。network topology fault の修復後に
+    query bug が露出する、という cascade を正しく扱えている。</li>
+    </ul>
+    <h2 id="追記-reviewer-parser-修正後の2回目テスト">追記: reviewer
+    parser 修正後の2回目テスト</h2>
+    <p>reviewer parser に、Claude が返す ```json コードフェンスの除去と
+    <code>doesn\'t</code> のような軽微な apostrophe escape
+    の補正を入れたあと、同じ <code>i2/m/n/o/r/u</code>
+    系で再実験した。結果は
+    <code>observations/20260414T233041Z_phase1_compare_after_reviewer_parser_fix_once/summary.csv</code>
+    に保存されている。</p>
+    <p>なお、<code>r_single</code>
+    は前回の中断時に途中まで動いていたため、重複してAPIを叩かない方針で再実行していない。そのため、この表では
+    single-agent は5本、multi-agent は6本の結果として読む。</p>
+    <table>
+    <thead>
+    <tr>
+    <th>Scenario</th>
+    <th>single-agent</th>
+    <th>multi-agent</th>
+    <th>multi-agent の補足</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td><code>i2</code></td>
+    <td>failure</td>
+    <td>success</td>
+    <td>turn 3、replan 2、reviewer <code>retry</code></td>
+    </tr>
+    <tr>
+    <td><code>m</code></td>
+    <td>failure</td>
+    <td>success</td>
+    <td>turn 3、replan 2、reviewer <code>retry</code></td>
+    </tr>
+    <tr>
+    <td><code>n</code></td>
+    <td>failure</td>
+    <td>success</td>
+    <td>turn 2、replan 1、reviewer <code>retry</code></td>
+    </tr>
+    <tr>
+    <td><code>o</code></td>
+    <td>failure</td>
+    <td>failure</td>
+    <td>turn 3、replan 2、reviewer
+    <code>retry</code>、<code>max_turns_reached</code></td>
+    </tr>
+    <tr>
+    <td><code>r</code></td>
+    <td>not rerun</td>
+    <td>failure</td>
+    <td>turn 3、replan 2、reviewer
+    <code>retry</code>、<code>max_turns_reached</code></td>
+    </tr>
+    <tr>
+    <td><code>u</code></td>
+    <td>failure</td>
+    <td>failure</td>
+    <td>turn 3、replan 2、reviewer invocation
+    failed、<code>max_turns_reached</code></td>
+    </tr>
+    </tbody>
+    </table>
+    <p>この2回目テストでは、single-agent
+    は確認済み5本すべて失敗、multi-agent は 3/6 成功だった。parser
+    修正により、<code>i2/m/n/o/r</code> では reviewer の
+    <code>retry</code>
+    が保存済み履歴にも正しく反映されるようになった。特に <code>m</code>
+    は前回 <code>judge_stop</code> で止まっていたが、今回は reviewer の
+    retry が効き、3ターン目まで進んで成功している。</p>
+    <p>一方で、multi-agent 全体の成功率は前回の 5/6 から 3/6
+    に下がった。これは parser 修正そのものの悪化というより、LLM planner
+    の出力ぶれとターン上限の影響が大きい。<code>o</code> は reviewer
+    が正しく <code>retry</code> を返していたが、planner が2ターン目で
+    scope 外の <code>rebuild_compose_service</code> を含めたため
+    precheck で弾かれ、3ターン目もDB auth修復に留まって
+    <code>max_turns_reached</code> になった。<code>r</code> は3段
+    cascade の最後の query bug
+    まで到達したが、3ターン上限内で成功判定まで届かなかった。<code>u</code>
+    は reviewer 呼び出し自体が2回とも失敗し、judge が retry に override
+    したものの、初期の network topology fault を正しく掴みきれず
+    <code>max_turns_reached</code> になった。</p>
+    <p>まとめると、今回の修正で「reviewer が正しい retry
+    を返しているのに parser が stop 扱いに落とす」問題は解消した。ただし
+    Phase 2 前にさらに安定化するなら、次の焦点は parser
+    ではなく、planner の scope 遵守、turn 上限、reviewer API invocation
+    failure の扱いになる。</p>
+    <div class="footer">
+      <span>Safe Emergency Recovery Experiment — Research Wiki</span>
+      <span>ソース: <a href="../reports/phase1_compare_cost_report_20260414.md">../reports/phase1_compare_cost_report_20260414.md</a></span>
+    </div>
+  </main>
+</div>
+<script src="wiki.js"></script>
+</body>
+</html>

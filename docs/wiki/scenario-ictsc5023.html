@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ICTSC 5023 — Safe Emergency Recovery Wiki</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="layout">
+  <header class="topbar">
+    <div class="brand">
+      <a href="index.html">Safe Emergency Recovery</a>
+      <span class="sub">研究ドキュメント Wiki</span>
+    </div>
+    <nav class="topnav">
+      <a href="index.html">ホーム</a>
+      <a href="overview.html">概要</a>
+      <a href="roadmap-revised.html">最新ロードマップ</a>
+    </nav>
+  </header>
+  <aside class="sidebar">
+    <div class="group">
+      <div class="group-title">スタート</div>
+      <ul>
+        <li><a href="index.html" data-id="index">Wiki トップ</a></li>
+        <li><a href="overview.html" data-id="overview">プロジェクト概要 (README)</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">ロードマップ</div>
+      <ul>
+        <li><a href="roadmap-initial.html" data-id="roadmap-initial">初版ロードマップ (2026-03-16)</a></li>
+        <li><a href="roadmap-revised.html" data-id="roadmap-revised">改訂版ロードマップ (2026-04-15)</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">調査・レポート</div>
+      <ul>
+        <li><a href="report-repository-assessment.html" data-id="report-repository-assessment">リポジトリ調査レポート</a></li>
+        <li><a href="report-analysis.html" data-id="report-analysis">設計レビュー・改善提案</a></li>
+        <li><a href="report-phase1-cost.html" data-id="report-phase1-cost">Phase 1 比較実験コスト</a></li>
+        <li><a href="report-local-experiment-cost.html" data-id="report-local-experiment-cost">局所実験コスト</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">評価</div>
+      <ul>
+        <li><a href="evaluation-hypothesis-transition.html" data-id="evaluation-hypothesis-transition">仮説遷移評価 (Phase 4.5)</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">Production PoC</div>
+      <ul>
+        <li><a href="poc-architecture.html" data-id="poc-architecture">アーキテクチャ</a></li>
+        <li><a href="poc-deploy.html" data-id="poc-deploy">導入手順</a></li>
+        <li><a href="poc-validation-scenarios.html" data-id="poc-validation-scenarios">実機検証シナリオ</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">シナリオ</div>
+      <ul>
+        <li><a href="scenario-ictsc5023.html" data-id="scenario-ictsc5023">ICTSC 5023</a></li>
+      </ul>
+    </div>
+  </aside>
+  <main class="content">
+    <div class="breadcrumb"><a href="index.html">Wiki</a> / シナリオ / ICTSC 5023</div>
+    <h1 id="5023-今夜のirc"><strong>5023: 今夜のIRC</strong></h1>
+    <pre><code>[22:10:45] * wind (wind@10.0.0.2) has joined #home-lan
+[22:10:50] &lt;wind&gt; ついに建ててしまったな
+[22:11:05] &lt;~wave&gt; お家ネットワークでIRC始めた
+[22:11:20] &lt;wind&gt; わろた 時代錯誤も甚だしいな
+[22:11:45] &lt;~wave&gt; あ、なんかお前のIP 10.0.0.2 だけど
+[22:12:02] &lt;wind&gt; そういうお前も 10.0.0.2。
+[22:12:15] &lt;~wave&gt; ほんとうだ、なんでだろう
+[22:12:40] &lt;~wave&gt; あと新しいマシンいれたけど
+[22:12:55] &lt;~wave&gt; なんかうまくlinkしてくれない
+[22:13:10] &lt;wind&gt; ドキュメント読んだか？</code></pre>
+    <h1 id="制約"><strong>制約</strong></h1>
+    <ul>
+    <li>各ホスト <code>5023-sv1</code>, <code>5023-sv2</code> で、
+    docker stack を用いて、 InspIRCd が TLS モードで起動している
+    <ul>
+    <li>stack 名は <code>irc</code>, service
+    名は <code>irc_inspircd</code></li>
+    <li>コンテナの image は <a
+    href="https://hub.docker.com/r/inspircd/inspircd-docker/">InspIRCd</a></li>
+    <li>ローカルの認証局(step-ca)が環境に存在しており、 <code>5023-ca</code> が担っている
+    <ul>
+    <li>各ホストマシンは、その認証局を信頼するよう設定済みである</li>
+    </ul></li>
+    <li>証明書は <code>acme.sh</code> を用いて発行済で、service に
+    secret として組み込まれている</li>
+    <li>証明書について、その有効期間が本日もつならば、十分であるとしてよい</li>
+    </ul></li>
+    <li>ホスト名 <code>vespertilio.irc.internal</code>, <code>myotis.irc.internal</code> それぞれは
+    各マシンの <code>/etc/hosts</code> に登録されており、それぞれ <code>10.200.1.1</code>, <code>10.200.1.2</code> が割り当てられている
+    <ul>
+    <li><code>10.200.1.1</code>, <code>10.200.1.2</code> は <code>5023-sv1</code>, <code>5023-sv2</code> がそれぞれ持っている</li>
+    </ul></li>
+    <li>ホスト名 <code>ca.internal</code> は
+    各マシンの <code>/etc/hosts</code> に登録されており、<code>10.200.1.100</code> が割り当てられており、
+    それは <code>5023-ca</code> が持っている</li>
+    <li>IRCクライアントとサーバーの接続およびサーバー間リンクでは、TLSを使用すること</li>
+    </ul>
+    <h1 id="初期状態"><strong>初期状態</strong></h1>
+    <ul>
+    <li><code>5023-h1</code> から <code>weechat</code> を起動し　<code>vespertilio.irc.internal</code> につないだうえで
+    <ul>
+    <li>サーバが認識する当該クライアントの接続元アドレスが <code>10.200.1.200</code> ではない</li>
+    <li><code>/links</code> と打って <code>myotis.irc.internal</code> との
+    link が確認できない</li>
+    </ul></li>
+    <li><code>5023-h1</code> から <code>weechat</code> を起動し　<code>myotis.irc.internal</code> につないだうえで
+    <ul>
+    <li>サーバが認識する当該クライアントの接続元アドレスが <code>10.200.1.200</code> ではない</li>
+    <li><code>/links</code> と打って <code>vespertilio.irc.internal</code> との
+    link が確認できない</li>
+    </ul></li>
+    </ul>
+    <h1 id="終了状態"><strong>終了状態</strong></h1>
+    <ul>
+    <li><code>5023-h1</code> から <code>weechat</code> を起動して <code>vespertilio.irc.internal</code> につないだうえで
+    <ul>
+    <li>サーバが認識する当該クライアントの接続元アドレスが <code>10.200.1.200</code> である</li>
+    <li><code>/links</code> と打って <code>myotis.irc.internal</code> との
+    link が確認できる</li>
+    </ul></li>
+    <li><code>5023-h1</code> から <code>weechat</code> を起動して <code>myotis.irc.internal</code> につないだうえで
+    <ul>
+    <li>サーバが認識する当該クライアントの接続元アドレスが <code>10.200.1.200</code> である</li>
+    <li><code>/links</code> と打って <code>vespertilio.irc.internal</code> との
+    link が確認できる</li>
+    </ul></li>
+    <li>上記の状態が永続化されている
+    <ul>
+    <li>特に <code>docker service update --force irc_inspircd</code> などによって
+    container が再作成されても、終了状態が維持される</li>
+    </ul></li>
+    </ul>
+    <h1 id="接続情報"><strong>接続情報</strong></h1>
+    <table>
+    <thead>
+    <tr>
+    <th><strong>ホスト名</strong></th>
+    <th><strong>IPアドレス</strong></th>
+    <th><strong>ユーザ</strong></th>
+    <th><strong>パスワード</strong></th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td><code>5023-sv1</code></td>
+    <td><code>192.168.23.1</code></td>
+    <td><code>user</code></td>
+    <td><code>ictsc2025</code></td>
+    </tr>
+    <tr>
+    <td><code>5023-sv2</code></td>
+    <td><code>192.168.23.2</code></td>
+    <td><code>user</code></td>
+    <td><code>ictsc2025</code></td>
+    </tr>
+    <tr>
+    <td><code>5023-ca</code></td>
+    <td><code>192.168.23.3</code></td>
+    <td><code>user</code></td>
+    <td><code>ictsc2025</code></td>
+    </tr>
+    <tr>
+    <td><code>5023-h1</code></td>
+    <td><code>192.168.23.4</code></td>
+    <td><code>user</code></td>
+    <td><code>ictsc2025</code></td>
+    </tr>
+    </tbody>
+    </table>
+    <h1 id="報告書">報告書</h1>
+    <h1 id="5023-今夜のirc-報告書">5023: 今夜のIRC 報告書</h1>
+    <p><strong>課題番号:</strong> 5023 今夜のIRC</p>
+    <p><strong>対象ホスト:</strong> 5023-sv1 / 5023-sv2 / 5023-h1</p>
+    <p><strong>目的:</strong></p>
+    <ul>
+    <li>IRC サーバ間 link を確立する</li>
+    <li>クライアント接続元アドレスが <code>10.200.1.200</code>
+    と認識されるようにする</li>
+    </ul>
+    <hr />
+    <h2 id="1-初期状況">1. 初期状況</h2>
+    <p>問題文の初期状態では、以下の不具合があった。</p>
+    <ul>
+    <li><code>vespertilio.irc.internal</code> /
+    <code>myotis.irc.internal</code> に接続しても、クライアント接続元が
+    <code>10.200.1.200</code> にならない</li>
+    <li><code>/links</code> で相手サーバが表示されず、server link
+    が確立していない</li>
+    </ul>
+    <hr />
+    <h2 id="2-調査">2. 調査</h2>
+    <h3 id="21-サービス名と-swarm-状態の確認">2.1 サービス名と swarm
+    状態の確認</h3>
+    <p>当初 <code>irc_irc_inspircd</code>
+    を調査対象としていたが、実在しなかったため、実際の service
+    名を確認した。</p>
+    <h3 id="5023-sv1-で実行">5023-sv1 で実行</h3>
+    <div class="sourceCode" id="cb2"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">hostname</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> info <span class="at">--format</span> <span class="st">&#39;Swarm={{.Swarm.LocalNodeState}} Manager={{.Swarm.ControlAvailable}} NodeAddr={{.Swarm.NodeAddr}}&#39;</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> stack ls</span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> service ls</span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> ps <span class="at">--format</span> <span class="st">&#39;table {{.Names}}\t{{.Image}}\t{{.Ports}}&#39;</span></span></code></pre></div>
+    <h3 id="結果">結果</h3>
+    <pre><code>5023-sv1
+Swarm=active Manager=true NodeAddr=10.200.1.1
+
+NAME      SERVICES
+irc       1
+
+ID             NAME           MODE         REPLICAS   IMAGE                          PORTS
+5qdcg9qjjgco   irc_inspircd   replicated   1/1        inspircd/inspircd-docker:4.9
+
+NAMES                                      IMAGE                          PORTS
+irc_inspircd.1.k3klb5lqwz5mbu83ttxsdi1rw   inspircd/inspircd-docker:4.9   6667/tcp, 0.0.0.0:6697-&gt;6697/tcp, [::]:6697-&gt;6697/tcp, 7000/tcp, 0.0.0.0:7001-&gt;7001/tcp, [::]:7001-&gt;7001/tcp</code></pre>
+    <h3 id="5023-sv2-で実行">5023-sv2 で実行</h3>
+    <div class="sourceCode" id="cb4"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="fu">hostname</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> info <span class="at">--format</span> <span class="st">&#39;Swarm={{.Swarm.LocalNodeState}} Manager={{.Swarm.ControlAvailable}} NodeAddr={{.Swarm.NodeAddr}}&#39;</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> stack ls</span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> service ls</span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> ps <span class="at">--format</span> <span class="st">&#39;table {{.Names}}\t{{.Image}}\t{{.Ports}}&#39;</span></span></code></pre></div>
+    <h3 id="結果-1">結果</h3>
+    <pre><code>5023-sv2
+Swarm=active Manager=true NodeAddr=10.200.1.2
+
+NAME      SERVICES
+irc       1
+
+ID             NAME           MODE         REPLICAS   IMAGE                          PORTS
+szbkqag4m3p6   irc_inspircd   replicated   1/1        inspircd/inspircd-docker:4.9</code></pre>
+    <h3 id="判明事項">判明事項</h3>
+    <ul>
+    <li>正しい service 名は
+    <strong><code>irc_inspircd</code></strong></li>
+    <li>sv1 と sv2 はそれぞれ独立した swarm 上で動作</li>
+    <li>両ホストで InspIRCd service が起動している</li>
+    </ul>
+    <hr />
+    <h3 id="22-service-設定の確認">2.2 service 設定の確認</h3>
+    <h3 id="5023-sv1-で実行-1">5023-sv1 で実行</h3>
+    <div class="sourceCode" id="cb6"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> service inspect irc_inspircd <span class="at">--pretty</span></span></code></pre></div>
+    <h3 id="結果抜粋">結果（抜粋）</h3>
+    <pre><code>Env:
+ INSP_LINK1_ALLOWMASK=10.200.1.*
+ INSP_LINK1_FINGERPRINT=E20CD933733F57912ACA304C4BE748C5A7697C6AFD69AD42F7D0436D52C87C90
+ INSP_LINK1_IPADDR=10.200.1.2
+ INSP_LINK1_NAME=myotis.irc.internal
+ INSP_LINK1_PORT=7001
+ INSP_LINK1_RECVPASS=myo-to-vesp
+ INSP_LINK1_SENDPASS=vesp-to-myo
+ INSP_LINK1_TLS_ON=yes
+ INSP_NET_NAME=VespertilioNet
+ INSP_NET_SUFFIX=.irc.internal
+ INSP_SERVER_NAME=vespertilio.irc.internal
+
+Ports:
+ PublishedPort = 6697  PublishMode = host
+ PublishedPort = 7001  PublishMode = host</code></pre>
+    <h3 id="5023-sv2-で実行-1">5023-sv2 で実行</h3>
+    <div class="sourceCode" id="cb8"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> service inspect irc_inspircd <span class="at">--pretty</span></span></code></pre></div>
+    <h3 id="結果抜粋-1">結果（抜粋）</h3>
+    <pre><code>Env:
+ INSP_LINK1_ALLOWMASK=10.200.1.*
+ INSP_LINK1_FINGERPRINT=16791D679D912CA8836125155F21934643E3ACAB2FC05BA2B1746FC16BDE74D9
+ INSP_LINK1_IPADDR=10.200.1.1
+ INSP_LINK1_NAME=vespertilio.irc.internal
+ INSP_LINK1_PORT=7001
+ INSP_LINK1_RECVPASS=vesp-to-myo
+ INSP_LINK1_SENDPASS=myo-to-vesp
+ INSP_LINK1_TLS_ON=yes
+ INSP_NET_NAME=MyotisNet
+ INSP_NET_SUFFIX=.irc.internal
+ INSP_SERVER_NAME=myotis.irc.internal</code></pre>
+    <h3 id="判明事項-1">判明事項</h3>
+    <ul>
+    <li>link 設定自体は投入済み</li>
+    <li>ただし <strong><code>INSP_NET_NAME</code>
+    が左右で異なる</strong></li>
+    <li>fingerprint が設定されている</li>
+    </ul>
+    <hr />
+    <h3 id="23-自動接続ログの確認">2.3 自動接続ログの確認</h3>
+    <h3 id="5023-sv1-で実行-2">5023-sv1 で実行</h3>
+    <div class="sourceCode" id="cb10"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> exec f6bd841895e0 sh <span class="at">-lc</span> <span class="dt">\</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="st">&#39;grep -Ei &quot;AUTOCONNECT|linked|burst|handshake|closed|finger&quot; /inspircd/logs/inspircd.log | tail -n 50&#39;</span></span></code></pre></div>
+    <h3 id="結果抜粋-2">結果（抜粋）</h3>
+    <pre><code>LINK: AUTOCONNECT: Auto-connecting server myotis.irc.internal
+LINK: Connection to &#39;myotis.irc.internal&#39; failed with error: Connection closed</code></pre>
+    <h3 id="5023-sv2-で実行-2">5023-sv2 で実行</h3>
+    <div class="sourceCode" id="cb12"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> exec 83cb6ccdba4f sh <span class="at">-lc</span> <span class="dt">\</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a><span class="st">&#39;grep -Ei &quot;AUTOCONNECT|linked|burst|handshake|closed|finger&quot; /inspircd/logs/inspircd.log | tail -n 50&#39;</span></span></code></pre></div>
+    <h3 id="結果抜粋-3">結果（抜粋）</h3>
+    <pre><code>LINK: AUTOCONNECT: Auto-connecting server vespertilio.irc.internal
+LINK: Connection to &#39;vespertilio.irc.internal&#39; failed with error: Connection closed</code></pre>
+    <h3 id="判明事項-2">判明事項</h3>
+    <ul>
+    <li>autoconnect 自体は動作している</li>
+    <li>ただし link は確立せず close されている</li>
+    </ul>
+    <hr />
+    <h3 id="24-tls-プロファイルの確認">2.4 TLS プロファイルの確認</h3>
+    <h3 id="5023-sv1--5023-sv2-で実行">5023-sv1 / 5023-sv2 で実行</h3>
+    <div class="sourceCode" id="cb14"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> exec <span class="op">&lt;</span>container_id<span class="op">&gt;</span> sh <span class="at">-lc</span> <span class="st">&#39;grep -n &quot;&lt;sslprofile name=\&quot;main\&quot;&quot; -A20 /inspircd/conf/modules.conf&#39;</span></span></code></pre></div>
+    <h3 id="結果-2">結果</h3>
+    <pre><code>2515:&lt;sslprofile name=&quot;main&quot;
+2516-            provider=&quot;gnutls&quot;
+2517-            cafile=&quot;&quot;
+2518-            certfile=&quot;cert.pem&quot;
+2521-            hash=&quot;sha3-256&quot;
+2522-            keyfile=&quot;key.pem&quot;
+2526-            requestclientcert=&quot;yes&quot;</code></pre>
+    <h3 id="判明事項-3">判明事項</h3>
+    <ul>
+    <li>fingerprint 照合は <strong><code>sha3-256</code></strong>
+    ベースで行われる</li>
+    </ul>
+    <hr />
+    <h3 id="25-証明書有効期限確認">2.5 証明書有効期限確認</h3>
+    <h3 id="5023-sv1-で実行-3">5023-sv1 で実行</h3>
+    <div class="sourceCode" id="cb16"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> exec <span class="va">$(</span><span class="ex">docker</span> ps <span class="at">-q</span> <span class="at">--filter</span> name=irc_inspircd<span class="va">)</span> cat /run/secrets/inspircd.crt <span class="kw">|</span> <span class="dt">\</span></span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a><span class="ex">openssl</span> x509 <span class="at">-noout</span> <span class="at">-subject</span> <span class="at">-issuer</span> <span class="at">-dates</span></span></code></pre></div>
+    <h3 id="結果-3">結果</h3>
+    <pre><code>subject=CN = vespertilio.irc.internal
+issuer=O = ICTSC2025 Final 5023, CN = ICTSC2025 Final 5023 Intermediate CA
+notBefore=Mar 12 04:09:52 2026 GMT
+notAfter=Mar 13 04:10:52 2026 GMT</code></pre>
+    <h3 id="5023-sv2-で実行-3">5023-sv2 で実行</h3>
+    <div class="sourceCode" id="cb18"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> exec <span class="va">$(</span><span class="ex">docker</span> ps <span class="at">-q</span> <span class="at">--filter</span> name=irc_inspircd<span class="va">)</span> cat /run/secrets/inspircd.crt <span class="kw">|</span> <span class="dt">\</span></span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a><span class="ex">openssl</span> x509 <span class="at">-noout</span> <span class="at">-subject</span> <span class="at">-issuer</span> <span class="at">-dates</span></span></code></pre></div>
+    <h3 id="結果-4">結果</h3>
+    <pre><code>subject=CN = myotis.irc.internal
+issuer=O = ICTSC2025 Final 5023, CN = ICTSC2025 Final 5023 Intermediate CA
+notBefore=Mar 12 04:24:54 2026 GMT
+notAfter=Mar 13 04:25:54 2026 GMT</code></pre>
+    <h3 id="判明事項-4">判明事項</h3>
+    <ul>
+    <li>証明書は期限切れだったが、問題文上「有効期間は不問」とあるため、最終的には別原因を優先して調査した</li>
+    </ul>
+    <hr />
+    <h2 id="3-原因">3. 原因</h2>
+    <p>調査の結果、主な原因は以下の2点であった。</p>
+    <h3 id="31-server-link-不成立の原因">3.1 server link
+    不成立の原因</h3>
+    <ul>
+    <li><code>sslprofile</code> は <code>hash="sha3-256"</code>
+    なのに、初期設定の <code>INSP_LINK1_FINGERPRINT</code> は SHA-256
+    値だった</li>
+    <li>さらに <code>INSP_NET_NAME</code> が左右で異なっていた</li>
+    <li>これにより <code>invalid link credentials</code>
+    が発生し、server link が拒否されていた</li>
+    </ul>
+    <p>実際に確認したログ:</p>
+    <pre><code>LINK: Server connection from vespertilio.irc.internal denied, invalid link credentials</code></pre>
+    <h3 id="32-クライアントip不一致の原因">3.2
+    クライアントIP不一致の原因</h3>
+    <ul>
+    <li>最終的に <strong>service を host network
+    に移行するまで</strong>、InspIRCd からクライアントが Docker/NAT
+    側アドレスとして見えていた</li>
+    <li>また途中、検証用 weechat を誤って sv1
+    上で実行していたため、自己接続に見えるケースも発生した</li>
+    <li>正しくは <strong>5023-h1 上で weechat
+    を起動して確認</strong>する必要があった</li>
+    </ul>
+    <hr />
+    <h2 id="4-実施した修正">4. 実施した修正</h2>
+    <h3 id="41-fingerprint-を-sha3-256-に修正">4.1 fingerprint を
+    sha3-256 に修正</h3>
+    <h3 id="5023-sv1-で実行-4">5023-sv1 で実行</h3>
+    <div class="sourceCode" id="cb21"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> service update <span class="dt">\</span></span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">--env-rm</span> INSP_LINK1_FINGERPRINT <span class="dt">\</span></span>
+<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">--env-add</span> INSP_LINK1_FINGERPRINT=6029E70040A72D8C4C9F7AA5A5ED01C70F0FB293D772AE7F40FD33D40AC4F68F <span class="dt">\</span></span>
+<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a>  irc_inspircd</span></code></pre></div>
+    <h3 id="5023-sv2-で実行-4">5023-sv2 で実行</h3>
+    <div class="sourceCode" id="cb22"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> service update <span class="dt">\</span></span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">--env-rm</span> INSP_LINK1_FINGERPRINT <span class="dt">\</span></span>
+<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">--env-add</span> INSP_LINK1_FINGERPRINT=2182A307055D62CF6BBBCD5973C39F9C3F4A68E4FA7360EA11ADCA8595AB60D3 <span class="dt">\</span></span>
+<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a>  irc_inspircd</span></code></pre></div>
+    <hr />
+    <h3 id="42-irc-ネットワーク名を統一">4.2 IRC
+    ネットワーク名を統一</h3>
+    <h3 id="5023-sv1-で実行-5">5023-sv1 で実行</h3>
+    <div class="sourceCode" id="cb23"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> service update <span class="dt">\</span></span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">--env-rm</span> INSP_NET_NAME <span class="dt">\</span></span>
+<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">--env-add</span> INSP_NET_NAME=HomeLan <span class="dt">\</span></span>
+<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a>  irc_inspircd</span></code></pre></div>
+    <h3 id="5023-sv2-で実行-5">5023-sv2 で実行</h3>
+    <div class="sourceCode" id="cb24"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> service update <span class="dt">\</span></span>
+<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">--env-rm</span> INSP_NET_NAME <span class="dt">\</span></span>
+<span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">--env-add</span> INSP_NET_NAME=HomeLan <span class="dt">\</span></span>
+<span id="cb24-4"><a href="#cb24-4" aria-hidden="true" tabindex="-1"></a>  irc_inspircd</span></code></pre></div>
+    <hr />
+    <h3 id="43-fingerprint-とネットワーク名を再投入して整合性を確保">4.3
+    fingerprint とネットワーク名を再投入して整合性を確保</h3>
+    <h3 id="5023-sv1-で実行-6">5023-sv1 で実行</h3>
+    <div class="sourceCode" id="cb25"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> service update <span class="dt">\</span></span>
+<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">--env-rm</span> INSP_NET_NAME <span class="dt">\</span></span>
+<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">--env-rm</span> INSP_LINK1_FINGERPRINT <span class="dt">\</span></span>
+<span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">--env-add</span> INSP_NET_NAME=HomeLan <span class="dt">\</span></span>
+<span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">--env-add</span> INSP_LINK1_FINGERPRINT=6029E70040A72D8C4C9F7AA5A5ED01C70F0FB293D772AE7F40FD33D40AC4F68F <span class="dt">\</span></span>
+<span id="cb25-6"><a href="#cb25-6" aria-hidden="true" tabindex="-1"></a>  irc_inspircd</span></code></pre></div>
+    <h3 id="5023-sv2-で実行-6">5023-sv2 で実行</h3>
+    <div class="sourceCode" id="cb26"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> service update <span class="dt">\</span></span>
+<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">--env-rm</span> INSP_NET_NAME <span class="dt">\</span></span>
+<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">--env-rm</span> INSP_LINK1_FINGERPRINT <span class="dt">\</span></span>
+<span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">--env-add</span> INSP_NET_NAME=HomeLan <span class="dt">\</span></span>
+<span id="cb26-5"><a href="#cb26-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">--env-add</span> INSP_LINK1_FINGERPRINT=2182A307055D62CF6BBBCD5973C39F9C3F4A68E4FA7360EA11ADCA8595AB60D3 <span class="dt">\</span></span>
+<span id="cb26-6"><a href="#cb26-6" aria-hidden="true" tabindex="-1"></a>  irc_inspircd</span></code></pre></div>
+    <h3 id="修正後確認">修正後確認</h3>
+    <div class="sourceCode" id="cb27"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> service inspect irc_inspircd <span class="at">--pretty</span> <span class="kw">|</span> <span class="fu">grep</span> <span class="at">-E</span> <span class="st">&#39;INSP_NET_NAME|INSP_LINK1_FINGERPRINT&#39;</span></span></code></pre></div>
+    <h3 id="結果sv1">結果（sv1）</h3>
+    <pre><code>INSP_NET_NAME=HomeLan
+INSP_LINK1_FINGERPRINT=6029E70040A72D8C4C9F7AA5A5ED01C70F0FB293D772AE7F40FD33D40AC4F68F</code></pre>
+    <h3 id="結果sv2">結果（sv2）</h3>
+    <pre><code>INSP_NET_NAME=HomeLan
+INSP_LINK1_FINGERPRINT=2182A307055D62CF6BBBCD5973C39F9C3F4A68E4FA7360EA11ADCA8595AB60D3</code></pre>
+    <hr />
+    <h3 id="44-service-を-host-network-に移動">4.4 service を host
+    network に移動</h3>
+    <h3 id="5023-sv1-で実行-7">5023-sv1 で実行</h3>
+    <div class="sourceCode" id="cb30"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> service update <span class="dt">\</span></span>
+<span id="cb30-2"><a href="#cb30-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">--network-add</span> host <span class="dt">\</span></span>
+<span id="cb30-3"><a href="#cb30-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">--network-rm</span> irc_default <span class="dt">\</span></span>
+<span id="cb30-4"><a href="#cb30-4" aria-hidden="true" tabindex="-1"></a>  irc_inspircd</span></code></pre></div>
+    <h3 id="5023-sv2-で実行-7">5023-sv2 で実行</h3>
+    <div class="sourceCode" id="cb31"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> service update <span class="dt">\</span></span>
+<span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">--network-add</span> host <span class="dt">\</span></span>
+<span id="cb31-3"><a href="#cb31-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">--network-rm</span> irc_default <span class="dt">\</span></span>
+<span id="cb31-4"><a href="#cb31-4" aria-hidden="true" tabindex="-1"></a>  irc_inspircd</span></code></pre></div>
+    <h3 id="確認">確認</h3>
+    <div class="sourceCode" id="cb32"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> service inspect irc_inspircd <span class="at">--format</span> <span class="st">&#39;{{json .Spec.TaskTemplate.Networks}}&#39;</span></span>
+<span id="cb32-2"><a href="#cb32-2" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> ps <span class="at">--format</span> <span class="st">&#39;table {{.Names}}\t{{.Ports}}&#39;</span></span></code></pre></div>
+    <h3 id="結果-5">結果</h3>
+    <pre><code>[{&quot;Target&quot;:&quot;...&quot;}]
+NAMES                                      PORTS
+irc_inspircd.1.knhxi2tyc3zupv6nzlgif6co5</code></pre>
+    <h3 id="判明事項-5">判明事項</h3>
+    <ul>
+    <li>host network へ移行後、<code>docker ps</code> の
+    <code>PORTS</code> 表示は空になるが、これは正常動作</li>
+    </ul>
+    <hr />
+    <h2 id="5-動作確認">5. 動作確認</h2>
+    <h3 id="51-5023-h1-で-weechat-を起動">5.1 5023-h1 で weechat
+    を起動</h3>
+    <p>途中で競合したため、専用ディレクトリで起動した。</p>
+    <h3 id="5023-h1-で実行">5023-h1 で実行</h3>
+    <div class="sourceCode" id="cb34"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a><span class="fu">mkdir</span> <span class="at">-p</span> /tmp/weechat-h1</span>
+<span id="cb34-2"><a href="#cb34-2" aria-hidden="true" tabindex="-1"></a><span class="ex">weechat</span> <span class="at">--dir</span> /tmp/weechat-h1</span></code></pre></div>
+    <h3 id="weechat-内で実行">weechat 内で実行</h3>
+    <pre><code>/set irc.server_default.tls_verify off
+/server add vesp vespertilio.irc.internal/6697
+/server add myo myotis.irc.internal/6697
+/connect vesp
+/connect myo</code></pre>
+    <hr />
+    <h3 id="52-links-の確認">5.2 <code>/links</code> の確認</h3>
+    <h3 id="vesp-側">vesp 側</h3>
+    <pre><code>/links</code></pre>
+    <h3 id="結果-6">結果</h3>
+    <pre><code>myotis.irc.internal vespertilio.irc.internal 1 InspIRCd IRC Server
+vespertilio.irc.internal vespertilio.irc.internal 0 InspIRCd IRC Server
+* End of /LINKS list.</code></pre>
+    <h3 id="myo-側">myo 側</h3>
+    <pre><code>/links</code></pre>
+    <h3 id="結果-7">結果</h3>
+    <pre><code>vespertilio.irc.internal myotis.irc.internal 1 InspIRCd IRC Server
+myotis.irc.internal myotis.irc.internal 0 InspIRCd IRC Server
+* End of /LINKS list.</code></pre>
+    <h3 id="判定">判定</h3>
+    <ul>
+    <li>相互に相手サーバが見えており、<strong>server link
+    は確立</strong></li>
+    </ul>
+    <hr />
+    <h3 id="53-whois-による接続元アドレス確認">5.3 <code>/WHOIS</code>
+    による接続元アドレス確認</h3>
+    <h3 id="vesp-側-1">vesp 側</h3>
+    <pre><code>/whois user</code></pre>
+    <h3 id="結果-8">結果</h3>
+    <pre><code>[user] (user@10.200.1.200): user
+[user] 10.200.1.200 is connecting from user@10.200.1.200
+[user] vespertilio.irc.internal (InspIRCd IRC Server)
+[user] is using a secure connection
+[user] End of /WHOIS list.</code></pre>
+    <h3 id="判定-1">判定</h3>
+    <ul>
+    <li>クライアント接続元が <strong><code>10.200.1.200</code></strong>
+    と認識されている</li>
+    </ul>
+    <hr />
+    <h3 id="54-os-レベルでの接続確認">5.4 OS レベルでの接続確認</h3>
+    <h3 id="5023-sv1-で実行-8">5023-sv1 で実行</h3>
+    <div class="sourceCode" id="cb42"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb42-1"><a href="#cb42-1" aria-hidden="true" tabindex="-1"></a><span class="ex">ss</span> <span class="at">-tn</span> sport = :6697</span></code></pre></div>
+    <h3 id="結果-9">結果</h3>
+    <pre><code>ESTAB  0  0  [::ffff:10.200.1.1]:6697  [::ffff:10.200.1.200]:39148</code></pre>
+    <h3 id="5023-sv2-で実行-8">5023-sv2 で実行</h3>
+    <div class="sourceCode" id="cb44"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb44-1"><a href="#cb44-1" aria-hidden="true" tabindex="-1"></a><span class="ex">ss</span> <span class="at">-tn</span> sport = :6697</span></code></pre></div>
+    <h3 id="結果-10">結果</h3>
+    <pre><code>ESTAB  0  0  [::ffff:10.200.1.2]:6697  [::ffff:10.200.1.200]:53838</code></pre>
+    <h3 id="判定-2">判定</h3>
+    <ul>
+    <li>sv1/sv2 の両方で、クライアント接続元が
+    <strong><code>10.200.1.200</code></strong></li>
+    <li>要件どおり</li>
+    </ul>
+    <hr />
+    <h2 id="6-最終結果">6. 最終結果</h2>
+    <p>以下を確認した。</p>
+    <ul>
+    <li><code>vespertilio.irc.internal</code>
+    に接続した際、<code>/links</code> で
+    <code>myotis.irc.internal</code> が表示される</li>
+    <li><code>myotis.irc.internal</code>
+    に接続した際、<code>/links</code> で
+    <code>vespertilio.irc.internal</code> が表示される</li>
+    <li>クライアント接続元は <code>10.200.1.200</code> と認識される</li>
+    <li>IRC クライアント接続および server link は TLS
+    で成立している</li>
+    </ul>
+    <p>したがって、<strong>終了状態を満たした</strong>。</p>
+    <div class="footer">
+      <span>Safe Emergency Recovery Experiment — Research Wiki</span>
+      <span>ソース: <a href="../scenarios/ictsc_5023.md">../scenarios/ictsc_5023.md</a></span>
+    </div>
+  </main>
+</div>
+<script src="wiki.js"></script>
+</body>
+</html>

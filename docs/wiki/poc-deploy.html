@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Production PoC 導入手順 — Safe Emergency Recovery Wiki</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="layout">
+  <header class="topbar">
+    <div class="brand">
+      <a href="index.html">Safe Emergency Recovery</a>
+      <span class="sub">研究ドキュメント Wiki</span>
+    </div>
+    <nav class="topnav">
+      <a href="index.html">ホーム</a>
+      <a href="overview.html">概要</a>
+      <a href="roadmap-revised.html">最新ロードマップ</a>
+    </nav>
+  </header>
+  <aside class="sidebar">
+    <div class="group">
+      <div class="group-title">スタート</div>
+      <ul>
+        <li><a href="index.html" data-id="index">Wiki トップ</a></li>
+        <li><a href="overview.html" data-id="overview">プロジェクト概要 (README)</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">ロードマップ</div>
+      <ul>
+        <li><a href="roadmap-initial.html" data-id="roadmap-initial">初版ロードマップ (2026-03-16)</a></li>
+        <li><a href="roadmap-revised.html" data-id="roadmap-revised">改訂版ロードマップ (2026-04-15)</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">調査・レポート</div>
+      <ul>
+        <li><a href="report-repository-assessment.html" data-id="report-repository-assessment">リポジトリ調査レポート</a></li>
+        <li><a href="report-analysis.html" data-id="report-analysis">設計レビュー・改善提案</a></li>
+        <li><a href="report-phase1-cost.html" data-id="report-phase1-cost">Phase 1 比較実験コスト</a></li>
+        <li><a href="report-local-experiment-cost.html" data-id="report-local-experiment-cost">局所実験コスト</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">評価</div>
+      <ul>
+        <li><a href="evaluation-hypothesis-transition.html" data-id="evaluation-hypothesis-transition">仮説遷移評価 (Phase 4.5)</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">Production PoC</div>
+      <ul>
+        <li><a href="poc-architecture.html" data-id="poc-architecture">アーキテクチャ</a></li>
+        <li><a href="poc-deploy.html" data-id="poc-deploy">導入手順</a></li>
+        <li><a href="poc-validation-scenarios.html" data-id="poc-validation-scenarios">実機検証シナリオ</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">シナリオ</div>
+      <ul>
+        <li><a href="scenario-ictsc5023.html" data-id="scenario-ictsc5023">ICTSC 5023</a></li>
+      </ul>
+    </div>
+  </aside>
+  <main class="content">
+    <div class="breadcrumb"><a href="index.html">Wiki</a> / Production PoC / 導入手順</div>
+    <h1 id="production-poc-導入手順">Production PoC 導入手順</h1>
+    <h2 id="1-概要">1. 概要</h2>
+    <p>この手順書は、既存の Docker ベース研究用 flow を壊さずに、Ubuntu
+    Server へ隔離された production PoC を導入するためのものです。</p>
+    <h2 id="2-前提条件">2. 前提条件</h2>
+    <ul>
+    <li>Ubuntu Server</li>
+    <li>Python 3.12 以上</li>
+    <li><code>systemd</code>, <code>journalctl</code>, <code>ss</code>,
+    <code>curl</code>, <code>df</code> が利用可能</li>
+    <li>対象 service log を読める権限</li>
+    <li>Discord 通知を使う場合は webhook URL</li>
+    <li>監視実行用の専用 service account を作成するか、既存の安全な
+    service account を 1 つ決めておく</li>
+    </ul>
+    <h2 id="3-専用ユーザーの作成">3. 専用ユーザーの作成</h2>
+    <p><code>infra-poc</code> は例示名であり、Ubuntu
+    に最初から存在するユーザーではありません。</p>
+    <p>新規に専用ユーザーを作る場合の例:</p>
+    <div class="sourceCode" id="cb1"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">sudo</span> useradd <span class="dt">\</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">--system</span> <span class="dt">\</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">--create-home</span> <span class="dt">\</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">--home-dir</span> /var/lib/infra-production-poc <span class="dt">\</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">--shell</span> /usr/sbin/nologin <span class="dt">\</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">--user-group</span> <span class="dt">\</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>  infra-poc</span></code></pre></div>
+    <p>確認:</p>
+    <div class="sourceCode" id="cb2"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">id</span> infra-poc</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="fu">getent</span> passwd infra-poc</span></code></pre></div>
+    <p>既存ユーザーを使う場合:</p>
+    <ul>
+    <li>この手順書中の <code>infra-poc</code>
+    をそのユーザー名に置き換える</li>
+    <li><code>production-poc-monitor.service</code> の
+    <code>User=</code> と <code>Group=</code> も同じ名前に修正する</li>
+    </ul>
+    <h2 id="4-リポジトリ配置">4. リポジトリ配置</h2>
+    <div class="sourceCode" id="cb3"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">sudo</span> mkdir <span class="at">-p</span> /opt/infra-emergency-recovery</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="fu">sudo</span> chown <span class="st">&quot;</span><span class="va">$USER</span><span class="st">&quot;</span>:<span class="st">&quot;</span><span class="va">$USER</span><span class="st">&quot;</span> /opt/infra-emergency-recovery</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> clone <span class="op">&lt;</span>repo-url<span class="op">&gt;</span> /opt/infra-emergency-recovery</span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> /opt/infra-emergency-recovery</span></code></pre></div>
+    <p>注意:</p>
+    <ul>
+    <li><code>.gitignore</code> により <code>.venv/</code>
+    はリポジトリへ含まれません</li>
+    <li><code>.env</code>, <code>.env.*</code>
+    も原則リポジトリに含まれません</li>
+    <li>そのため、仮想環境と secrets を含む env file は配備先 Ubuntu
+    Server 上で必ず手動作成してください</li>
+    </ul>
+    <h2 id="5-実行環境の準備">5. 実行環境の準備</h2>
+    <p>この手順で <code>/opt/infra-emergency-recovery/.venv</code>
+    を新規作成します。clone 直後のリポジトリには <code>.venv</code>
+    は存在しません。</p>
+    <div class="sourceCode" id="cb4"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python3</span> <span class="at">-m</span> venv .venv</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="bu">source</span> .venv/bin/activate</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="ex">pip</span> install <span class="at">-r</span> requirements_agent.txt</span></code></pre></div>
+    <p>作成確認:</p>
+    <div class="sourceCode" id="cb5"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="bu">test</span> <span class="at">-x</span> /opt/infra-emergency-recovery/.venv/bin/python</span></code></pre></div>
+    <p>モジュール起動時の注意:</p>
+    <ul>
+    <li><code>experimental.production_poc...</code> はリポジトリ直下を
+    Python import path に含める必要があります</li>
+    <li>手動実行では、<code>cd /opt/infra-emergency-recovery</code>
+    してから起動するか、<code>PYTHONPATH=/opt/infra-emergency-recovery</code>
+    を付けて実行してください</li>
+    </ul>
+    <h2 id="6-poc-設定ファイルの作成">6. PoC 設定ファイルの作成</h2>
+    <div class="sourceCode" id="cb6"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="fu">sudo</span> mkdir <span class="at">-p</span> /etc/infra-production-poc</span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="fu">sudo</span> cp experimental/production_poc/config/production_poc.example.yaml /etc/infra-production-poc/production_poc.yaml</span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a><span class="fu">sudo</span> cp experimental/production_poc/.env.example /etc/infra-production-poc/production_poc.env</span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a><span class="fu">sudo</span> chown root:infra-poc /etc/infra-production-poc/production_poc.yaml</span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a><span class="fu">sudo</span> chmod 640 /etc/infra-production-poc/production_poc.yaml</span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a><span class="fu">sudo</span> chown root:infra-poc /etc/infra-production-poc/production_poc.env</span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a><span class="fu">sudo</span> chmod 640 /etc/infra-production-poc/production_poc.env</span></code></pre></div>
+    <p><code>infra-poc</code> を使わない場合は、ここも実際に使う service
+    account のグループ名へ置き換えてください。</p>
+    <p>重要:</p>
+    <ul>
+    <li><code>production_poc.env</code>
+    は監視実行ユーザーが読める必要があります</li>
+    <li><code>chmod 600</code> のままだと root
+    以外は読めず、<code>PermissionError</code> になります</li>
+    <li>推奨は <code>root:&lt;service-account-group&gt;</code> と
+    <code>640</code> です</li>
+    </ul>
+    <p><code>/etc/infra-production-poc/production_poc.yaml</code>
+    は次を実ホストに合わせて修正してください。</p>
+    <ul>
+    <li><code>services.web.service_name</code></li>
+    <li><code>services.minecraft.management_mode</code></li>
+    <li><code>services.minecraft.service_name</code></li>
+    <li><code>services.minecraft.working_directory</code></li>
+    <li><code>services.minecraft.startup_script_path</code></li>
+    <li>Web health URL</li>
+    <li>access log / error log path</li>
+    <li>Minecraft log path</li>
+    <li><code>monitoring.ignored_failed_units</code></li>
+    <li><code>monitoring.ignored_journal_patterns</code></li>
+    <li>初回は <code>actions.mode: propose-only</code></li>
+    <li>意図して provider key を入れるまで
+    <code>llm.enabled: false</code></li>
+    </ul>
+    <p>Minecraft が <code>tmux</code> や <code>start-server.sh</code>
+    で動いている場合は、次のように設定してください。</p>
+    <ul>
+    <li><code>services.minecraft.management_mode: shell_script</code>
+    または <code>tmux</code></li>
+    <li><code>services.minecraft.service_name: ""</code></li>
+    <li><code>services.minecraft.working_directory</code>
+    にサーバーディレクトリを入れる</li>
+    <li><code>services.minecraft.startup_script_path</code> に
+    <code>start-server.sh</code> を入れる</li>
+    </ul>
+    <p>この PoC は安全上の理由から、<code>shell script</code> /
+    <code>tmux</code> 管理の Minecraft を自動起動しません。 この情報は
+    Discord 通知や手動復旧時の参照情報として使われます。</p>
+    <p>Minecraft の log が <code>/home/&lt;user&gt;/...</code>
+    配下にある場合は、監視実行ユーザーがその path
+    を読める必要があります。 監視実行ユーザーを Minecraft
+    管理ユーザー本人に合わせるか、親ディレクトリを traverse できるように
+    ACL / group 権限を付与してください。 権限不足の path
+    は最新版コードではスキップされますが、ログ抜粋は取れません。</p>
+    <p><code>actions.allowed_restart_services</code>
+    には、<code>systemd</code> で安全に再起動できる service
+    だけを入れてください。 <code>tmux</code> や
+    <code>shell script</code> 管理の Minecraft
+    をここへ入れても自動実行対象にはしないでください。</p>
+    <p>restart 以外の修復は <code>actions.allowed_runbooks</code> に固定
+    argv として登録します。 ここには任意 shell 文字列ではなく、必ず list
+    形式の command を入れてください。</p>
+    <div class="sourceCode" id="cb7"><pre
+    class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="fu">actions</span><span class="kw">:</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">allowed_runbooks</span><span class="kw">:</span></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="kw">-</span><span class="at"> </span><span class="fu">id</span><span class="kw">:</span><span class="at"> reload_nginx_config</span></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">command</span><span class="kw">:</span></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a><span class="at">        </span><span class="kw">-</span><span class="at"> systemctl</span></span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a><span class="at">        </span><span class="kw">-</span><span class="at"> reload</span></span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a><span class="at">        </span><span class="kw">-</span><span class="at"> nginx</span></span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">risk_class</span><span class="kw">:</span><span class="at"> low</span></span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">kinds</span><span class="kw">:</span></span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a><span class="at">        </span><span class="kw">-</span><span class="at"> runbook</span></span>
+<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">summary</span><span class="kw">:</span><span class="at"> Reload nginx configuration</span></span>
+<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">expected_impact</span><span class="kw">:</span><span class="at"> Applies an already validated nginx configuration without a full service restart.</span></span>
+<span id="cb7-13"><a href="#cb7-13" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">verification</span><span class="kw">:</span></span>
+<span id="cb7-14"><a href="#cb7-14" aria-hidden="true" tabindex="-1"></a><span class="at">        </span><span class="fu">kind</span><span class="kw">:</span><span class="at"> web</span></span>
+<span id="cb7-15"><a href="#cb7-15" aria-hidden="true" tabindex="-1"></a><span class="at">        </span><span class="fu">service</span><span class="kw">:</span><span class="at"> nginx</span></span></code></pre></div>
+    <p><code>service_failover</code>、<code>config_toggle_rollback</code>、<code>dependency_rollback</code>
+    のような medium-risk 操作も、 実体は <code>allowed_runbooks</code>
+    の固定 command として登録します。 medium-risk action は、fresh
+    snapshot と approval file が揃うまで実行されません。</p>
+    <div class="sourceCode" id="cb8"><pre
+    class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="fu">backup</span><span class="kw">:</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">provider</span><span class="kw">:</span><span class="at"> local-snapshot</span></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">snapshot_paths</span><span class="kw">:</span></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="kw">-</span><span class="at"> /var/backups/infra/latest</span></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">max_age_seconds</span><span class="kw">:</span><span class="at"> </span><span class="dv">86400</span></span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">minimum_count</span><span class="kw">:</span><span class="at"> </span><span class="dv">1</span></span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a><span class="fu">actions</span><span class="kw">:</span></span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">approval_dir</span><span class="kw">:</span><span class="at"> /var/lib/infra-production-poc/approvals</span></span>
+<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">allowed_runbooks</span><span class="kw">:</span></span>
+<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="kw">-</span><span class="at"> </span><span class="fu">id</span><span class="kw">:</span><span class="at"> failover_web_to_standby</span></span>
+<span id="cb8-12"><a href="#cb8-12" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">command</span><span class="kw">:</span><span class="at"> </span><span class="kw">[</span><span class="at">/usr/local/sbin/failover-web</span><span class="kw">,</span><span class="at"> --to</span><span class="kw">,</span><span class="at"> standby</span><span class="kw">]</span></span>
+<span id="cb8-13"><a href="#cb8-13" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">risk_class</span><span class="kw">:</span><span class="at"> medium</span></span>
+<span id="cb8-14"><a href="#cb8-14" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">kinds</span><span class="kw">:</span><span class="at"> </span><span class="kw">[</span><span class="at">service_failover</span><span class="kw">]</span></span>
+<span id="cb8-15"><a href="#cb8-15" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">rollback_runbook_id</span><span class="kw">:</span><span class="at"> failover_web_to_primary</span></span>
+<span id="cb8-16"><a href="#cb8-16" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">summary</span><span class="kw">:</span><span class="at"> Fail over web traffic to standby</span></span>
+<span id="cb8-17"><a href="#cb8-17" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">expected_impact</span><span class="kw">:</span><span class="at"> Switches traffic to the preconfigured standby target.</span></span>
+<span id="cb8-18"><a href="#cb8-18" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">verification</span><span class="kw">:</span></span>
+<span id="cb8-19"><a href="#cb8-19" aria-hidden="true" tabindex="-1"></a><span class="at">        </span><span class="fu">kind</span><span class="kw">:</span><span class="at"> web</span></span>
+<span id="cb8-20"><a href="#cb8-20" aria-hidden="true" tabindex="-1"></a><span class="at">        </span><span class="fu">service</span><span class="kw">:</span><span class="at"> nginx</span></span></code></pre></div>
+    <p>medium-risk action が提案されると、通知または incident JSON の
+    guard reason に approval file path が出ます。
+    内容を確認したうえで、その path に空ファイルまたは短いメモを書いた
+    <code>.approved</code> ファイルを作ると承認扱いになります。 承認
+    file は実験後に削除してください。</p>
+    <p><code>execute</code> モードで非 root ユーザーから
+    <code>systemctl restart</code>
+    を実行する場合は、<code>actions.restart_command_prefix</code>
+    を使います。</p>
+    <div class="sourceCode" id="cb9"><pre
+    class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="fu">actions</span><span class="kw">:</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">allowed_restart_services</span><span class="kw">:</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="kw">-</span><span class="at"> apache2</span></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">restart_command_prefix</span><span class="kw">:</span></span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="kw">-</span><span class="at"> sudo</span></span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="kw">-</span><span class="at"> -n</span></span></code></pre></div>
+    <p>このとき、対象 service の restart だけを許可する限定的な
+    <code>sudoers</code> 設定を追加してください。 例として
+    <code>sasa</code> ユーザーが <code>apache2</code>
+    だけ再起動できるようにする場合:</p>
+    <div class="sourceCode" id="cb10"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="fu">sudo</span> visudo <span class="at">-f</span> /etc/sudoers.d/infra-production-poc</span></code></pre></div>
+    <pre class="sudoers"><code>sasa ALL=(root) NOPASSWD: /usr/bin/systemctl restart apache2</code></pre>
+    <p><code>sudo -n</code> はパスワード対話を禁止します。 そのため
+    <code>sudoers</code> が不足している場合、PoC
+    は即失敗し、無言で権限昇格されることはありません。</p>
+    <p>さらに、systemd unit で <code>NoNewPrivileges=true</code>
+    を有効にしていると <code>sudo -n</code> 自体が失敗します。
+    <code>execute</code> モードで
+    <code>restart_command_prefix: ["sudo", "-n"]</code> を使う場合は、
+    <code>/etc/systemd/system/production-poc-monitor.service</code> の
+    <code>NoNewPrivileges=false</code> を維持してください。</p>
+    <p>既知のノイズを抑えたい場合は、次のような ignorelist
+    を使えます。</p>
+    <div class="sourceCode" id="cb12"><pre
+    class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="fu">monitoring</span><span class="kw">:</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">ignored_failed_units</span><span class="kw">:</span></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="kw">-</span><span class="at"> apt-daily.service</span></span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="kw">-</span><span class="at"> logrotate.service</span></span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">ignored_journal_patterns</span><span class="kw">:</span></span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="kw">-</span><span class="at"> </span><span class="fu">connect_to localhost port 25565</span><span class="kw">:</span><span class="at"> failed</span></span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="kw">-</span><span class="at"> /var/log/playit/playit.log</span></span></code></pre></div>
+    <p><code>logrotate.service</code> が <code>playit.log</code>
+    を参照して失敗している場合は、まず不要な <code>logrotate</code>
+    設定ファイルを確認してください。
+    それでもすぐに監視ノイズだけを抑えたい場合、この ignorelist
+    を暫定的に使えます。</p>
+    <p><code>/etc/infra-production-poc/production_poc.env</code>
+    では次を設定します。</p>
+    <ul>
+    <li><code>DISCORD_WEBHOOK_URL=...</code></li>
+    <li>LLM を有効にする場合のみ <code>OPENAI_API_KEY=...</code>
+    など</li>
+    </ul>
+    <h2 id="7-状態保存ディレクトリ作成">7. 状態保存ディレクトリ作成</h2>
+    <div class="sourceCode" id="cb13"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="fu">sudo</span> mkdir <span class="at">-p</span> /var/lib/infra-production-poc</span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="fu">sudo</span> chown <span class="at">-R</span> infra-poc:infra-poc /var/lib/infra-production-poc</span></code></pre></div>
+    <p><code>infra-poc</code> を使わない場合は、この <code>chown</code>
+    のユーザー名とグループ名も実際に使う値へ置き換えてください。</p>
+    <h2 id="8-初回-discovery-実行">8. 初回 discovery 実行</h2>
+    <p>timer を有効化する前に、まず discovery を手動実行します。</p>
+    <div class="sourceCode" id="cb14"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> /opt/infra-emergency-recovery</span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a><span class="fu">sudo</span> <span class="at">-u</span> infra-poc env PYTHONPATH=/opt/infra-emergency-recovery <span class="dt">\</span></span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>  /opt/infra-emergency-recovery/.venv/bin/python <span class="dt">\</span></span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">-m</span> experimental.production_poc.runtime_prod.main <span class="dt">\</span></span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">--config</span> /etc/infra-production-poc/production_poc.yaml <span class="dt">\</span></span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">--env-file</span> /etc/infra-production-poc/production_poc.env <span class="dt">\</span></span>
+<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a>  discover</span></code></pre></div>
+    <p>既存ユーザーを使う場合は、<code>sudo -u infra-poc</code>
+    もそのユーザー名へ置き換えてください。</p>
+    <p>設定した <code>state_dir</code> 以下に次が作られます。</p>
+    <ul>
+    <li><code>latest_snapshot.json</code></li>
+    <li><code>latest_snapshot.md</code></li>
+    <li>timestamp 付き snapshot archive</li>
+    </ul>
+    <h2 id="9-dry-run--propose-only-初回確認">9. dry-run / propose-only
+    初回確認</h2>
+    <p>初回は <code>actions.mode: propose-only</code> のまま 1
+    回監視を実行します。</p>
+    <div class="sourceCode" id="cb15"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> /opt/infra-emergency-recovery</span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a><span class="fu">sudo</span> <span class="at">-u</span> infra-poc env PYTHONPATH=/opt/infra-emergency-recovery <span class="dt">\</span></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>  /opt/infra-emergency-recovery/.venv/bin/python <span class="dt">\</span></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">-m</span> experimental.production_poc.runtime_prod.main <span class="dt">\</span></span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">--config</span> /etc/infra-production-poc/production_poc.yaml <span class="dt">\</span></span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">--env-file</span> /etc/infra-production-poc/production_poc.env <span class="dt">\</span></span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a>  monitor-once</span></code></pre></div>
+    <p>確認ポイントは次です。</p>
+    <ul>
+    <li>Discord の起動通知、監視開始通知、異常通知が読みやすい</li>
+    <li>検出された Web service と Minecraft service
+    が実環境と一致する</li>
+    <li>自動 restart が走らない</li>
+    <li>異常時だけ incident JSON が保存される</li>
+    </ul>
+    <h2 id="10-execute-モード移行">10. execute モード移行</h2>
+    <p>propose-only の確認後にのみ execute へ進みます。</p>
+    <ol type="1">
+    <li><code>allowed_restart_services</code> を小さく明示的に保つ</li>
+    <li>必要なら
+    <code>actions.restart_command_prefix: ["sudo", "-n"]</code>
+    を設定する</li>
+    <li><code>/etc/sudoers.d/infra-production-poc</code> に対象 service
+    だけの <code>NOPASSWD</code> を入れる</li>
+    <li><code>visudo -c</code> で構文確認する</li>
+    <li><code>actions.mode</code> を <code>execute</code>
+    に変更する</li>
+    <li><code>monitor-once</code> を再実行する</li>
+    <li>想定した service 名だけが restart 対象になることを確認する</li>
+    </ol>
+    <p>service 名に広い指定や wildcard は入れないでください。</p>
+    <h2 id="11-systemd-service--timer-化">11. systemd service / timer
+    化</h2>
+    <p>まず次の雛形を実環境向けに見直します。</p>
+    <ul>
+    <li><code>experimental/production_poc/deploy/production-poc-monitor.service</code></li>
+    <li><code>experimental/production_poc/deploy/production-poc-monitor.timer</code></li>
+    </ul>
+    <p>重要:</p>
+    <ul>
+    <li>サーバー上のリポジトリ内ファイル
+    <code>experimental/production_poc/deploy/production-poc-monitor.service</code>
+    を直接編集し続けないでください</li>
+    <li>ここを編集すると、将来 <code>git pull</code>
+    したときにローカル変更として衝突します</li>
+    <li>追跡対象ではない
+    <code>/etc/systemd/system/production-poc-monitor.service</code>
+    側を編集対象にしてください</li>
+    <li>API key や webhook URL は unit
+    ファイルに書かず、<code>/etc/infra-production-poc/production_poc.env</code>
+    に置いてください</li>
+    </ul>
+    <p>特に <code>production-poc-monitor.service</code>
+    では次を確認してください。</p>
+    <ul>
+    <li><code>User=infra-poc</code></li>
+    <li><code>Group=infra-poc</code></li>
+    <li><code>Environment=PYTHONPATH=/opt/infra-emergency-recovery</code></li>
+    <li><code>ExecStart=/opt/infra-emergency-recovery/.venv/bin/python ...</code></li>
+    <li>Minecraft の log や working directory が <code>/home/...</code>
+    配下なら <code>ProtectHome=read-only</code></li>
+    <li><code>restart_command_prefix: ["sudo", "-n"]</code> を使うなら
+    <code>NoNewPrivileges=false</code></li>
+    </ul>
+    <p>もし別 path
+    に仮想環境を作った場合や、別ユーザーを使う場合は、それぞれ実環境の値へ書き換えてから
+    <code>/etc/systemd/system/</code> へ配置してください。</p>
+    <p><code>ProtectHome=true</code> のままだと <code>/home/...</code>
+    配下が見えなくなり、<code>/home/sasa/minecraft-server-20260226/logs/latest.log</code>
+    のような構成では監視に失敗します。 この PoC では <code>/home</code>
+    配下を読むケースがあるため、同梱の service 雛形は
+    <code>ProtectHome=read-only</code> を前提にしています。</p>
+    <p>その後、以下で配置します。</p>
+    <div class="sourceCode" id="cb16"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="fu">sudo</span> cp experimental/production_poc/deploy/production-poc-monitor.service /etc/systemd/system/</span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a><span class="fu">sudo</span> cp experimental/production_poc/deploy/production-poc-monitor.timer /etc/systemd/system/</span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a><span class="fu">sudo</span> systemctl daemon-reload</span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a><span class="fu">sudo</span> systemctl enable <span class="at">--now</span> production-poc-monitor.timer</span></code></pre></div>
+    <p>配置後の修正は、原則として
+    <code>/etc/systemd/system/production-poc-monitor.service</code>
+    側だけに行ってください。</p>
+    <h2 id="12-git-pull-が-local-changes-で止まったとき">12.
+    <code>git pull</code> が local changes で止まったとき</h2>
+    <p>すでにサーバー上の追跡ファイルを編集してしまった場合は、次の流れで復旧できます。</p>
+    <ol type="1">
+    <li>現在のローカル変更を退避する</li>
+    <li><code>/etc/systemd/system/production-poc-monitor.service</code>
+    へ必要な変更を移す</li>
+    <li>リポジトリ内の追跡ファイルを元に戻す</li>
+    <li><code>git pull</code> する</li>
+    </ol>
+    <p>例:</p>
+    <div class="sourceCode" id="cb17"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> /opt/infra-emergency-recovery</span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a><span class="fu">cp</span> experimental/production_poc/deploy/production-poc-monitor.service /tmp/production-poc-monitor.service.local</span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a><span class="fu">sudo</span> cp /tmp/production-poc-monitor.service.local /etc/systemd/system/production-poc-monitor.service</span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> restore experimental/production_poc/deploy/production-poc-monitor.service</span>
+<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> pull</span>
+<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a><span class="fu">sudo</span> systemctl daemon-reload</span></code></pre></div>
+    <p>もし
+    <code>/etc/systemd/system/production-poc-monitor.service</code>
+    を直接編集したい場合は:</p>
+    <div class="sourceCode" id="cb18"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="ex">sudoedit</span> /etc/systemd/system/production-poc-monitor.service</span></code></pre></div>
+    <p>あるいは override を使う方法でも構いません。</p>
+    <div class="sourceCode" id="cb19"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="fu">sudo</span> systemctl edit production-poc-monitor.service</span></code></pre></div>
+    <h2 id="13-停止方法">13. 停止方法</h2>
+    <div class="sourceCode" id="cb20"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="fu">sudo</span> systemctl stop production-poc-monitor.timer</span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a><span class="fu">sudo</span> systemctl stop production-poc-monitor.service</span></code></pre></div>
+    <h2 id="14-ログの見方">14. ログの見方</h2>
+    <ul>
+    <li><code>journalctl -u production-poc-monitor.service -n 100 --no-pager</code></li>
+    <li>設定した <code>state_dir</code></li>
+    <li>相関 ID 付き Discord 通知</li>
+    <li>対象 service の log / journal:</li>
+    </ul>
+    <div class="sourceCode" id="cb21"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="ex">journalctl</span> <span class="at">-u</span> nginx <span class="at">-n</span> 100 <span class="at">--no-pager</span></span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a><span class="ex">journalctl</span> <span class="at">-u</span> minecraft <span class="at">-n</span> 100 <span class="at">--no-pager</span>   <span class="co"># systemd 管理時のみ</span></span>
+<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a><span class="fu">tail</span> <span class="at">-n</span> 100 /path/to/minecraft/logs/latest.log</span></code></pre></div>
+    <h2 id="15-セキュリティ上の注意">15. セキュリティ上の注意</h2>
+    <ul>
+    <li>env file は管理者か専用 service account
+    のみが読めるようにする</li>
+    <li>必要な log と command だけにアクセスできる専用 user を推奨</li>
+    <li><code>NoNewPrivileges=true</code> を維持する</li>
+    <li>明示した state directory 以外に書き込み権限を広げない</li>
+    <li>API key、Discord webhook URL、token 類は Git
+    管理下のファイルへ書かない</li>
+    </ul>
+    <h2 id="16-バックアップ未整備環境での注意">16.
+    バックアップ未整備環境での注意</h2>
+    <p>この PoC は、バックアップや snapshot
+    が弱い、または未整備な環境を前提にしています。</p>
+    <ul>
+    <li>既定は <code>propose-only</code> のままにする</li>
+    <li><code>execute</code> は明示的な実験モードとして扱う</li>
+    <li><code>backup.provider: none</code> のままでは medium-risk action
+    は実行されない</li>
+    <li><code>local-snapshot</code> は snapshot marker
+    の存在と鮮度だけを確認する。snapshot
+    作成自体は既存のバックアップ運用側で行う</li>
+    <li>実 snapshot 機構が入るまで、package 管理、file delete、host-wide
+    change を allowlist に追加しない</li>
+    </ul>
+    <div class="footer">
+      <span>Safe Emergency Recovery Experiment — Research Wiki</span>
+      <span>ソース: <a href="../production_poc/deploy.md">../production_poc/deploy.md</a></span>
+    </div>
+  </main>
+</div>
+<script src="wiki.js"></script>
+</body>
+</html>

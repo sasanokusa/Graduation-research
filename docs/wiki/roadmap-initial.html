@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>初版ロードマップ
+(2026-03-16) — Safe Emergency Recovery Wiki</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="layout">
+  <header class="topbar">
+    <div class="brand">
+      <a href="index.html">Safe Emergency Recovery</a>
+      <span class="sub">研究ドキュメント Wiki</span>
+    </div>
+    <nav class="topnav">
+      <a href="index.html">ホーム</a>
+      <a href="overview.html">概要</a>
+      <a href="roadmap-revised.html">最新ロードマップ</a>
+    </nav>
+  </header>
+  <aside class="sidebar">
+    <div class="group">
+      <div class="group-title">スタート</div>
+      <ul>
+        <li><a href="index.html" data-id="index">Wiki トップ</a></li>
+        <li><a href="overview.html" data-id="overview">プロジェクト概要 (README)</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">ロードマップ</div>
+      <ul>
+        <li><a href="roadmap-initial.html" data-id="roadmap-initial">初版ロードマップ (2026-03-16)</a></li>
+        <li><a href="roadmap-revised.html" data-id="roadmap-revised">改訂版ロードマップ (2026-04-15)</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">調査・レポート</div>
+      <ul>
+        <li><a href="report-repository-assessment.html" data-id="report-repository-assessment">リポジトリ調査レポート</a></li>
+        <li><a href="report-analysis.html" data-id="report-analysis">設計レビュー・改善提案</a></li>
+        <li><a href="report-phase1-cost.html" data-id="report-phase1-cost">Phase 1 比較実験コスト</a></li>
+        <li><a href="report-local-experiment-cost.html" data-id="report-local-experiment-cost">局所実験コスト</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">評価</div>
+      <ul>
+        <li><a href="evaluation-hypothesis-transition.html" data-id="evaluation-hypothesis-transition">仮説遷移評価 (Phase 4.5)</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">Production PoC</div>
+      <ul>
+        <li><a href="poc-architecture.html" data-id="poc-architecture">アーキテクチャ</a></li>
+        <li><a href="poc-deploy.html" data-id="poc-deploy">導入手順</a></li>
+        <li><a href="poc-validation-scenarios.html" data-id="poc-validation-scenarios">実機検証シナリオ</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">シナリオ</div>
+      <ul>
+        <li><a href="scenario-ictsc5023.html" data-id="scenario-ictsc5023">ICTSC 5023</a></li>
+      </ul>
+    </div>
+  </aside>
+  <main class="content">
+    <div class="breadcrumb"><a href="index.html">Wiki</a> / ロードマップ / 初版</div>
+    <h1 id="実装ロードマップ">実装ロードマップ</h1>
+    <p>作成日: 2026-03-16<br />
+    基礎資料: <a
+    href="report-repository-assessment.html"><code>report-repository-assessment.html</code></a></p>
+    <h2 id="1-目的">1. 目的</h2>
+    <p>本ロードマップの目的は、現状の</p>
+    <ul>
+    <li>安全な LLM 応急復旧実験基盤</li>
+    <li>minimal な multi-agent ループ</li>
+    <li>実ホスト向け low-risk PoC</li>
+    </ul>
+    <p>を、卒業研究案である
+    <strong>「LLMマルチエージェント協調を用いたDCインフラ応急修復システム」</strong>
+    により近い形へ段階的に発展させることである。</p>
+    <p>特に重要なのは、単に機能を増やすことではなく、<strong>卒論として説得力のある比較実験と主張</strong>
+    を成立させる順番で実装を進めることである。</p>
+    <h2 id="2-基本方針">2. 基本方針</h2>
+    <p>以下の 4 原則で進める。</p>
+    <ol type="1">
+    <li><p><strong>評価可能性を先に固める</strong><br />
+    機能追加より前に、シナリオ・観測・集計・テストの整合を取る。</p></li>
+    <li><p><strong>hard scenario で multi-agent
+    の価値を示す</strong><br />
+    <code>i2/m/n/o/r/u</code> のような多段障害で single-agent
+    を上回ることを主目標にする。</p></li>
+    <li><p><strong>DCらしさは「段階的に」増やす</strong><br />
+    いきなり大規模 DC を目指すのではなく、multi-service / multi-host /
+    topology-aware な方向へ広げる。</p></li>
+    <li><p><strong>本番PoCは安全性を崩さず拡張する</strong><br />
+    <code>restart</code>
+    一辺倒から広げるが、人間承認・バックアップ・段階的 rollback
+    を伴わせる。</p></li>
+    </ol>
+    <h2 id="3-優先順位">3. 優先順位</h2>
+    <h3 id="最優先-p0">最優先 (<code>P0</code>)</h3>
+    <ul>
+    <li>評価パイプラインの整合</li>
+    <li>実験環境の安定化</li>
+    <li>hard scenario 向け multi-agent 強化</li>
+    </ul>
+    <h3 id="高優先-p1">高優先 (<code>P1</code>)</h3>
+    <ul>
+    <li>shared state を持つ本格 multi-agent orchestration</li>
+    <li>DCライクなベンチマーク拡張</li>
+    <li>比較実験の設計と自動集計</li>
+    </ul>
+    <h3 id="中優先-p2">中優先 (<code>P2</code>)</h3>
+    <ul>
+    <li>production PoC の action 拡張</li>
+    <li>backup provider / approval gate の実装</li>
+    </ul>
+    <h3 id="低優先-p3">低優先 (<code>P3</code>)</h3>
+    <ul>
+    <li>実運用向け UI/通知の洗練</li>
+    <li>長期運用向け監査・可視化ダッシュボード</li>
+    </ul>
+    <h2 id="4-フェーズ別計画">4. フェーズ別計画</h2>
+    <h2 id="phase-0-評価基盤の整合と実験環境の安定化">Phase 0:
+    評価基盤の整合と実験環境の安定化</h2>
+    <h3 id="目的">目的</h3>
+    <p>「何を評価しているのか」が曖昧にならないように、シナリオ定義、観測スイープ、集計、README、テストを同期させる。</p>
+    <h3 id="実装項目">実装項目</h3>
+    <ol type="1">
+    <li><p><code>observe_runs.sh</code> のデフォルト sweep を見直す</p>
+    <ul>
+    <li><code>p/q/r</code> を含める</li>
+    <li>必要なら <code>A-U</code> を網羅する標準 sweep と短縮 sweep
+    を分ける</li>
+    </ul></li>
+    <li><p><code>aggregate_observations.py</code> を <code>s/t/u</code>
+    まで対応させる</p>
+    <ul>
+    <li><code>EXPECTED_DOMAINS_BY_SCENARIO</code> を更新する</li>
+    <li>multi-agent 向けメトリクスを追加しやすい形へ整理する</li>
+    </ul></li>
+    <li><p><code>README.md</code> のシナリオ記述を <code>A-U</code>
+    基準に更新する</p>
+    <ul>
+    <li><code>A-R</code> など古い記述を修正する</li>
+    <li>stale link を整理する</li>
+    </ul></li>
+    <li><p><code>reset.sh</code> / Docker 実験環境を安定化する</p>
+    <ul>
+    <li><code>/target-db</code> 競合の原因を特定する</li>
+    <li>cleanup をより確実にする</li>
+    <li>multi-agent end-to-end test が安定して回る状態にする</li>
+    </ul></li>
+    <li><p>テスト実行の標準手順を固定する</p>
+    <ul>
+    <li><code>./.venv/bin/python -m pytest -q</code>
+    を公式手順にする</li>
+    <li>可能なら CI か <code>check.sh</code> を追加する</li>
+    </ul></li>
+    </ol>
+    <h3 id="完了条件">完了条件</h3>
+    <ul>
+    <li>シナリオ、観測、集計、README の対象範囲が一致している</li>
+    <li>multi-agent mock テストが環境要因で落ちない</li>
+    <li>再現手順が第三者に説明できる</li>
+    </ul>
+    <h3 id="卒論上の価値">卒論上の価値</h3>
+    <p>このフェーズを終えると、「評価設計が整理されている」こと自体が研究の信頼性になる。</p>
+    <h2 id="phase-1-multi-agent-orchestration-の本格化">Phase 1:
+    multi-agent orchestration の本格化</h2>
+    <h3 id="目的-1">目的</h3>
+    <p>現状の <code>planner -&gt; reviewer -&gt; judge</code>
+    直列ループを、<strong>明確な役割分担を持つ multi-agent 協調</strong>
+    に進化させる。</p>
+    <h3 id="実装項目-1">実装項目</h3>
+    <ol type="1">
+    <li><p>shared incident state / blackboard の導入</p>
+    <ul>
+    <li>観測、仮説、候補修復、検証結果、失敗履歴を agent
+    間で共有する</li>
+    </ul></li>
+    <li><p>agent の役割を明確化する</p>
+    <ul>
+    <li><code>observer agent</code></li>
+    <li><code>triage agent</code></li>
+    <li><code>repair planner agent</code></li>
+    <li><code>verification reviewer agent</code></li>
+    <li><code>safety judge agent</code></li>
+    </ul></li>
+    <li><p>追加観測を 1 回制限から複数回へ拡張する</p>
+    <ul>
+    <li>confidence や ambiguity に応じて追加観測を継続する</li>
+    <li>無限ループ防止の上限を入れる</li>
+    </ul></li>
+    <li><p>reviewer の提案を実際に次ターンへ強く反映する</p>
+    <ul>
+    <li>推奨 scope</li>
+    <li>推奨次観測</li>
+    <li>残存ドメイン仮説</li>
+    </ul></li>
+    <li><p>hard scenario 専用の multi-turn 戦略を入れる</p>
+    <ul>
+    <li><code>i2</code>: port 修復後に query bug へ移る</li>
+    <li><code>m</code>: nginx -&gt; DB auth -&gt; query bug
+    の三段階</li>
+    <li><code>n</code>: dependency -&gt; query bug</li>
+    <li><code>o</code>: stale evidence を無視して DB auth -&gt; query
+    bug</li>
+    <li><code>r/u</code>: マスク障害の解除後に再観測</li>
+    </ul></li>
+    </ol>
+    <h3 id="完了条件-1">完了条件</h3>
+    <ul>
+    <li>multi-agent の役割分担がコード上でも説明上でも明確である</li>
+    <li><code>i2/m/n/o</code> で mock multi-agent が安定成功する</li>
+    <li>LLM multi-agent が single-agent より hard scenario
+    で改善する</li>
+    </ul>
+    <h3 id="卒論上の価値-1">卒論上の価値</h3>
+    <p>このフェーズが最重要である。<br />
+    卒論の核は「multi-agent にする意味」を hard scenario
+    で示せるかどうかにある。</p>
+    <h2 id="phase-2-dcライクなベンチマークへの拡張">Phase 2:
+    DCライクなベンチマークへの拡張</h2>
+    <h3 id="目的-2">目的</h3>
+    <p>現状の <code>nginx -&gt; app -&gt; db</code>
+    から一歩進めて、<strong>DC インフラに近い複雑性</strong>
+    を持つ評価環境へ拡張する。</p>
+    <h3 id="実装項目-2">実装項目</h3>
+    <ol type="1">
+    <li><p>対象構成を multi-service 化する</p>
+    <ul>
+    <li>cache</li>
+    <li>worker</li>
+    <li>queue</li>
+    <li>metrics / monitoring service</li>
+    </ul></li>
+    <li><p>topology-aware な fault を追加する</p>
+    <ul>
+    <li>name resolution 失敗</li>
+    <li>network partition 風の障害</li>
+    <li>failover 先不一致</li>
+    <li>複数設定の bilateral drift</li>
+    </ul></li>
+    <li><p>multi-host 的な抽象化を導入する</p>
+    <ul>
+    <li><code>host-A</code>, <code>host-B</code> を模した service
+    group</li>
+    <li>依存先切替や route 切替をシナリオ化する</li>
+    </ul></li>
+    <li><p>semantic success check を強化する</p>
+    <ul>
+    <li>単に 200 を返すだけでなく</li>
+    <li>expected topology</li>
+    <li>expected contract</li>
+    <li>degraded mode でないこと を確認する</li>
+    </ul></li>
+    <li><p>シナリオを fault class ごとに整理し直す</p>
+    <ul>
+    <li>service-local fault</li>
+    <li>dependency fault</li>
+    <li>topology fault</li>
+    <li>ambiguous/noisy fault</li>
+    <li>masked cascade</li>
+    </ul></li>
+    </ol>
+    <h3 id="完了条件-2">完了条件</h3>
+    <ul>
+    <li>ベンチマーク対象が単一アプリ修復から一段広がる</li>
+    <li>「DCインフラらしさ」を本文で説明できる</li>
+    <li>少なくとも 1 つは topology-aware な multi-step scenario
+    を用意できる</li>
+    </ul>
+    <h3 id="卒論上の価値-2">卒論上の価値</h3>
+    <p>題目の <code>DCインフラ</code>
+    の説得力を上げるフェーズである。<br />
+    ここで対象を広げないと、「Web アプリ復旧研究」に見えやすい。</p>
+    <h2 id="phase-3-安全な修復アクションの拡張">Phase 3:
+    安全な修復アクションの拡張</h2>
+    <h3 id="目的-3">目的</h3>
+    <p>修復能力を広げつつ、安全性の主張を崩さない。</p>
+    <h3 id="実装項目-3">実装項目</h3>
+    <ol type="1">
+    <li><p>action vocabulary を段階的に増やす<br />
+    候補:</p>
+    <ul>
+    <li>allowlisted runbook execution</li>
+    <li>service failover switch</li>
+    <li>config toggle rollback</li>
+    <li>dependency rollback</li>
+    <li>read-only diagnosis actions の拡充</li>
+    </ul></li>
+    <li><p><code>ActionGuard</code> / verifier の risk model
+    を強化する</p>
+    <ul>
+    <li>read-only</li>
+    <li>low-risk</li>
+    <li>medium-risk</li>
+    <li>blocked をより明確に分ける</li>
+    </ul></li>
+    <li><p>backup provider を本実装する</p>
+    <ul>
+    <li>snapshot availability の確認</li>
+    <li>risky action 前の guard</li>
+    <li>rollback 失敗時の escalation</li>
+    </ul></li>
+    <li><p>human approval gate を導入する</p>
+    <ul>
+    <li>medium-risk 以上は approve 必須</li>
+    <li>Discord / file / CLI ベースでもよいので形にする</li>
+    </ul></li>
+    <li><p>rollback を段階的にする</p>
+    <ul>
+    <li>file rollback だけでなく</li>
+    <li>service refresh</li>
+    <li>verification after rollback</li>
+    <li>必要なら fallback safe mode</li>
+    </ul></li>
+    </ol>
+    <h3 id="完了条件-3">完了条件</h3>
+    <ul>
+    <li>production PoC で restart 以外の低リスク修復を 1
+    つ以上安全に扱える</li>
+    <li>backup / approval / rollback の流れを説明できる</li>
+    </ul>
+    <h3 id="卒論上の価値-3">卒論上の価値</h3>
+    <p>「安全に実行できる multi-agent repair
+    system」という主張の厚みが増す。</p>
+    <h2 id="phase-4-production-poc-の強化">Phase 4: production PoC
+    の強化</h2>
+    <h3 id="目的-4">目的</h3>
+    <p><code>monitoring + propose-only</code>
+    から、<strong>human-in-the-loop な応急修復支援システム</strong>
+    へ進める。</p>
+    <h3 id="実装項目-4">実装項目</h3>
+    <ol type="1">
+    <li><p>analyzer の提案品質を上げる</p>
+    <ul>
+    <li>host-level issue の分類を詳細化</li>
+    <li>read-only diagnostics を提案させる</li>
+    <li>escalation reason を構造化する</li>
+    </ul></li>
+    <li><p>live-run artifact を残す</p>
+    <ul>
+    <li>実機での monitor log</li>
+    <li>incident JSON</li>
+    <li>verification log</li>
+    <li>manual validation record</li>
+    </ul></li>
+    <li><p>実機向け validation scenario を増やす</p>
+    <ul>
+    <li>restart だけで直るケース</li>
+    <li>read-only diagnosis だけで人間判断へ渡すケース</li>
+    <li>approval 後に限定修復するケース</li>
+    </ul></li>
+    <li><p>notification を研究向けに整える</p>
+    <ul>
+    <li>相関 ID</li>
+    <li>decision trace</li>
+    <li>why executed / why blocked</li>
+    </ul></li>
+    </ol>
+    <h3 id="完了条件-4">完了条件</h3>
+    <ul>
+    <li>production PoC が「監視ツール」ではなく「安全な応急修復支援
+    PoC」と呼べる</li>
+    <li>少数でも live-run artifact を卒論に載せられる</li>
+    </ul>
+    <h2 id="phase-5-比較実験と卒論向け成果整理">Phase 5:
+    比較実験と卒論向け成果整理</h2>
+    <h3 id="目的-5">目的</h3>
+    <p>実装を研究成果へ変換する。</p>
+    <h3 id="実装項目-5">実装項目</h3>
+    <ol type="1">
+    <li><p>比較対象を固定する</p>
+    <ul>
+    <li>single-agent</li>
+    <li>multi-agent minimal</li>
+    <li>improved multi-agent</li>
+    </ul></li>
+    <li><p>比較指標を固定する</p>
+    <ul>
+    <li>success rate</li>
+    <li>hard scenario success rate</li>
+    <li>number of turns</li>
+    <li>unsafe action rejection rate</li>
+    <li>rollback rate</li>
+    <li>recovery time</li>
+    <li>semantic success rate</li>
+    </ul></li>
+    <li><p>アブレーションを行う</p>
+    <ul>
+    <li>reviewer なし</li>
+    <li>judge なし</li>
+    <li>additional observation なし</li>
+    <li>backup/approval なし</li>
+    </ul></li>
+    <li><p>production PoC の位置づけを明確にする</p>
+    <ul>
+    <li>full automation ではなく</li>
+    <li>low-risk remediation support PoC として整理する</li>
+    </ul></li>
+    <li><p>論文用の図表を作る</p>
+    <ul>
+    <li>アーキテクチャ図</li>
+    <li>フロー図</li>
+    <li>成功率比較表</li>
+    <li>hard scenario の turn-by-turn 事例</li>
+    </ul></li>
+    </ol>
+    <h3 id="完了条件-5">完了条件</h3>
+    <ul>
+    <li>卒論の実験章がそのまま書ける</li>
+    <li><code>multi-agent にする意義</code> を数値で示せる</li>
+    </ul>
+    <h2 id="5-まず着手すべき具体タスク">5. まず着手すべき具体タスク</h2>
+    <p>次に実装するべきものを、実際の着手順で並べる。</p>
+    <ol type="1">
+    <li><code>observe_runs.sh</code>,
+    <code>aggregate_observations.py</code>, <code>README.md</code> を
+    <code>A-U</code> 基準で同期する</li>
+    <li><code>reset.sh</code> の Docker cleanup 問題を直し、multi-agent
+    mock テストを安定化する</li>
+    <li>reviewer / judge / triage の state 受け渡しを整理し、shared
+    incident state を入れる</li>
+    <li>additional observation を複数回ループ可能にする</li>
+    <li><code>i2/m/n/o/r/u</code> を対象に improved multi-agent
+    の成功率を上げる</li>
+    <li><code>DCライク</code> な topology scenario を 1
+    系統追加する</li>
+    <li>production PoC に approval + backup provider +
+    低リスク追加アクションを入れる</li>
+    </ol>
+    <h2 id="6-各フェーズの成果物">6. 各フェーズの成果物</h2>
+    <h3 id="phase-0-の成果物">Phase 0 の成果物</h3>
+    <ul>
+    <li>整合した README</li>
+    <li>安定した sweep / aggregate</li>
+    <li>安定した Docker テスト環境</li>
+    </ul>
+    <h3 id="phase-1-の成果物">Phase 1 の成果物</h3>
+    <ul>
+    <li>improved multi-agent orchestration</li>
+    <li>hard scenario success 改善</li>
+    <li>turn-by-turn trace</li>
+    </ul>
+    <h3 id="phase-2-の成果物">Phase 2 の成果物</h3>
+    <ul>
+    <li>DCライク benchmark scenario 群</li>
+    <li>topology-aware success checks</li>
+    </ul>
+    <h3 id="phase-3-4-の成果物">Phase 3-4 の成果物</h3>
+    <ul>
+    <li>backup provider</li>
+    <li>approval gate</li>
+    <li>expanded production PoC</li>
+    </ul>
+    <h3 id="phase-5-の成果物">Phase 5 の成果物</h3>
+    <ul>
+    <li>比較表</li>
+    <li>成功率グラフ</li>
+    <li>卒論用図表</li>
+    </ul>
+    <h2 id="7-リスクと対策">7. リスクと対策</h2>
+    <h3 id="リスク-1-実装を広げすぎて比較実験が薄くなる">リスク 1:
+    実装を広げすぎて比較実験が薄くなる</h3>
+    <p>対策:</p>
+    <ul>
+    <li>まず hard scenario の改善を最優先にする</li>
+    <li>production PoC の機能追加は後段に回す</li>
+    </ul>
+    <h3 id="リスク-2-dcインフラ-を広げすぎて安全性が崩れる">リスク 2:
+    <code>DCインフラ</code> を広げすぎて安全性が崩れる</h3>
+    <p>対策:</p>
+    <ul>
+    <li>action は allowlist 方式のまま広げる</li>
+    <li>backup / approval を先に入れる</li>
+    </ul>
+    <h3 id="リスク-3-題目に対して成果が散漫になる">リスク 3:
+    題目に対して成果が散漫になる</h3>
+    <p>対策:</p>
+    <ul>
+    <li>卒論の主張を「安全制約下での multi-agent repair
+    effectiveness」に集中させる</li>
+    <li>production PoC は補強材料として位置づける</li>
+    </ul>
+    <h2 id="8-推奨する最終的な研究ストーリー">8.
+    推奨する最終的な研究ストーリー</h2>
+    <p>最も通しやすい研究ストーリーは次の形である。</p>
+    <ol type="1">
+    <li>安全な単一エージェント応急復旧基盤を構築した</li>
+    <li>hard scenario では single-agent
+    が部分修復で止まりやすいことを示した</li>
+    <li>multi-agent orchestration
+    を導入し、再観測・再計画・再評価を可能にした</li>
+    <li>その結果、masked cascade や ambiguous scenario
+    で復旧性能が改善した</li>
+    <li>さらに実ホスト向け PoC を通じて、本番適用時の安全制約と
+    human-in-the-loop の必要性を示した</li>
+    </ol>
+    <p>この流れなら、現状のリポジトリ資産を最大限活かしつつ、題目との整合も取りやすい。</p>
+    <h2 id="9-結論">9. 結論</h2>
+    <p>今後の実装は、<strong>機能を増やす順番</strong>
+    が重要である。<br />
+    最初にやるべきことは「評価の整合」と「hard scenario に対する
+    multi-agent の改善」であり、その後に <code>DCらしさ</code> と
+    <code>production PoC</code> を拡張するのが最も効率的である。</p>
+    <p>したがって、推奨順序は以下である。</p>
+    <ol type="1">
+    <li>評価基盤整備</li>
+    <li>multi-agent 強化</li>
+    <li>DCライク benchmark 拡張</li>
+    <li>安全な action / backup / approval 実装</li>
+    <li>production PoC 強化</li>
+    <li>比較実験と卒論整理</li>
+    </ol>
+    <p>この順で進めれば、現在のリポジトリを
+    <strong>「安全な応急復旧評価基盤」から「卒論として主張可能な
+    multi-agent DCライク修復システム」へ発展させやすい</strong>。</p>
+    <div class="footer">
+      <span>Safe Emergency Recovery Experiment — Research Wiki</span>
+      <span>ソース: <a href="../roadmap/implementation_roadmap_20260316.md">../roadmap/implementation_roadmap_20260316.md</a></span>
+    </div>
+  </main>
+</div>
+<script src="wiki.js"></script>
+</body>
+</html>

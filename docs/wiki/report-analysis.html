@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>設計レビュー・改善提案 — Safe Emergency Recovery Wiki</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="layout">
+  <header class="topbar">
+    <div class="brand">
+      <a href="index.html">Safe Emergency Recovery</a>
+      <span class="sub">研究ドキュメント Wiki</span>
+    </div>
+    <nav class="topnav">
+      <a href="index.html">ホーム</a>
+      <a href="overview.html">概要</a>
+      <a href="roadmap-revised.html">最新ロードマップ</a>
+    </nav>
+  </header>
+  <aside class="sidebar">
+    <div class="group">
+      <div class="group-title">スタート</div>
+      <ul>
+        <li><a href="index.html" data-id="index">Wiki トップ</a></li>
+        <li><a href="overview.html" data-id="overview">プロジェクト概要 (README)</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">ロードマップ</div>
+      <ul>
+        <li><a href="roadmap-initial.html" data-id="roadmap-initial">初版ロードマップ (2026-03-16)</a></li>
+        <li><a href="roadmap-revised.html" data-id="roadmap-revised">改訂版ロードマップ (2026-04-15)</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">調査・レポート</div>
+      <ul>
+        <li><a href="report-repository-assessment.html" data-id="report-repository-assessment">リポジトリ調査レポート</a></li>
+        <li><a href="report-analysis.html" data-id="report-analysis">設計レビュー・改善提案</a></li>
+        <li><a href="report-phase1-cost.html" data-id="report-phase1-cost">Phase 1 比較実験コスト</a></li>
+        <li><a href="report-local-experiment-cost.html" data-id="report-local-experiment-cost">局所実験コスト</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">評価</div>
+      <ul>
+        <li><a href="evaluation-hypothesis-transition.html" data-id="evaluation-hypothesis-transition">仮説遷移評価 (Phase 4.5)</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">Production PoC</div>
+      <ul>
+        <li><a href="poc-architecture.html" data-id="poc-architecture">アーキテクチャ</a></li>
+        <li><a href="poc-deploy.html" data-id="poc-deploy">導入手順</a></li>
+        <li><a href="poc-validation-scenarios.html" data-id="poc-validation-scenarios">実機検証シナリオ</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">シナリオ</div>
+      <ul>
+        <li><a href="scenario-ictsc5023.html" data-id="scenario-ictsc5023">ICTSC 5023</a></li>
+      </ul>
+    </div>
+  </aside>
+  <main class="content">
+    <div class="breadcrumb"><a href="index.html">Wiki</a> / レポート / 設計レビュー</div>
+    <h1 id="codex-システム設計レビュー改善提案">Codex
+    システム設計レビュー・改善提案</h1>
+    <p>卒業研究用検証環境 (Safe Emergency Recovery Experiment Baseline)
+    の全ソースコードを精読した上での、設計上の弱点・潜在バグ・改善提案をまとめる。</p>
+    <hr />
+    <h2 id="red_circle-バグ設計上の問題点">🔴 バグ・設計上の問題点</h2>
+    <h3 id="1-_service_running-関数の重複定義">1. <a
+    href="file:///Users/ryoike/Documents/codex/core/healthchecks.py#54-66">_service_running</a>
+    関数の重複定義</h3>
+    <p><a
+    href="file:///Users/ryoike/Documents/codex/core/healthchecks.py">healthchecks.py</a>
+    と <a
+    href="file:///Users/ryoike/Documents/codex/core/verifier.py">verifier.py</a>
+    の両方に <a
+    href="file:///Users/ryoike/Documents/codex/core/healthchecks.py#54-66">_service_running</a>
+    が独立実装されている。ロジックは同一だが、片方だけ修正すると不整合が生じる。</p>
+    <ul>
+    <li><a
+    href="file:///Users/ryoike/Documents/codex/core/healthchecks.py#L54-L65">healthchecks.py:L54-65</a></li>
+    <li><a
+    href="file:///Users/ryoike/Documents/codex/core/verifier.py#L207-L218">verifier.py:L207-218</a></li>
+    </ul>
+    <div class="warning">
+    <div class="title">
+    <p>Warning</p>
+    </div>
+    <p>片方だけ変更すると判定結果が分岐し、サイレント不整合を引き起こす。<a
+    href="file:///Users/ryoike/Documents/codex/core/healthchecks.py">healthchecks.py</a>
+    側へ統一すべき。</p>
+    </div>
+    <hr />
+    <h3 id="2-シナリオ定義と実行パスの不一致">2.
+    シナリオ定義と実行パスの不一致</h3>
+    <p><a
+    href="file:///Users/ryoike/Documents/codex/scenarios/definitions.yaml">definitions.yaml</a>
+    には <strong>i2, m, n, o</strong> のシナリオが定義されているが：</p>
+    <ul>
+    <li><a
+    href="file:///Users/ryoike/Documents/codex/break.sh">break.sh</a>
+    には i2/m/n/o の注入ロジックが存在しない</li>
+    <li><a
+    href="file:///Users/ryoike/Documents/codex/agent.py">agent.py</a> /
+    <a
+    href="file:///Users/ryoike/Documents/codex/runners/run_single.py">run_single.py</a>
+    の <code>--scenario</code> の choices に i2/m/n/o がない</li>
+    <li><a
+    href="file:///Users/ryoike/Documents/codex/agents/mock_worker.py">mock_worker.py</a>
+    にも i2/m/n/o の固定 plan がない</li>
+    <li><a
+    href="file:///Users/ryoike/Documents/codex/core/triage.py">triage.py</a>
+    の <a
+    href="file:///Users/ryoike/Documents/codex/core/triage.py#131-222">_rank_internal_scenarios</a>
+    にも i2/m/n/o のルールがない</li>
+    </ul>
+    <div class="important">
+    <div class="title">
+    <p>Important</p>
+    </div>
+    <p>定義だけ存在して実行できないシナリオは、YAML
+    検証で拾えずに実験結果の解釈を混乱させる可能性がある。使わないなら明示的にコメントアウトするか、実装が追いついたら
+    break 側も揃えるべき。</p>
+    </div>
+    <hr />
+    <h3 id="3-rollback-後のサービス再起動が欠落">3. Rollback
+    後のサービス再起動が欠落</h3>
+    <p><a
+    href="file:///Users/ryoike/Documents/codex/core/executor.py#L134-L136">executor.py:L135</a>
+    でファイルのロールバック (<a
+    href="file:///Users/ryoike/Documents/codex/core/executor.py#20-30">rollback_files</a>)
+    を実行するが、<strong>ロールバック後にサービスの restart/rebuild
+    を行わない</strong>。例えば <a
+    href="file:///Users/ryoike/Documents/codex/app/main.py">app/main.py</a>
+    をロールバックしても、実行中のコンテナは壊れたコードのままである。</p>
+    <pre><code>rollback_result = rollback_files(backups) if backups else ...
+# ← この後 docker compose restart/rebuild がない</code></pre>
+    <div class="caution">
+    <div class="title">
+    <p>Caution</p>
+    </div>
+    <p>ファイルだけ戻しても running
+    なコンテナは古い状態のままで、ロールバックの意味が半減する。</p>
+    </div>
+    <hr />
+    <h3
+    id="4-postcheck_node-後のロールバックでもサービス再起動がない">4. <a
+    href="file:///Users/ryoike/Documents/codex/runners/run_single.py#190-210">postcheck_node</a>
+    後のロールバックでもサービス再起動がない</h3>
+    <p><a
+    href="file:///Users/ryoike/Documents/codex/runners/run_single.py#L218-L227">run_single.py:L218-227</a>
+    の <a
+    href="file:///Users/ryoike/Documents/codex/runners/run_single.py#218-228">rollback_node</a>
+    でも同様に、ファイルを復元するだけで compose restart/rebuild
+    しない。</p>
+    <hr />
+    <h3 id="5-normalize_repo_path-のパストラバーサル検証が不完全">5. <a
+    href="file:///Users/ryoike/Documents/codex/core/policies.py#36-45">normalize_repo_path</a>
+    のパストラバーサル検証が不完全</h3>
+    <p><a
+    href="file:///Users/ryoike/Documents/codex/core/policies.py#L36-L44">policies.py:L36-44</a>
+    で <code>../</code> を弾いているが、symlink
+    経由のエスケープはチェックしていない。<a
+    href="file:///Users/ryoike/Documents/codex/core/policies.py#47-53">resolve_repo_path</a>
+    側で <a
+    href="file:///Users/ryoike/Documents/codex/core/policies.py#47-53">resolve()</a>
+    後の親チェックはしている（L49-51）ので実害は小さいが、<a
+    href="file:///Users/ryoike/Documents/codex/core/policies.py#36-45">normalize_repo_path</a>
+    単体で信頼するコードがあると穴になりうる。</p>
+    <hr />
+    <h3 id="6-show_file-が-executor-内に残っている">6.
+    <code>show_file</code> が executor 内に残っている</h3>
+    <p><a
+    href="file:///Users/ryoike/Documents/codex/core/executor.py#L123-L131">executor.py:L123-131</a>
+    で <code>show_file</code> の実行パスが残っている。README
+    とプロンプトでは「単一ターンでは show_file
+    は許可しない」と明記されているが、executor
+    自体は実行可能。許可制御は <a
+    href="file:///Users/ryoike/Documents/codex/core/actions.py">actions.py</a>
+    の <code>forbidden_action_types</code>
+    に依存しており、呼び方次第でバイパスされる設計。</p>
+    <hr />
+    <h3
+    id="7-mock_worker_node-で-planner-関連フィールドが不完全に初期化">7.
+    <a
+    href="file:///Users/ryoike/Documents/codex/agents/mock_worker.py#203-227">mock_worker_node</a>
+    で planner 関連フィールドが不完全に初期化</h3>
+    <p><a
+    href="file:///Users/ryoike/Documents/codex/agents/mock_worker.py#L213-L226">mock_worker.py:L214-226</a>
+    で <code>planner_error_stage</code>, <code>planner_attempts</code>,
+    <code>planner_transport_failure</code>,
+    <code>planner_reasoning_failure</code>,
+    <code>planner_fallback_used</code>,
+    <code>planner_fallback_reason</code>,
+    <code>planner_fallback_type</code> が設定されていない。<a
+    href="file:///Users/ryoike/Documents/codex/runners/run_single.py#230-323">save_result</a>
+    時に <code>state[key]</code>
+    で初期値が使われるため大事には至らないが、明示設定がない点は脆弱。</p>
+    <hr />
+    <h2 id="yellow_circle-設計上の甘さ">🟡 設計上の甘さ</h2>
+    <h3 id="8-triage-がハードコードされた文字列パターンマッチに依存">8.
+    Triage がハードコードされた文字列パターンマッチに依存</h3>
+    <p><a
+    href="file:///Users/ryoike/Documents/codex/core/triage.py">triage.py</a>
+    の <a
+    href="file:///Users/ryoike/Documents/codex/core/triage.py#224-430">_rank_domains</a>
+    と <a
+    href="file:///Users/ryoike/Documents/codex/core/triage.py#131-222">_rank_internal_scenarios</a>
+    は、<code>"server app:8001"</code>,
+    <code>"FROM itemz ORDER BY id"</code>,
+    <code>"DB_PASSWORD=wrongpassword"</code> 等の
+    <strong>リテラル文字列</strong> に対する単純な <a
+    href="file:///Users/ryoike/Documents/codex/aggregate_observations.py#275-378">in</a>
+    演算をスコアリングに使っている。</p>
+    <ul>
+    <li><strong>問題</strong>: 故障注入パターンが少しでも変われば（例:
+    ポートが 8002 になる）、triage が全く機能しなくなる</li>
+    <li><strong>改善案</strong>: パターンを正規表現化するか、<a
+    href="file:///Users/ryoike/Documents/codex/scenarios/definitions.yaml">definitions.yaml</a>
+    に triage 用のシグネチャを定義して data-driven にする</li>
+    </ul>
+    <hr />
+    <h3 id="9-_hidden_benchmark_evidence-がファイルを直接読んでいる">9.
+    <a
+    href="file:///Users/ryoike/Documents/codex/core/triage.py#111-117">_hidden_benchmark_evidence</a>
+    がファイルを直接読んでいる</h3>
+    <p><a
+    href="file:///Users/ryoike/Documents/codex/core/triage.py#L111-L116">triage.py:L111-116</a>
+    で <a
+    href="file:///Users/ryoike/Documents/codex/app/app.env">app/app.env</a>,
+    <a
+    href="file:///Users/ryoike/Documents/codex/app/main.py">app/main.py</a>,
+    <a
+    href="file:///Users/ryoike/Documents/codex/nginx/nginx.conf">nginx/nginx.conf</a>
+    を <strong>直接読み込んで</strong> I/K
+    シナリオの判定に使っている。これは triage
+    が「観測から推定する」という設計方針と矛盾し、チート的に正解を見ている。</p>
+    <div class="warning">
+    <div class="title">
+    <p>Warning</p>
+    </div>
+    <p>open-world triage の公平な評価を行うなら、<a
+    href="file:///Users/ryoike/Documents/codex/core/triage.py#131-222">_rank_internal_scenarios</a>
+    は evaluator 専用であることを明確にし、triage のドメイン推定（<a
+    href="file:///Users/ryoike/Documents/codex/core/triage.py#224-430">_rank_domains</a>）とは完全に分離すべき。</p>
+    </div>
+    <hr />
+    <h3 id="10-追加観測が-1-回限り固定的">10. 追加観測が 1
+    回限り・固定的</h3>
+    <p>追加観測（<a
+    href="file:///Users/ryoike/Documents/codex/agents/sensor.py#462-541">additional_observation_node</a>）は
+    1 回しか許可されず、取得する項目も
+    <code>recommended_next_observations</code>
+    の固定文字列マッチで決まる。</p>
+    <ul>
+    <li><strong>問題</strong>: 不十分だった場合の再試行パスがない。K
+    シナリオのように追加観測が必須のケースで、1
+    回目で十分な情報が得られなかった場合に対応できない。</li>
+    <li><strong>改善案</strong>: 最大 N 回まで iterative
+    に追加観測を許す設定を入れ、信頼度が閾値を超えるまでループできるようにする。</li>
+    </ul>
+    <hr />
+    <h3 id="11-postcheck-の-retry-判定条件が曖昧">11. Postcheck の retry
+    判定条件が曖昧</h3>
+    <p><a
+    href="file:///Users/ryoike/Documents/codex/core/verifier.py#L285-L295">verifier.py:L285-295</a>
+    の postcheck ループは <code>readiness_wait_used=True</code>
+    でないと即座に break する。しかし、<code>readiness_wait_used</code>
+    は executor が <code>readiness_wait_requested</code>
+    を返した場合にしか True にならない。</p>
+    <ul>
+    <li><strong>問題</strong>: nginx.conf だけ編集→nginx restart
+    の場合、<code>readiness_wait_requested</code> は True
+    になるが、restart 直後の一瞬の不通でも postcheck が最初の 1
+    回で失敗判定される可能性がある。</li>
+    <li><strong>改善案</strong>: restart/rebuild を含む全ケースで短い
+    retry を入れるか、サービスの ready 判定を別の仕組みで行う。</li>
+    </ul>
+    <hr />
+    <h3
+    id="12-expand_execution_actions-の-app-rebuild-自動挿入が複雑すぎる">12.
+    <a
+    href="file:///Users/ryoike/Documents/codex/core/actions.py#183-282">expand_execution_actions</a>
+    の app rebuild 自動挿入が複雑すぎる</h3>
+    <p><a
+    href="file:///Users/ryoike/Documents/codex/core/actions.py#L183-L281">actions.py:L183-281</a>
+    の自動 action 展開ロジックが約 100 行あり、restart→rebuild
+    のアップグレード、nginx config test の自動挿入、app rebuild
+    の自動追加が同一関数に詰め込まれている。エッジケースのテストが難しい。</p>
+    <ul>
+    <li><strong>改善案</strong>: 各展開ルール（nginx test
+    挿入、restart→rebuild 昇格、app rebuild
+    追加）を個別の小関数に分割し、単体テスト可能にする。</li>
+    </ul>
+    <hr />
+    <h3 id="13-結果-json-内のフィールド重複">13. 結果 JSON
+    内のフィールド重複</h3>
+    <p><a
+    href="file:///Users/ryoike/Documents/codex/runners/run_single.py#L230-L320">run_single.py:L230-320</a>
+    の <a
+    href="file:///Users/ryoike/Documents/codex/runners/run_single.py#230-323">save_result</a>
+    で、同じ情報が異なるキー名で二重に格納されている：</p>
+    <table>
+    <thead>
+    <tr>
+    <th>重複</th>
+    <th>キー1</th>
+    <th>キー2</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>アクション</td>
+    <td><code>normalized_actions</code></td>
+    <td><code>proposed_actions</code></td>
+    </tr>
+    <tr>
+    <td>生出力</td>
+    <td><code>planner_output_raw</code></td>
+    <td><code>worker_raw_output</code></td>
+    </tr>
+    <tr>
+    <td>ファイルスニペット</td>
+    <td><code>worker_visible_file_snippets</code></td>
+    <td><code>worker_visible_context.observation.file_snippets</code></td>
+    </tr>
+    </tbody>
+    </table>
+    <p>データサイズが膨張し、分析時に混乱を招く。</p>
+    <hr />
+    <h3 id="14-エラーハンドリングの一貫性不足">14.
+    エラーハンドリングの一貫性不足</h3>
+    <ul>
+    <li><a
+    href="file:///Users/ryoike/Documents/codex/core/healthchecks.py">healthchecks.py</a>
+    の <a
+    href="file:///Users/ryoike/Documents/codex/core/healthchecks.py#68-86">http_check</a>
+    は <code>urllib</code> の例外を <a
+    href="file:///Users/ryoike/Documents/codex/core/actions.py#15-21">str(exc)</a>
+    で丸めて返すが、タイムアウトとコネクション拒否の区別がつかない</li>
+    <li><a
+    href="file:///Users/ryoike/Documents/codex/core/healthchecks.py#10-23">run_fixed_command</a>
+    はタイムアウトを設定していないため、Docker
+    デーモンが応答しない場合にハングする可能性がある</li>
+    </ul>
+    <hr />
+    <h2 id="green_circle-改善提案より良い結果を得るために">🟢
+    改善提案（より良い結果を得るために）</h2>
+    <h3 id="15-multi-turn-修復ループの導入">15. Multi-turn
+    修復ループの導入</h3>
+    <p>現在は「1 回の計画で復旧を試みる」設計であり、I
+    のような多段障害には対応しにくい。postcheck の失敗結果を feedback
+    として worker に戻し、<strong>最大 N ターンの self-correction
+    ループ</strong>
+    を入れることで、「初段の修復で新たに露出した障害を検出・修復」できるようになる。</p>
+    <hr />
+    <h3 id="16-信頼度スコアの動的更新">16. 信頼度スコアの動的更新</h3>
+    <p>triage の confidence はルールベースの固定値。追加観測や postcheck
+    の結果を踏まえた <strong>Bayesian 的な信頼度更新</strong>
+    を行えば、曖昧ケースでの判定精度が向上する可能性がある。</p>
+    <hr />
+    <h3 id="17-テストスイートの欠如">17. テストスイートの欠如</h3>
+    <p>プロジェクト全体に
+    <strong>ユニットテストがない</strong>。特に以下はテストが強く必要：</p>
+    <ul>
+    <li><a
+    href="file:///Users/ryoike/Documents/codex/core/actions.py#23-113">normalize_action</a>
+    / <a
+    href="file:///Users/ryoike/Documents/codex/core/actions.py#115-141">normalize_actions</a>
+    のエッジケース（空文字列、不正型、ネスト構造）</li>
+    <li><a
+    href="file:///Users/ryoike/Documents/codex/core/actions.py#183-282">expand_execution_actions</a>
+    の自動挿入ロジック</li>
+    <li><a
+    href="file:///Users/ryoike/Documents/codex/core/triage.py#224-430">_rank_domains</a>
+    / <a
+    href="file:///Users/ryoike/Documents/codex/core/triage.py#131-222">_rank_internal_scenarios</a>
+    のスコアリング</li>
+    <li><code>replace_text</code> の 1 回一致制約</li>
+    </ul>
+    <p>テストがないと、新シナリオ追加時のリグレッションを検知できない。</p>
+    <hr />
+    <h3 id="18-sensor-の観測タイミング制御の改良">18. Sensor
+    の観測タイミング制御の改良</h3>
+    <p><code>OBSERVATION_STABILIZATION_SECONDS = 2</code> で最大 2
+    回まで安定化待機するが、app コンテナの起動が遅い場合（pip install
+    を含む）にはこれでは足りない場合がある。動的に起動シーケンスの完了を待つ（例:
+    <code>docker compose wait</code> や healthcheck
+    の利用）方がロバスト。</p>
+    <hr />
+    <h3 id="19-prompt-engineering-の版管理">19. Prompt Engineering
+    の版管理</h3>
+    <p><a
+    href="file:///Users/ryoike/Documents/codex/core/prompts.py">core/prompts.py</a>
+    では <code>single_agent_blind_v7</code>
+    のようにバージョン番号を手動管理しているが、実際にどのプロンプトでどの結果が出たかの追跡可能性が弱い。プロンプトテキスト自体のハッシュを結果
+    JSON に含めると、再現性が向上する。</p>
+    <hr />
+    <h3 id="20-restore_from_base-のみに頼る安全策のリスク">20.
+    <code>restore_from_base</code> のみに頼る安全策のリスク</h3>
+    <p><a
+    href="file:///Users/ryoike/Documents/codex/app/app.env">app/app.env</a>
+    等で正解値が分からない場合に <code>restore_from_base</code>
+    をフォールバックにしているが、base
+    ファイルが正規の標的環境で実際に存在する前提。本番想定では base
+    ファイルが無いケースも考慮し、<strong>構成管理バックアップとの差分適用</strong>
+    といった代替戦略の検討が望ましい。</p>
+    <hr />
+    <h2 id="まとめ">まとめ</h2>
+    <table>
+    <thead>
+    <tr>
+    <th>カテゴリ</th>
+    <th>件数</th>
+    <th>深刻度</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>バグ・実装上の問題</td>
+    <td>7 件</td>
+    <td>🔴 高</td>
+    </tr>
+    <tr>
+    <td>設計上の甘さ</td>
+    <td>7 件</td>
+    <td>🟡 中</td>
+    </tr>
+    <tr>
+    <td>より良い結果のための改善提案</td>
+    <td>6 件</td>
+    <td>🟢 提案</td>
+    </tr>
+    </tbody>
+    </table>
+    <p>特に <strong>ロールバック後のサービス再起動欠落</strong>（#3,
+    #4）と
+    <strong>ユニットテスト未整備</strong>（#17）は、卒論として提出するシステムとしては対処優先度が高い。Triage
+    のハードコーディング（#8,
+    #9）は研究成果としての汎用性に関わる論点となりうる。</p>
+    <div class="footer">
+      <span>Safe Emergency Recovery Experiment — Research Wiki</span>
+      <span>ソース: <a href="../reports/analysis_report.md">../reports/analysis_report.md</a></span>
+    </div>
+  </main>
+</div>
+<script src="wiki.js"></script>
+</body>
+</html>

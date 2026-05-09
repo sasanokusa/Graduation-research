@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Production PoC
+実機検証シナリオ — Safe Emergency Recovery Wiki</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="layout">
+  <header class="topbar">
+    <div class="brand">
+      <a href="index.html">Safe Emergency Recovery</a>
+      <span class="sub">研究ドキュメント Wiki</span>
+    </div>
+    <nav class="topnav">
+      <a href="index.html">ホーム</a>
+      <a href="overview.html">概要</a>
+      <a href="roadmap-revised.html">最新ロードマップ</a>
+    </nav>
+  </header>
+  <aside class="sidebar">
+    <div class="group">
+      <div class="group-title">スタート</div>
+      <ul>
+        <li><a href="index.html" data-id="index">Wiki トップ</a></li>
+        <li><a href="overview.html" data-id="overview">プロジェクト概要 (README)</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">ロードマップ</div>
+      <ul>
+        <li><a href="roadmap-initial.html" data-id="roadmap-initial">初版ロードマップ (2026-03-16)</a></li>
+        <li><a href="roadmap-revised.html" data-id="roadmap-revised">改訂版ロードマップ (2026-04-15)</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">調査・レポート</div>
+      <ul>
+        <li><a href="report-repository-assessment.html" data-id="report-repository-assessment">リポジトリ調査レポート</a></li>
+        <li><a href="report-analysis.html" data-id="report-analysis">設計レビュー・改善提案</a></li>
+        <li><a href="report-phase1-cost.html" data-id="report-phase1-cost">Phase 1 比較実験コスト</a></li>
+        <li><a href="report-local-experiment-cost.html" data-id="report-local-experiment-cost">局所実験コスト</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">評価</div>
+      <ul>
+        <li><a href="evaluation-hypothesis-transition.html" data-id="evaluation-hypothesis-transition">仮説遷移評価 (Phase 4.5)</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">Production PoC</div>
+      <ul>
+        <li><a href="poc-architecture.html" data-id="poc-architecture">アーキテクチャ</a></li>
+        <li><a href="poc-deploy.html" data-id="poc-deploy">導入手順</a></li>
+        <li><a href="poc-validation-scenarios.html" data-id="poc-validation-scenarios">実機検証シナリオ</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">シナリオ</div>
+      <ul>
+        <li><a href="scenario-ictsc5023.html" data-id="scenario-ictsc5023">ICTSC 5023</a></li>
+      </ul>
+    </div>
+  </aside>
+  <main class="content">
+    <div class="breadcrumb"><a href="index.html">Wiki</a> / Production PoC / 実機検証</div>
+    <h1 id="production-poc-実機検証シナリオ">Production PoC
+    実機検証シナリオ</h1>
+    <p>本番影響が小さい時間帯に実施し、最初は必ず
+    <code>propose-only</code> で始めてください。</p>
+    <h2 id="シナリオ-1-web-service-を停止して検知">シナリオ 1: Web
+    service を停止して検知</h2>
+    <ol type="1">
+    <li><code>sudo systemctl stop nginx</code></li>
+    <li><code>monitor-once</code> を実行</li>
+    <li>次を確認
+    <ul>
+    <li><code>web_service_inactive</code></li>
+    <li><code>web_http_failed</code></li>
+    <li>Discord 障害通知</li>
+    </ul></li>
+    <li>service は手動復旧するか、restart allowlist を確認済みの場合のみ
+    <code>execute</code> で再試験</li>
+    </ol>
+    <h2 id="シナリオ-2-minecraft-停止を検知">シナリオ 2: Minecraft
+    停止を検知</h2>
+    <p><code>systemd</code> 管理か、<code>tmux</code> /
+    <code>shell script</code> 管理かで手順を分けてください。</p>
+    <h3 id="2-a-systemd-管理の-minecraft">2-A. systemd 管理の
+    Minecraft</h3>
+    <ol type="1">
+    <li><code>sudo systemctl stop minecraft</code></li>
+    <li><code>monitor-once</code> を実行</li>
+    <li>次を確認
+    <ul>
+    <li><code>minecraft_process_missing</code> または
+    <code>minecraft_port_failed</code></li>
+    <li>Discord 障害通知</li>
+    <li><code>execute</code> でも allowlist
+    外なら自動再起動されない</li>
+    </ul></li>
+    </ol>
+    <h3 id="2-b-tmux--shell-script-管理の-minecraft">2-B. tmux / shell
+    script 管理の Minecraft</h3>
+    <ol type="1">
+    <li>安全な時間帯に、Minecraft Java process を停止するか、tmux
+    session を明示的に落とす</li>
+    <li><code>monitor-once</code> を実行</li>
+    <li>次を確認
+    <ul>
+    <li><code>minecraft_process_missing</code> または
+    <code>minecraft_port_failed</code></li>
+    <li><code>systemctl is-active minecraft</code>
+    のような誤判定が出ない</li>
+    <li>Discord では「手動復旧が必要」という趣旨の通知になる</li>
+    </ul></li>
+    </ol>
+    <h2 id="シナリオ-3-localhost-health-check-を失敗させる">シナリオ 3:
+    localhost health check を失敗させる</h2>
+    <ol type="1">
+    <li>config の Web health URL を一時的に
+    <code>http://127.0.0.1:9/healthz</code> のような失敗先へ向ける</li>
+    <li><code>monitor-once</code> を実行</li>
+    <li>次を確認
+    <ul>
+    <li><code>web_http_failed</code></li>
+    <li><code>propose-only</code> では危険操作が実行されない</li>
+    </ul></li>
+    </ol>
+    <h2
+    id="シナリオ-4-dummy-failed-unit-でエスカレーション確認">シナリオ 4:
+    dummy failed unit でエスカレーション確認</h2>
+    <ol type="1">
+    <li>無害な test unit を failed 状態にする</li>
+    <li><code>monitor-once</code> を実行</li>
+    <li>次を確認
+    <ul>
+    <li><code>systemd_failed</code></li>
+    <li>安全な自動操作が無い場合、Discord
+    にエスカレーション文面が出る</li>
+    </ul></li>
+    </ol>
+    <h2 id="シナリオ-5-execute-モードで-restart-と検証を確認">シナリオ
+    5: execute モードで restart と検証を確認</h2>
+    <ol type="1">
+    <li><code>allowed_restart_services</code> を既知の安全 service 1
+    つに絞る</li>
+    <li><code>actions.mode: execute</code> に変更</li>
+    <li>対象 service を停止</li>
+    <li><code>monitor-once</code> を実行</li>
+    <li>次を確認
+    <ul>
+    <li>restart 試行が 1 回だけ記録される</li>
+    <li>直後に検証が走る</li>
+    <li>検証失敗時に連鎖自動操作が走らない</li>
+    </ul></li>
+    </ol>
+    <h2 id="シナリオ-6-restart-以外の-low-risk-runbook-を確認">シナリオ
+    6: restart 以外の low-risk runbook を確認</h2>
+    <ol type="1">
+    <li><code>allowed_runbooks</code> に
+    <code>reload_nginx_config</code> のような固定 argv runbook
+    を登録する</li>
+    <li>analyzer から <code>kind: runbook</code>,
+    <code>metadata.runbook_id: reload_nginx_config</code> の action
+    が出る条件で <code>monitor-once</code> を実行する</li>
+    <li>次を確認
+    <ul>
+    <li><code>command_preview.args</code> が YAML に登録した固定 argv
+    と一致する</li>
+    <li><code>risk_class: low</code> として扱われる</li>
+    <li><code>execute</code> モードでは最大 1 回だけ実行される</li>
+    <li>実行後に <code>verification.kind</code>
+    に対応した確認が走る</li>
+    </ul></li>
+    </ol>
+    <h2
+    id="シナリオ-7-medium-risk-action-の-backup--approval-gate-を確認">シナリオ
+    7: medium-risk action の backup / approval gate を確認</h2>
+    <ol type="1">
+    <li><code>backup.provider: local-snapshot</code> と
+    <code>snapshot_paths</code> を設定する</li>
+    <li>fresh snapshot marker が無い状態で <code>service_failover</code>
+    などの medium-risk runbook を提案させる</li>
+    <li>backup 不足で実行されないことを確認する</li>
+    <li>snapshot marker を用意し、再度 <code>monitor-once</code>
+    を実行する</li>
+    <li>incident JSON または通知に出る approval id
+    を確認し、<code>approval_dir/&lt;approval_id&gt;.approved</code>
+    を作る</li>
+    <li>再度実行し、承認済みの場合だけ command
+    が実行可能になることを確認する</li>
+    </ol>
+    <h2 id="シナリオ-8-rollback-runbook-を確認">シナリオ 8: rollback
+    runbook を確認</h2>
+    <ol type="1">
+    <li>low-risk または approved medium-risk runbook に
+    <code>rollback_runbook_id</code> を設定する</li>
+    <li>検証が失敗するよう、一時的に health endpoint
+    を失敗先へ向ける</li>
+    <li><code>monitor-once</code> を実行する</li>
+    <li>次を確認
+    <ul>
+    <li>primary runbook 実行後に verification が失敗する</li>
+    <li>rollback runbook が 1 段だけ実行される</li>
+    <li><code>verification.rollback</code> に guard / execution /
+    verification が保存される</li>
+    <li>rollback 後も復旧確認に失敗する場合は
+    <code>fallback_safe_mode: true</code> になり、手動対応へ進む</li>
+    </ul></li>
+    </ol>
+    <div class="footer">
+      <span>Safe Emergency Recovery Experiment — Research Wiki</span>
+      <span>ソース: <a href="../production_poc/validation_scenarios.md">../production_poc/validation_scenarios.md</a></span>
+    </div>
+  </main>
+</div>
+<script src="wiki.js"></script>
+</body>
+</html>

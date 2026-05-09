@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>仮説遷移評価 (Phase 4.5) — Safe Emergency Recovery Wiki</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="layout">
+  <header class="topbar">
+    <div class="brand">
+      <a href="index.html">Safe Emergency Recovery</a>
+      <span class="sub">研究ドキュメント Wiki</span>
+    </div>
+    <nav class="topnav">
+      <a href="index.html">ホーム</a>
+      <a href="overview.html">概要</a>
+      <a href="roadmap-revised.html">最新ロードマップ</a>
+    </nav>
+  </header>
+  <aside class="sidebar">
+    <div class="group">
+      <div class="group-title">スタート</div>
+      <ul>
+        <li><a href="index.html" data-id="index">Wiki トップ</a></li>
+        <li><a href="overview.html" data-id="overview">プロジェクト概要 (README)</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">ロードマップ</div>
+      <ul>
+        <li><a href="roadmap-initial.html" data-id="roadmap-initial">初版ロードマップ (2026-03-16)</a></li>
+        <li><a href="roadmap-revised.html" data-id="roadmap-revised">改訂版ロードマップ (2026-04-15)</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">調査・レポート</div>
+      <ul>
+        <li><a href="report-repository-assessment.html" data-id="report-repository-assessment">リポジトリ調査レポート</a></li>
+        <li><a href="report-analysis.html" data-id="report-analysis">設計レビュー・改善提案</a></li>
+        <li><a href="report-phase1-cost.html" data-id="report-phase1-cost">Phase 1 比較実験コスト</a></li>
+        <li><a href="report-local-experiment-cost.html" data-id="report-local-experiment-cost">局所実験コスト</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">評価</div>
+      <ul>
+        <li><a href="evaluation-hypothesis-transition.html" data-id="evaluation-hypothesis-transition">仮説遷移評価 (Phase 4.5)</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">Production PoC</div>
+      <ul>
+        <li><a href="poc-architecture.html" data-id="poc-architecture">アーキテクチャ</a></li>
+        <li><a href="poc-deploy.html" data-id="poc-deploy">導入手順</a></li>
+        <li><a href="poc-validation-scenarios.html" data-id="poc-validation-scenarios">実機検証シナリオ</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">シナリオ</div>
+      <ul>
+        <li><a href="scenario-ictsc5023.html" data-id="scenario-ictsc5023">ICTSC 5023</a></li>
+      </ul>
+    </div>
+  </aside>
+  <main class="content">
+    <div class="breadcrumb"><a href="index.html">Wiki</a> / 評価 / 仮説遷移</div>
+    <h1 id="hypothesis-transition-evaluation">Hypothesis Transition
+    Evaluation</h1>
+    <p>Phase 4.5
+    は、成功率だけでなく「どの制御構造が仮説固執を減らしたか」を見るための評価準備フェーズである。</p>
+    <h2 id="比較条件">比較条件</h2>
+    <p>最低限の比較条件は次の 4 つに固定する。</p>
+    <ul>
+    <li><code>single_agent_one_shot</code>: <code>agent.py</code></li>
+    <li><code>single_agent_iterative_self_critique</code>:
+    <code>self_critique_agent.py</code></li>
+    <li><code>multi_agent_single_planner</code>:
+    <code>multi_agent.py</code></li>
+    <li><code>improved_multi_agent</code>: 今後の planner diversity /
+    prompt 改良版</li>
+    </ul>
+    <p><code>single_agent_iterative_self_critique</code> は planner と
+    critic の provider/model を <code>SINGLE_AGENT_*</code> に揃え、外部
+    reviewer / judge role は使わない。</p>
+    <h2 id="保存されるログ">保存されるログ</h2>
+    <p>各 result JSON には次を保存する。</p>
+    <ul>
+    <li><code>baseline_condition</code></li>
+    <li><code>hypothesis_log</code></li>
+    <li><code>hypothesis_metrics</code></li>
+    <li><code>self_critique_history</code></li>
+    </ul>
+    <p><code>hypothesis_log</code> の各 turn には次を含める。</p>
+    <ul>
+    <li><code>primary_hypothesis</code></li>
+    <li><code>secondary_hypotheses</code></li>
+    <li><code>confidence</code></li>
+    <li><code>evidence_summary</code></li>
+    <li><code>proposed_action</code></li>
+    <li><code>reviewer_feedback_category</code></li>
+    <li><code>judge_decision</code></li>
+    <li><code>hypothesis_changed</code></li>
+    <li><code>changed_after_critique</code></li>
+    </ul>
+    <h2 id="集計">集計</h2>
+    <p>result JSON または observation summary から CSV を作る。</p>
+    <div class="sourceCode" id="cb1"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="ex">./.venv/bin/python</span> aggregate_hypothesis_metrics.py results/20260419T114139Z_m.json</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="ex">./.venv/bin/python</span> aggregate_hypothesis_metrics.py observations/<span class="op">&lt;</span>run<span class="op">&gt;</span>/summary.csv <span class="at">--output</span> observations/<span class="op">&lt;</span>run<span class="op">&gt;</span>/hypothesis_metrics.csv</span></code></pre></div>
+    <p>最低限見る指標は次である。</p>
+    <ul>
+    <li>Top-1 仮説変更回数</li>
+    <li>仮説集合更新回数</li>
+    <li>批判後の仮説変化率</li>
+    <li>誤仮説固着長</li>
+    <li>first-fix success と full recovery</li>
+    <li>再観測回数と仮説変化への寄与</li>
+    </ul>
+    <div class="footer">
+      <span>Safe Emergency Recovery Experiment — Research Wiki</span>
+      <span>ソース: <a href="../hypothesis_transition_evaluation.md">../hypothesis_transition_evaluation.md</a></span>
+    </div>
+  </main>
+</div>
+<script src="wiki.js"></script>
+</body>
+</html>

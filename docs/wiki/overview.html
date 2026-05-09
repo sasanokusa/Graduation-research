@@ -1,0 +1,1065 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>プロジェクト概要 — Safe Emergency Recovery Wiki</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="layout">
+  <header class="topbar">
+    <div class="brand">
+      <a href="index.html">Safe Emergency Recovery</a>
+      <span class="sub">研究ドキュメント Wiki</span>
+    </div>
+    <nav class="topnav">
+      <a href="index.html">ホーム</a>
+      <a href="overview.html">概要</a>
+      <a href="roadmap-revised.html">最新ロードマップ</a>
+    </nav>
+  </header>
+  <aside class="sidebar">
+    <div class="group">
+      <div class="group-title">スタート</div>
+      <ul>
+        <li><a href="index.html" data-id="index">Wiki トップ</a></li>
+        <li><a href="overview.html" data-id="overview">プロジェクト概要 (README)</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">ロードマップ</div>
+      <ul>
+        <li><a href="roadmap-initial.html" data-id="roadmap-initial">初版ロードマップ (2026-03-16)</a></li>
+        <li><a href="roadmap-revised.html" data-id="roadmap-revised">改訂版ロードマップ (2026-04-15)</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">調査・レポート</div>
+      <ul>
+        <li><a href="report-repository-assessment.html" data-id="report-repository-assessment">リポジトリ調査レポート</a></li>
+        <li><a href="report-analysis.html" data-id="report-analysis">設計レビュー・改善提案</a></li>
+        <li><a href="report-phase1-cost.html" data-id="report-phase1-cost">Phase 1 比較実験コスト</a></li>
+        <li><a href="report-local-experiment-cost.html" data-id="report-local-experiment-cost">局所実験コスト</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">評価</div>
+      <ul>
+        <li><a href="evaluation-hypothesis-transition.html" data-id="evaluation-hypothesis-transition">仮説遷移評価 (Phase 4.5)</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">Production PoC</div>
+      <ul>
+        <li><a href="poc-architecture.html" data-id="poc-architecture">アーキテクチャ</a></li>
+        <li><a href="poc-deploy.html" data-id="poc-deploy">導入手順</a></li>
+        <li><a href="poc-validation-scenarios.html" data-id="poc-validation-scenarios">実機検証シナリオ</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">シナリオ</div>
+      <ul>
+        <li><a href="scenario-ictsc5023.html" data-id="scenario-ictsc5023">ICTSC 5023</a></li>
+      </ul>
+    </div>
+  </aside>
+  <main class="content">
+    <div class="breadcrumb"><a href="index.html">Wiki</a> / 概要</div>
+    <h1 id="safe-emergency-recovery-experiment-baseline">Safe Emergency
+    Recovery Experiment Baseline</h1>
+    <p>本リポジトリは、Docker Compose
+    ベースの意図的に破壊可能な標的環境に対して、LLM
+    が応急復旧を試みる研究評価基盤である。目的は本番運用ではなく、障害注入、観測、修復計画、検証、ロールバック、結果記録までを安全に反復実験することである。</p>
+    <p>今回の主系は、自由形式シェルコマンドをそのまま実行する PoC
+    ではなく、構造化アクション、Verifier、Rollback
+    を備えた単一エージェント版である。さらに現在は、内部ベンチマーク用の
+    A-X シナリオ真値を保持しつつ、sensor / triage / planner 側は
+    closed-set の scenario classifier ではなく、open-world
+    の仮説生成器として動作する構成へ寄せている。</p>
+    <h2 id="応急復旧の成功条件">応急復旧の成功条件</h2>
+    <p>本リポジトリにおける「応急復旧成功」は、元の構成を一字一句再現することではない。以下を満たし、かつ被害拡大を起こしていない状態を成功とみなす。</p>
+    <ul>
+    <li>シナリオごとに定義した主要ヘルスチェックが通る</li>
+    <li>主要 API が 200 を返し、必要な semantic check も満たす</li>
+    <li>許可されていないファイル変更や危険操作を行っていない</li>
+    <li>失敗時にロールバック可能な変更は自動で巻き戻される</li>
+    </ul>
+    <p>シナリオごとの成功条件は <a
+    href="scenarios/definitions.yaml">scenarios/definitions.yaml</a>
+    に定義している。</p>
+    <h2 id="何を残したか">何を残したか</h2>
+    <p>既存の標的環境と故障注入系は維持している。</p>
+    <ul>
+    <li><a href="docker-compose.yml">docker-compose.yml</a></li>
+    <li><a href="break.sh">break.sh</a></li>
+    <li><a href="reset.sh">reset.sh</a></li>
+    <li><a href="nginx/nginx.conf">nginx/nginx.conf</a></li>
+    <li><a href="app/main.py">app/main.py</a></li>
+    <li><a href="app/requirements.txt">app/requirements.txt</a></li>
+    <li><a href="app/app.env">app/app.env</a></li>
+    </ul>
+    <p><code>break.sh</code> による A-X 障害注入と <code>reset.sh</code>
+    による初期化手順は従来どおり利用できる。</p>
+    <h2 id="現在の主系構成">現在の主系構成</h2>
+    <pre class="text"><code>.
+├── agent.py                      # 単一エージェント版の薄い入口
+├── runners
+│   └── run_single.py             # 構造化アクション方式の runner
+├── agents
+│   ├── mock_worker.py            # LLM 非依存の固定 plan
+│   ├── sensor.py                 # 観測情報の収集
+│   └── worker.py                 # role 設定経由の構造化アクション計画
+├── core
+│   ├── agent_factory.py          # role -&gt; provider/model/client 解決
+│   ├── agent_roles.py            # single_agent/planner/reviewer/judge/triage
+│   ├── actions.py                # JSON プランの解析と整形
+│   ├── executor.py               # whitelist 実行と rollback
+│   ├── evaluator_mapping.py      # evaluator 専用の internal benchmark mapping
+│   ├── healthchecks.py           # docker / HTTP チェック
+│   ├── policies.py               # 許可パスと許可アクション
+│   ├── prompts.py                # prompt registry
+│   ├── scenario_context.py       # internal -&gt; worker-visible context の変換
+│   ├── settings.py               # .env / env ベースの typed settings
+│   ├── state.py                  # LangGraph state
+│   ├── triage.py                 # auto mode の障害クラス推定と scope 提案
+│   └── verifier.py               # pre/post check
+├── scenarios
+│   └── definitions.yaml          # シナリオ定義
+├── tests                         # pytest ベースの unit / integration test
+├── results                       # 実験結果 JSON と backup（ローカル生成物）
+├── multi_agent.py                # blackboard-driven multi-agent runner の薄い入口
+├── docker-compose.yml
+├── break.sh
+└── reset.sh</code></pre>
+    <p><code>agent.py</code> が single-agent one-shot
+    主系、<code>self_critique_agent.py</code> が single-agent iterative
+    self-critique baseline、<code>multi_agent.py</code> が blackboard
+    を共有する multi-agent orchestration の入口である。現時点では
+    observer / triage / repair planner / verification reviewer / safety
+    judge を直列に回す構成であり、並列協調やサービス別 agent
+    まではまだ扱わない。</p>
+    <h2 id="現在のフロー">現在のフロー</h2>
+    <ol type="1">
+    <li>Sensor: <code>service_logs</code>, <code>http results</code>,
+    <code>compose ps</code>, <code>relevant snippets</code>,
+    <code>recent error excerpts</code>,
+    <code>suspicious patterns</code>, <code>static observations</code>
+    を収集する</li>
+    <li>Triage:
+    観測から抽象的な障害ドメイン仮説、confidence、evidence、candidate
+    scope、missing evidence、recommended next observations
+    を生成する</li>
+    <li>Additional Observation: single-agent では triage
+    が証拠不足を示した場合のみ 1 回だけ、multi-agent
+    ではターンをまたいで上限付きで狭い log excerpt や file snippet
+    を追加取得する</li>
+    <li>Worker: true scenario ではなく triage の
+    <code>suspected_domains</code> と <code>candidate_scope</code>
+    を使って構造化アクションを計画する</li>
+    <li>Verifier: action の安全性と triage scope 逸脱を審査する</li>
+    <li>Executor / Postcheck / Rollback:
+    実行、段階的検証、必要時の巻き戻しを行う</li>
+    </ol>
+    <h2 id="multi-agent-orchestration">Multi-agent Orchestration</h2>
+    <p>multi-agent mode は single-agent
+    の安全機構をそのまま使い、<code>observer -&gt; triage -&gt; repair planner -&gt; precheck/execute/postcheck -&gt; verification reviewer -&gt; safety judge -&gt; replan</code>
+    を回す実験 runner である。各 agent は結果 JSON の
+    <code>incident_blackboard</code>
+    に、観測、仮説、修復候補、実行結果、検証結果、失敗履歴、reviewer
+    guidance、judge decision を追記する。</p>
+    <ul>
+    <li>Observer agent: service logs, HTTP checks, compose state,
+    relevant snippets, current/historical evidence を収集する</li>
+    <li>Triage agent: open-world fault-domain hypotheses と candidate
+    scope を作る。前ターンの reviewer guidance
+    がある場合は、残存ドメイン、推奨 scope、推奨追加観測を次ターンの
+    planner input に反映する</li>
+    <li>Repair planner agent: triage, blackboard, 過去ターンの失敗履歴,
+    reviewer feedback を見て次の action plan を返す</li>
+    <li>Verification reviewer agent: proposed / validated / executed
+    actions と postcheck / rollback を見て、<code>retry</code> か
+    <code>stop</code> を返し、次ターンの scope と観測を提案する</li>
+    <li>Safety judge agent: reviewer decision
+    を安全性と証拠の観点から受理または override する</li>
+    <li>最大ターン: <code>MULTI_AGENT_MAX_TURNS</code> で制御し、既定は
+    5 ターン</li>
+    <li>追加観測上限:
+    <code>MULTI_AGENT_MAX_ADDITIONAL_OBSERVATIONS</code>
+    で制御し、既定は 3 回</li>
+    </ul>
+    <p>Reviewer と Judge は benchmark 真値を見ない。open-world の
+    evidence、prior turn trace、shared incident blackboard
+    だけを見て、次に何を直すべきか、または止めるべきかを判断する。</p>
+    <h2 id="許可アクション">許可アクション</h2>
+    <p>LLM は自由なシェル文字列を返さない。代わりに、JSON
+    で以下のアクション列を返す。</p>
+    <ul>
+    <li><code>edit_file</code></li>
+    <li><code>restart_compose_service</code></li>
+    <li><code>rebuild_compose_service</code></li>
+    <li><code>run_config_test</code></li>
+    <li><code>run_health_check</code></li>
+    </ul>
+    <p>現在の単一ターン runner では <code>show_file</code>
+    は許可していない。必要なファイル断片は Sensor
+    が観測情報として先に収集し、Worker はそれを根拠に
+    <code>replace_text</code> を組み立てる。 また、単一ターンの A
+    シナリオでは <code>run_config_test</code> と
+    <code>restart_compose_service</code> だけのプランは許可せず、snippet
+    に誤設定行が見えている場合は <code>edit_file</code>
+    を含むことを前提とする。</p>
+    <p><code>edit_file</code> はさらに安全側へ限定している。</p>
+    <ul>
+    <li>対象ファイルは <code>nginx/nginx.conf</code>,
+    <code>app/main.py</code>, <code>app/requirements.txt</code>,
+    <code>app/app.env</code> のみ</li>
+    <li>操作は <code>replace_text</code> または
+    <code>restore_from_base</code></li>
+    <li>リポジトリ全体への一括置換は禁止</li>
+    <li><code>replace_text</code> は 1 箇所一致のみを許可する</li>
+    <li><code>restore_from_base</code> は最終手段であり、特に
+    <code>app/main.py</code> では局所 <code>replace_text</code>
+    を第一選択とする</li>
+    <li>hard scenario (<code>I2</code>, <code>M</code>, <code>N</code>,
+    <code>O</code>) では <code>app/main.py</code> への初手
+    <code>restore_from_base</code> を verifier が拒否する</li>
+    </ul>
+    <h2 id="禁止操作">禁止操作</h2>
+    <p>Executor
+    は構造化アクションを内部関数へ変換して実行する。任意シェル文字列は直接実行しない。</p>
+    <p>禁止対象の例:</p>
+    <ul>
+    <li><code>rm</code></li>
+    <li><code>sudo</code></li>
+    <li><code>chmod</code>, <code>chown</code></li>
+    <li><code>find</code>, <code>grep -rl</code>, <code>xargs</code>
+    を使った横断編集</li>
+    <li>ワイルドカードを用いた広域編集</li>
+    <li>リポジトリ外パスの参照</li>
+    <li>任意の <code>shell=True</code> 実行</li>
+    </ul>
+    <h2 id="verifier-の役割">Verifier の役割</h2>
+    <p>Verifier は段階的検証を行う。</p>
+    <h3 id="precheck">Precheck</h3>
+    <ul>
+    <li>candidate scope で許可されたファイルか</li>
+    <li>candidate scope で許可されたアクションか</li>
+    <li>triage が提案した <code>candidate_scope</code>
+    を逸脱していないか</li>
+    <li>シナリオで定義した <code>success_checks</code> 名が
+    success-check registry に存在するか</li>
+    <li>変更差分が大きすぎないか</li>
+    <li><code>docker compose config</code> が通るか</li>
+    <li><code>nginx/nginx.conf</code> 編集時に自動 config test
+    を差し込める前提か</li>
+    </ul>
+    <p>Precheck 結果 JSON では以下を分離して保存する。</p>
+    <ul>
+    <li><code>validated_actions</code></li>
+    <li><code>validated_success_checks</code></li>
+    <li><code>action_validation_errors</code></li>
+    <li><code>scope_validation_errors</code></li>
+    <li><code>success_check_validation_errors</code></li>
+    <li><code>worker_normalization_errors</code></li>
+    </ul>
+    <h3 id="postcheck">Postcheck</h3>
+    <ul>
+    <li><code>docker compose ps</code> によるサービス状態</li>
+    <li><code>http://localhost:8080/healthz</code></li>
+    <li><code>http://localhost:8080/api/items</code></li>
+    <li>直近ログの簡易確認</li>
+    <li>シナリオごとの <code>success_checks</code></li>
+    </ul>
+    <p><code>rebuild_compose_service app</code> を含む B/C/D/E/F/G
+    系では、コンテナ再作成直後にアプリケーションがまだ listen
+    しておらず、一時的に 502 や connection refused
+    が見えることがある。そのため postcheck は短い retry
+    を伴う収束待ちを行ってから最終判定する。</p>
+    <p>収束待ちの既定値は env で調整できる。</p>
+    <ul>
+    <li><code>POSTCHECK_RETRY_ATTEMPTS</code></li>
+    <li><code>POSTCHECK_RETRY_INTERVAL_SECONDS</code></li>
+    </ul>
+    <h2 id="rollback">Rollback</h2>
+    <p><code>edit_file</code> 実行前には対象ファイルを
+    <code>results/backups/</code>
+    に退避する。以下のケースでロールバックが動作する。</p>
+    <ul>
+    <li>Executor 内のアクション実行で失敗した場合</li>
+    <li><code>nginx/nginx.conf</code> 編集後の自動 <code>nginx -t</code>
+    に失敗した場合</li>
+    <li>実行は完了したが postcheck
+    に失敗し、バックアップが残っている場合</li>
+    </ul>
+    <p>現在の rollback
+    は「ファイルを戻して終わり」ではない。復元対象ファイルから影響
+    service を推定し、復元後に必要な refresh を行う。</p>
+    <ul>
+    <li><code>nginx/nginx.conf</code> を rollback:
+    <code>run_config_test nginx</code> の後に
+    <code>restart_compose_service nginx</code></li>
+    <li><code>app/app.env</code>, <code>app/main.py</code>,
+    <code>app/requirements.txt</code> を rollback:
+    <code>rebuild_compose_service app</code></li>
+    </ul>
+    <p>さらに rollback 後にも short postcheck を流し、結果 JSON
+    に以下を残す。</p>
+    <ul>
+    <li><code>rollback_actions</code></li>
+    <li><code>rollback_action_results</code></li>
+    <li><code>rollback_postcheck_result</code></li>
+    </ul>
+    <p>ここでの rollback は baseline healthy state
+    への強制復元ではなく、「今回の修復試行前の状態」への復元である。したがって、注入済み
+    fault 自体は rollback 後も残りうる。</p>
+    <h2 id="シナリオ定義">シナリオ定義</h2>
+    <p><a
+    href="scenarios/definitions.yaml">scenarios/definitions.yaml</a>
+    には各シナリオの以下を記述している。</p>
+    <ul>
+    <li><code>fault_classes</code></li>
+    <li><code>name</code></li>
+    <li><code>description</code></li>
+    <li><code>fault_class</code></li>
+    <li><code>allowed_files</code></li>
+    <li><code>allowed_actions</code></li>
+    <li><code>success_checks</code></li>
+    <li><code>failure_conditions</code></li>
+    </ul>
+    <p>現在は A-X の 24 シナリオを定義している。</p>
+    <h2 id="セットアップ">セットアップ</h2>
+    <p>Python 3.12 を推奨する。Python 3.14 では LangChain
+    周辺の警告が出ることを確認している。</p>
+    <div class="sourceCode" id="cb2"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python3.12</span> <span class="at">-m</span> venv .venv</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="bu">source</span> .venv/bin/activate</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="ex">pip</span> install <span class="at">-r</span> requirements_agent.txt</span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="fu">cp</span> .env.example .env</span></code></pre></div>
+    <p><code>.env</code> に API key と role ごとの provider/model
+    を記入する。<code>.env</code> は <a
+    href=".gitignore"><code>.gitignore</code></a>
+    で除外し、<code>.env.example</code> だけをリポジトリに残す。 API key
+    がログ、チャット、Git 履歴などに露出した可能性がある場合は、各
+    provider 側で key を revoke / rotate してから新しい値を
+    <code>.env</code> に入れ直す。</p>
+    <p>最小構成の例:</p>
+    <pre class="dotenv"><code>GOOGLE_API_KEY=YOUR_API_KEY
+SINGLE_AGENT_PROVIDER=google
+SINGLE_AGENT_MODEL=gemini-3-flash-preview
+SINGLE_AGENT_TIMEOUT_SECONDS=75
+SINGLE_AGENT_THINKING_LEVEL=low
+MULTI_AGENT_MAX_TURNS=5
+COMMAND_TIMEOUT_SECONDS=20
+HTTP_TIMEOUT_SECONDS=3
+POSTCHECK_RETRY_ATTEMPTS=15
+POSTCHECK_RETRY_INTERVAL_SECONDS=2</code></pre>
+    <p>既存の <code>.venv</code> が Python 3.14
+    系で作られている場合は、いったん削除して Python 3.12
+    で作り直す。</p>
+    <div class="sourceCode" id="cb4"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="fu">rm</span> <span class="at">-rf</span> .venv</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python3.12</span> <span class="at">-m</span> venv .venv</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="bu">source</span> .venv/bin/activate</span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="ex">pip</span> install <span class="at">-r</span> requirements_agent.txt</span></code></pre></div>
+    <p>Gemini 3 Flash 系では planner timeout が起きうる。これは
+    reasoning failure とは別であり、通信待ちや API
+    側の一時障害で落ちることがある。現行 baseline では以下の env
+    を推奨する。</p>
+    <ul>
+    <li><code>GOOGLE_API_KEY</code>: 単一エージェントの既定 provider
+    secret</li>
+    <li><code>OPENAI_API_KEY</code>, <code>ANTHROPIC_API_KEY</code>:
+    将来の role 分離用 secret</li>
+    <li><code>GEMINI_MODEL</code>: 既定は
+    <code>gemini-3-flash-preview</code></li>
+    <li><code>GEMINI_PLANNER_TIMEOUT_SECONDS</code>: 既定は
+    <code>75</code></li>
+    <li><code>GEMINI_THINKING_LEVEL</code>: 既定は <code>low</code></li>
+    <li><code>SINGLE_AGENT_PROVIDER</code>,
+    <code>SINGLE_AGENT_MODEL</code>: 単一エージェント worker 用の role
+    設定</li>
+    <li><code>PLANNER_PROVIDER</code>, <code>PLANNER_MODEL</code>,
+    <code>REVIEWER_PROVIDER</code>, <code>REVIEWER_MODEL</code>,
+    <code>JUDGE_PROVIDER</code>, <code>JUDGE_MODEL</code>,
+    <code>TRIAGE_PROVIDER</code>, <code>TRIAGE_MODEL</code>: 将来の
+    multi-agent 用 role 設定</li>
+    <li><code>MULTI_AGENT_MAX_TURNS</code>: multi-agent orchestration
+    の最大 planner turn 数</li>
+    <li><code>MULTI_AGENT_MAX_ADDITIONAL_OBSERVATIONS</code>:
+    multi-agent orchestration の追加観測上限</li>
+    <li><code>COMMAND_TIMEOUT_SECONDS</code>: docker compose / shell
+    command の timeout</li>
+    <li><code>HTTP_TIMEOUT_SECONDS</code>: <code>/healthz</code>,
+    <code>/api/items</code> 観測の timeout</li>
+    <li><code>POSTCHECK_RETRY_ATTEMPTS</code>: postcheck retry 回数</li>
+    <li><code>POSTCHECK_RETRY_INTERVAL_SECONDS</code>: postcheck retry
+    間隔秒</li>
+    </ul>
+    <p><code>GEMINI_THINKING_LEVEL</code> は low-latency
+    用の簡易設定であり、<code>off</code>, <code>low</code>,
+    <code>medium</code>, <code>high</code>, <code>default</code>、または
+    thinking budget の整数値を受け付ける。</p>
+    <h2 id="secret-管理と-role-設定">Secret 管理と role 設定</h2>
+    <p>現在の設定解決は <a href="core/settings.py">core/settings.py</a>
+    と <a href="core/agent_factory.py">core/agent_factory.py</a>
+    に集約している。</p>
+    <ul>
+    <li>provider secret: <code>OPENAI_API_KEY</code>,
+    <code>GOOGLE_API_KEY</code>, <code>ANTHROPIC_API_KEY</code></li>
+    <li>provider default model: <code>OPENAI_DEFAULT_MODEL</code>,
+    <code>GOOGLE_DEFAULT_MODEL</code>,
+    <code>ANTHROPIC_DEFAULT_MODEL</code></li>
+    <li>role override: <code>SINGLE_AGENT_*</code>,
+    <code>PLANNER_*</code>, <code>REVIEWER_*</code>,
+    <code>JUDGE_*</code>, <code>TRIAGE_*</code></li>
+    </ul>
+    <p>単一エージェント worker は <code>single_agent</code> role
+    を使う。multi-agent では同じ設定層を使って <code>planner</code>,
+    <code>reviewer</code>, <code>judge</code>, <code>triage</code>
+    を個別 provider/model へ振り分けられる。</p>
+    <p>優先順位は概ね
+    <code>role override &gt; provider default &gt; コード内 default</code>
+    である。single-agent については後方互換のため
+    <code>GEMINI_MODEL</code>,
+    <code>GEMINI_PLANNER_TIMEOUT_SECONDS</code>,
+    <code>GEMINI_THINKING_LEVEL</code> などの legacy env
+    も引き続き読む。</p>
+    <h2 id="prompt-mode">Prompt Mode</h2>
+    <p>単一エージェント worker の system prompt
+    は実行時に切り替えられる。</p>
+    <ul>
+    <li><code>blind</code>:
+    評価用のデフォルト。障害クラスやシナリオ名に寄ったヒントを system
+    prompt に入れない</li>
+    <li><code>hinted</code>: 開発用。障害クラスに関する弱いヒントを
+    system prompt に含める</li>
+    </ul>
+    <p>管理は <a href="core/prompts.py">core/prompts.py</a> の registry
+    経由で行う。将来 <code>strict</code>, <code>debug</code>,
+    <code>fewshot</code> などを追加しやすい構造にしている。</p>
+    <h2 id="auto-mode-と-forced-mode">Auto Mode と Forced Mode</h2>
+    <p><code>agent.py</code> の <code>--scenario</code>
+    は省略可能であり、デフォルトは <code>auto</code> である。</p>
+    <ul>
+    <li><code>auto</code>: Sensor の次に TRIAGE
+    を実行し、観測結果から抽象ドメイン仮説を生成する open-world mode
+    である</li>
+    <li><code>a|b|c|d|e|f|g|h|i|i2|k|l|m|n|o|p|q|r|s|t|u|v|w|x</code>:
+    benchmark/debug 用の forced mode として evaluator
+    側の内部真値だけを固定する</li>
+    </ul>
+    <p>TRIAGE の役割は、障害原因の真値を worker
+    に直接渡すことではなく、観測から妥当と推定される障害ドメイン仮説と候補スコープを生成することである。true
+    scenario の詳細説明は worker に渡さず、planner には triage
+    が提案した抽象ドメイン、evidence、candidate scope だけを見せる。</p>
+    <p>TRIAGE の出力 schema は以下である。</p>
+    <ul>
+    <li><code>suspected_domains</code>
+    <ul>
+    <li><code>domain</code></li>
+    <li><code>confidence</code></li>
+    <li><code>evidence</code></li>
+    </ul></li>
+    <li><code>candidate_scope</code>
+    <ul>
+    <li><code>files</code></li>
+    <li><code>services</code></li>
+    <li><code>allowed_actions</code></li>
+    </ul></li>
+    <li><code>missing_evidence</code></li>
+    <li><code>recommended_next_observations</code></li>
+    <li><code>ambiguity_level</code></li>
+    <li><code>triage_summary</code></li>
+    <li><code>current_state_evidence</code></li>
+    <li><code>historical_evidence</code></li>
+    </ul>
+    <h2 id="internal-definition-と-worker-visible-context">Internal
+    Definition と Worker-visible Context</h2>
+    <p>内部評価に使うシナリオ定義と、worker
+    に実際に見せる文脈は分離している。</p>
+    <ul>
+    <li>internal definition: <a
+    href="scenarios/definitions.yaml">scenarios/definitions.yaml</a> を
+    source of truth とし、<code>description</code>,
+    <code>success_checks</code>, <code>failure_conditions</code> などを
+    verifier / evaluator が使う</li>
+    <li>evaluator-only mapping: <a
+    href="core/evaluator_mapping.py">core/evaluator_mapping.py</a> が
+    forced mode の internal scenario 解決と benchmark 用 mapping
+    を担当する</li>
+    <li>worker-visible context: <a
+    href="core/scenario_context.py">core/scenario_context.py</a> で
+    triage output と観測情報から生成する</li>
+    </ul>
+    <p>open-world triage 自体は sensor
+    の観測だけを参照し、evaluator-only の internal mapping
+    は別責務に分けている。これにより、worker-visible context へ
+    benchmark-specific な hidden evidence を混ぜない。</p>
+    <p>この分離は multi-agent 化の前提でもある。reviewer や judge
+    を追加しても、worker 系 role は injected scenario
+    の真値を見ず、evaluator 側だけが benchmark 真値を保持する。</p>
+    <p>blind では worker に以下を見せる。</p>
+    <ul>
+    <li><code>suspected_domains</code></li>
+    <li><code>candidate_scope</code></li>
+    <li><code>missing_evidence</code></li>
+    <li><code>recommended_next_observations</code></li>
+    <li><code>ambiguity_level</code></li>
+    <li><code>triage_summary</code></li>
+    <li><code>observation</code> の技術情報
+    <ul>
+    <li><code>compose_ps</code></li>
+    <li><code>health_checks</code></li>
+    <li><code>file_snippets</code></li>
+    <li><code>relevant_log_excerpts</code></li>
+    <li><code>http_error_evidence</code></li>
+    <li><code>suspicious_patterns</code></li>
+    <li><code>static_observations</code></li>
+    <li><code>additional_observation</code></li>
+    <li><code>current_state_evidence</code></li>
+    <li><code>historical_evidence</code></li>
+    </ul></li>
+    <li>一般的な safety constraints</li>
+    </ul>
+    <p>blind では worker に以下を渡さない。</p>
+    <ul>
+    <li><code>description</code></li>
+    <li><code>failure_conditions</code></li>
+    <li><code>internal_scenario_id</code></li>
+    <li>benchmark-specific scenario A-X の意味づけ</li>
+    <li>root cause を直接示す答え寄り説明文</li>
+    </ul>
+    <p>hinted では internal definition をそのまま渡さず、worker-visible
+    context に弱い運用ヒントだけを追加する。</p>
+    <p>Scenario C の blind 実行では、<code>app/app.env</code> の
+    relevant snippet や app 側接続エラーの証拠が worker-visible context
+    に出ていないと、安全に <code>edit_file</code>
+    を提案しにくい。そのため current baseline は
+    <code>DB_PASSWORD=...</code> の relevant snippet と、HTTP 500
+    応答本文や関連ログ断片を worker
+    に渡し、正しい値が観測から直接分からない場合は
+    <code>restore_from_base</code>
+    を安全な復旧案として選べるようにしている。 また、Scenario C は env
+    修正だけでは不十分であり、修正後の <code>app</code>
+    に設定を再読込させるため <code>rebuild_compose_service app</code>
+    相当の再作成が必要である。worker prompt
+    でもこの一般則を明示し、executor 側も <code>app/app.env</code>
+    編集時には app の rebuild を自動追加または restart から upgrade
+    する。 Scenario D/F/G では <code>app/main.py</code> の relevant
+    snippet を worker-visible context に含め、局所コード障害や schema
+    drift を evidence-backed に修正できるようにしている。Scenario E では
+    <code>APP_PORT=...</code> と app log の listen port evidence
+    を追加し、A と似た 502 でも competing repair choice が results JSON
+    に残るようにしている。Scenario H では upstream block と location
+    block の関係が見える nginx snippet と、<code>proxy_pass</code> 先が
+    named upstream group でありうることを示す static observation
+    を追加し、upstream group 名と Docker service
+    名の混同を減らしている。Scenario I / I2 / M / N / O では masked
+    cascade を維持するため、初期観測では <code>app/main.py</code> の
+    query bug を見せすぎないよう route-level snippet に抑える。Scenario
+    K では HTTP body を generic な <code>internal error</code>
+    に抑え、追加観測で app log や狭い code snippet
+    を取らないと真因が見えにくい。Scenario L / O では current-state
+    evidence と historical evidence を分け、現在の app/query or DB
+    側障害と古い nginx upstream failure
+    を区別して扱えるようにしている。</p>
+    <h2 id="標的環境の起動と確認">標的環境の起動と確認</h2>
+    <div class="sourceCode" id="cb5"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> compose up <span class="at">-d</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> http://localhost:8080/healthz</span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> http://localhost:8080/api/items</span></code></pre></div>
+    <h2 id="故障注入">故障注入</h2>
+    <div class="sourceCode" id="cb6"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="ex">./break.sh</span> a</span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="ex">./break.sh</span> b</span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a><span class="ex">./break.sh</span> c</span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a><span class="ex">./break.sh</span> d</span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a><span class="ex">./break.sh</span> e</span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a><span class="ex">./break.sh</span> f</span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a><span class="ex">./break.sh</span> g</span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a><span class="ex">./break.sh</span> h</span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a><span class="ex">./break.sh</span> i</span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a><span class="ex">./break.sh</span> i2</span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a><span class="ex">./break.sh</span> k</span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a><span class="ex">./break.sh</span> l</span>
+<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a><span class="ex">./break.sh</span> m</span>
+<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a><span class="ex">./break.sh</span> n</span>
+<span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a><span class="ex">./break.sh</span> o</span>
+<span id="cb6-16"><a href="#cb6-16" aria-hidden="true" tabindex="-1"></a><span class="ex">./break.sh</span> p</span>
+<span id="cb6-17"><a href="#cb6-17" aria-hidden="true" tabindex="-1"></a><span class="ex">./break.sh</span> q</span>
+<span id="cb6-18"><a href="#cb6-18" aria-hidden="true" tabindex="-1"></a><span class="ex">./break.sh</span> r</span>
+<span id="cb6-19"><a href="#cb6-19" aria-hidden="true" tabindex="-1"></a><span class="ex">./break.sh</span> s</span>
+<span id="cb6-20"><a href="#cb6-20" aria-hidden="true" tabindex="-1"></a><span class="ex">./break.sh</span> t</span>
+<span id="cb6-21"><a href="#cb6-21" aria-hidden="true" tabindex="-1"></a><span class="ex">./break.sh</span> u</span></code></pre></div>
+    <p>内容:</p>
+    <ul>
+    <li>A: <code>nginx/nginx.conf</code> の upstream ポート誤設定</li>
+    <li>B: <code>app/requirements.txt</code> から依存を削除</li>
+    <li>C: <code>app/app.env</code> の DB パスワード誤設定</li>
+    <li>D: <code>app/main.py</code> の items クエリを存在しないテーブル
+    <code>itemz</code> へ変更</li>
+    <li>E: <code>app/app.env</code> の <code>APP_PORT</code> を 9000
+    に変更し、nginx upstream と drift させる</li>
+    <li>F: <code>app/main.py</code> の items クエリを存在しない列
+    <code>details</code> へ変更</li>
+    <li>G: <code>app/main.py</code> の <code>/healthz</code>
+    クエリだけを壊し、main API は生かす</li>
+    <li>H: <code>nginx/nginx.conf</code> の upstream host 名を
+    <code>backend</code> に壊す</li>
+    <li>I: <code>app/app.env</code> の <code>APP_PORT</code> と
+    <code>DB_PASSWORD</code> を同時に壊し、app 再作成で反映させる</li>
+    <li>I2: <code>app/app.env</code> の <code>APP_PORT</code> と
+    <code>app/main.py</code> の query bug を同時注入し、初段は port
+    mismatch を前面化する</li>
+    <li>K: <code>app/main.py</code> を opaque 500 化し、HTTP body
+    では真因を見えにくくする</li>
+    <li>L: 一時的に nginx upstream failure を発生させて stale log
+    を残した後、現在障害として <code>app/main.py</code> の query bug
+    を残す</li>
+    <li>M: nginx upstream host mismatch, DB password drift, query bug
+    を三層で重ねる</li>
+    <li>N: <code>uvicorn</code> 欠落で app
+    起動失敗を前面化し、その後ろに query bug を隠す</li>
+    <li>O: stale nginx failure を recent logs に残したうえで、steady
+    state の真因を DB auth drift + hidden query bug に置く</li>
+    <li>P: <code>app/main.py</code> の query failure
+    を握りつぶし、<code>/api/items</code> が 200 + 空 payload に見える
+    visible green / hidden red を作る</li>
+    <li>Q: app 側 port drift に対し、「nginx を追従させる」か「app を
+    baseline へ戻す」かの competing repair choice を作る</li>
+    <li>R: dependency failure が DB auth drift を隠し、さらに DB auth
+    drift が query bug を隠す non-commutative masked cascade を作る</li>
+    <li>S: nginx と app の port 契約を両側で壊し、両ファイルの baseline
+    復元が必要な bilateral drift を作る</li>
+    <li>T: <code>app/app.env</code> の <code>DB_HOST</code> を
+    <code>127.0.0.1</code> に変え、Docker 内ネットワーク前提を壊す
+    topology fault を作る</li>
+    <li>U: <code>DB_HOST</code> の topology fault の後ろに query bug
+    を隠し、段階的再観測を要求する</li>
+    <li>V: <code>CACHE_HOST</code> を存在しない service name
+    に変え、HTTP は green でも <code>/api/topology</code> の dependency
+    reachability を落とす</li>
+    <li>W: <code>CACHE_HOST</code> を reachable な <code>queue</code>
+    に向け、failover 先不一致を semantic contract で検出する</li>
+    <li>X: cache / queue target を入れ替え、さらに degraded mode
+    を有効化して bilateral topology drift を作る</li>
+    </ul>
+    <p>Scenario C
+    は設定ファイルを書き換えるだけでは実行中プロセスに反映されない。そのため
+    <a href="break.sh">break.sh</a> は <code>app/app.env</code>
+    を壊した後に <code>docker compose up -d --force-recreate app</code>
+    を実行し、起動し直した app に誤設定を読み込ませる。さらに
+    <code>/api/items</code>
+    が失敗するまで短時間待機し、注入成功をログに出す。</p>
+    <p>Scenario C の注入確認を手動で見たい場合は以下を実行する。</p>
+    <div class="sourceCode" id="cb7"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="ex">./reset.sh</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="ex">./break.sh</span> c</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> http://localhost:8080/api/items</span></code></pre></div>
+    <p>この <code>curl</code>
+    は失敗する想定である。B/C/D/E/F/G/I/I2/K/L/M/N/O/P/Q/R/S/T/U/V/W/X
+    のように app の再起動や再作成を伴う障害は、A
+    よりも設定反映と収束待ちが重要になる。</p>
+    <h2 id="追加シナリオ-d-x">追加シナリオ D-X</h2>
+    <ul>
+    <li>D: <code>healthz_200</code> は通るが <code>api_items_200</code>
+    だけ失敗する局所コード障害である。HTTP evidence に missing table
+    が出る。</li>
+    <li>E: nginx 側は 8000、app 側は 9000 を前提にしており、A に似た 502
+    でも port drift
+    の切り分けが必要である。単一エージェントでは難しく、multi-agent
+    比較向けの難シナリオとして残している。</li>
+    <li>F: <code>healthz_200</code> は通るが <code>api_items_200</code>
+    だけ Unknown column で失敗する schema drift である。</li>
+    <li>G: <code>api_items_200</code> は通るが <code>healthz_200</code>
+    だけ失敗する partial failure である。</li>
+    <li>H: port mismatch ではなく upstream host mismatch であり、nginx
+    log に host resolution failure が出る。単一エージェントでは
+    <code>backend</code> を upstream group 名と Docker service
+    名で混同しやすく、誤って <code>proxy_pass http://backend;</code>
+    を書き換える failure mode がある。</li>
+    <li>I: 二段階マスク障害であり、初期は upstream reachability failure
+    が前面に出るが、port だけを戻すと DB auth failure
+    が露出する。単一エージェントの一発修復では終わりにくい。</li>
+    <li>I2: port drift が query bug をマスクする。初段では upstream
+    failure だけが見えやすく、port 修正後に <code>itemz</code>
+    が露出する。</li>
+    <li>K: opaque 500 であり、HTTP body だけでは root cause が弱く、app
+    log や狭い code snippet の追加観測が必要になる。</li>
+    <li>L: stale nginx upstream failure を recent logs
+    に残しつつ、steady state の真因は app/query 側に置く。浅い triage は
+    nginx に引っ張られやすい。</li>
+    <li>M: nginx host mismatch、DB auth drift、query bug
+    が三層で重なる。1 段目で nginx を直しても DB auth が出て、2 段目で
+    DB を直しても query bug が残る。</li>
+    <li>N: dependency failure が query bug をマスクする。初段では app
+    crash-loop が前面に出て、依存修復後に <code>itemz</code>
+    が露出する。</li>
+    <li>O: stale nginx evidence と masked cascade を同時に持つ。steady
+    state は DB auth failure だが、recent logs には古い upstream failure
+    が残る。</li>
+    <li>P: visible green, hidden red である。<code>/healthz</code> と
+    <code>/api/items</code> は HTTP 200
+    に見えても、<code>api_items_nonempty</code> と
+    <code>api_items_schema_ok</code> が落ちるため semantic success
+    にはならない。独立 tester / judge が価値を出しやすい。</li>
+    <li>Q: competing repair choice である。疎通だけ見れば nginx を
+    drifted app port
+    に合わせても一時的に直るが、<code>port_contract_matches_baseline</code>
+    により app 側 port 契約を baseline
+    に戻した場合のみ成功とみなす。</li>
+    <li>R: non-commutative masked cascade である。初段は dependency
+    failure、次に DB auth drift、最後に query bug
+    が露出するため、段階的再観測と再計画が必要になる。</li>
+    <li>S: bilateral port contract violation である。nginx と app
+    の両方が baseline から外れているため、片側だけ直しても
+    <code>port_contract_matches_baseline</code> を満たせない。</li>
+    <li>T: network topology fault である。<code>DB_HOST=127.0.0.1</code>
+    は Docker 内では DB コンテナを指さず、DB auth failure に見える症状と
+    app-side env mismatch が同時に出やすい。</li>
+    <li>U: topology fault が query bug をマスクする。初段では DB
+    到達性だけが前面に出て、<code>DB_HOST</code> を戻した後に
+    <code>itemz</code> が露出する。</li>
+    <li>V: cache name resolution fault である。<code>/healthz</code> と
+    <code>/api/items</code> は green でも、app から cache service
+    へ到達できず <code>dc_topology_contract_ok</code> が落ちる。</li>
+    <li>W: failover target mismatch
+    である。<code>CACHE_HOST=queue</code> は TCP 的には reachable
+    だが、期待 topology contract から外れるため semantic success
+    にはならない。</li>
+    <li>X: bilateral dependency drift である。cache / queue target
+    の入れ替えと <code>DEGRADED_MODE=true</code> を同時に入れ、plain
+    HTTP 200 では見逃す DC-like drift を作る。</li>
+    </ul>
+    <p>単一エージェントの mock worker では D/F/G/H/K/L/P/Q/S/T/V/W/X
+    は比較的安定して復旧できる。E も mock では app 側の port restore
+    で収束するが、LLM worker では competing repair choice
+    がぶれやすい。I / I2 / M / N / O / R / U
+    は意図的に部分修復で止まりやすく、single-turn planner
+    の限界を観測するためのシナリオである。P / Q / S は semantic success
+    と port contract を、T / U / V / W / X は topology-aware
+    connectivity と dependency contract を評価しやすい。</p>
+    <p>open-world 単一エージェントの現状整理としては、A-G
+    は比較的安定して解ける一方、H は文字列の多義性、I / I2 / M / N / O /
+    R / U は partial repair 後の再計画、K は additional observation
+    必須、L / O は stale evidence 耐性、P は semantic verification、Q /
+    S は competing repair choice と bilateral drift、T / U / V / W / X
+    は topology-aware connectivity と semantic dependency contract
+    が主な難所になる。</p>
+    <h2 id="実験の回し方">実験の回し方</h2>
+    <h3 id="auto-mode-の最小例">auto mode の最小例</h3>
+    <div class="sourceCode" id="cb8"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> compose up <span class="at">-d</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="ex">./break.sh</span> a</span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> agent.py <span class="at">--worker</span> llm <span class="at">--prompt-mode</span> blind</span></code></pre></div>
+    <p>この形が default の運用であり、TRIAGE が open-world
+    の障害ドメイン仮説を生成し、必要なら 1 回だけ追加観測を行ってから
+    planner へ進む。</p>
+    <h3 id="forced-mode-の最小例">forced mode の最小例</h3>
+    <div class="sourceCode" id="cb9"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> compose up <span class="at">-d</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="ex">./break.sh</span> a</span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> agent.py <span class="at">--scenario</span> a <span class="at">--worker</span> llm <span class="at">--prompt-mode</span> blind</span></code></pre></div>
+    <p>直接 runner を呼ぶ場合:</p>
+    <div class="sourceCode" id="cb10"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> runners/run_single.py <span class="at">--scenario</span> auto <span class="at">--worker</span> llm <span class="at">--prompt-mode</span> blind</span></code></pre></div>
+    <p>ヒントありで開発検証する場合:</p>
+    <div class="sourceCode" id="cb11"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> agent.py <span class="at">--worker</span> llm <span class="at">--prompt-mode</span> hinted</span></code></pre></div>
+    <p>LLM 非依存で executor / verifier / rollback を検証したい場合:</p>
+    <div class="sourceCode" id="cb12"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="ex">./break.sh</span> a</span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> agent.py <span class="at">--worker</span> mock <span class="at">--prompt-mode</span> blind</span></code></pre></div>
+    <p>multi-agent orchestration を使う場合:</p>
+    <div class="sourceCode" id="cb13"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> multi_agent.py <span class="at">--worker</span> llm <span class="at">--prompt-mode</span> blind</span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> multi_agent.py <span class="at">--worker</span> mock <span class="at">--prompt-mode</span> blind</span></code></pre></div>
+    <p>single-agent self-critique baseline を forced mode
+    で見る場合:</p>
+    <div class="sourceCode" id="cb14"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> self_critique_agent.py <span class="at">--scenario</span> m <span class="at">--worker</span> llm <span class="at">--prompt-mode</span> blind</span></code></pre></div>
+    <p>hard scenario を forced mode で見る場合:</p>
+    <div class="sourceCode" id="cb15"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="ex">./break.sh</span> i2</span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> multi_agent.py <span class="at">--scenario</span> i2 <span class="at">--worker</span> mock <span class="at">--prompt-mode</span> blind</span></code></pre></div>
+    <h3 id="観測スイープ">観測スイープ</h3>
+    <p>標準のフルスイープは <code>A-X</code> を対象にする。</p>
+    <div class="sourceCode" id="cb16"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="ex">./observe_runs.sh</span> all <span class="at">--worker</span> llm <span class="at">--prompt-mode</span> blind <span class="at">--repeat</span> 3 <span class="at">--python</span> ./.venv/bin/python</span></code></pre></div>
+    <p>短縮スイープは代表シナリオだけで素早く確認したいときに使う。</p>
+    <div class="sourceCode" id="cb17"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="ex">./observe_runs.sh</span> short <span class="at">--worker</span> mock <span class="at">--scenario-mode</span> forced <span class="at">--python</span> ./.venv/bin/python</span></code></pre></div>
+    <p>集計の最小例:</p>
+    <div class="sourceCode" id="cb18"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="ex">./.venv/bin/python</span> aggregate_observations.py observations/<span class="op">&lt;</span>timestamp<span class="op">&gt;</span>/summary.csv <span class="at">--group-by</span> scenario <span class="at">--show-overall</span></span></code></pre></div>
+    <p>仮説遷移メトリクスを集計する場合:</p>
+    <div class="sourceCode" id="cb19"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="ex">./.venv/bin/python</span> aggregate_hypothesis_metrics.py observations/<span class="op">&lt;</span>timestamp<span class="op">&gt;</span>/summary.csv <span class="at">--output</span> observations/<span class="op">&lt;</span>timestamp<span class="op">&gt;</span>/hypothesis_metrics.csv</span></code></pre></div>
+    <h3 id="完全リセット">完全リセット</h3>
+    <div class="sourceCode" id="cb20"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="ex">./reset.sh</span></span></code></pre></div>
+    <p><code>reset.sh</code> は stable な Compose project 名を使い、旧
+    <code>target-*</code> コンテナが残っていても cleanup してから stack
+    を再作成する。</p>
+    <h2 id="結果記録">結果記録</h2>
+    <p>1 試行ごとに <code>results/</code> へ JSON
+    を保存する。最低限、以下を記録する。</p>
+    <ul>
+    <li><code>timestamp</code></li>
+    <li><code>scenario</code></li>
+    <li><code>requested_scenario</code></li>
+    <li><code>scenario_source</code></li>
+    <li><code>internal_scenario_id</code></li>
+    <li><code>detected_fault_class</code></li>
+    <li><code>detection_confidence</code></li>
+    <li><code>detection_evidence</code></li>
+    <li><code>triage_summary</code></li>
+    <li><code>suspected_domains</code></li>
+    <li><code>candidate_scope</code></li>
+    <li><code>missing_evidence</code></li>
+    <li><code>recommended_next_observations</code></li>
+    <li><code>ambiguity_level</code></li>
+    <li><code>additional_observation_used</code></li>
+    <li><code>planner_input_scope</code></li>
+    <li><code>worker_mode</code></li>
+    <li><code>prompt_mode</code></li>
+    <li><code>system_prompt_name</code></li>
+    <li><code>system_prompt_hash</code></li>
+    <li><code>planner_error_type</code></li>
+    <li><code>planner_error_stage</code></li>
+    <li><code>planner_retry_count</code></li>
+    <li><code>planner_timeout_seconds</code></li>
+    <li><code>planner_attempts</code></li>
+    <li><code>planner_transport_failure</code></li>
+    <li><code>planner_reasoning_failure</code></li>
+    <li><code>planner_fallback_used</code></li>
+    <li><code>planner_fallback_reason</code></li>
+    <li><code>planner_fallback_type</code></li>
+    <li><code>worker_context_mode</code></li>
+    <li><code>worker_context_mode_hash</code></li>
+    <li><code>worker_visible_context</code></li>
+    <li><code>observation_additional</code></li>
+    <li><code>observed_symptoms</code></li>
+    <li><code>current_state_evidence</code></li>
+    <li><code>historical_evidence</code></li>
+    <li><code>triage_iterations</code></li>
+    <li><code>triage_before_additional_observation</code></li>
+    <li><code>triage_after_additional_observation</code></li>
+    <li><code>worker_raw_output</code></li>
+    <li><code>normalized_actions</code></li>
+    <li><code>auto_appended_actions</code></li>
+    <li><code>precheck_input_actions</code></li>
+    <li><code>validated_actions</code></li>
+    <li><code>validated_success_checks</code></li>
+    <li><code>action_validation_errors</code></li>
+    <li><code>success_check_validation_errors</code></li>
+    <li><code>action_results</code></li>
+    <li><code>rollback_actions</code></li>
+    <li><code>rollback_action_results</code></li>
+    <li><code>rollback_postcheck_result</code></li>
+    <li><code>readiness_wait_used</code></li>
+    <li><code>readiness_attempts</code></li>
+    <li><code>first_success_time_seconds</code></li>
+    <li><code>postcheck_retry_attempts</code></li>
+    <li><code>postcheck_first_success_time_seconds</code></li>
+    <li><code>postcheck_used_retry_window</code></li>
+    <li><code>verifier_precheck_result</code></li>
+    <li><code>execution_result</code></li>
+    <li><code>verifier_postcheck_result</code></li>
+    <li><code>rollback_used</code></li>
+    <li><code>rollback_result</code></li>
+    <li><code>final_status</code></li>
+    <li><code>elapsed_seconds</code></li>
+    </ul>
+    <p><code>aggregate_observations.py</code> では open-world 向けに
+    <code>domain_match_rate(%)</code> を集計する。これは injected
+    scenario の内部真値を abstract domain
+    へ写した期待値と、<code>detected_fault_class</code>
+    の一致率である。旧来の scenario 文字との直接比較は
+    <code>legacy_detect_match_rate(%)</code>
+    として分離している。加えて以下を集計する。</p>
+    <ul>
+    <li><code>transport_failure_rate(%)</code></li>
+    <li><code>avg_planner_retries</code></li>
+    <li><code>rollback_recovery_rate(%)</code></li>
+    <li><code>retry_assisted_recovery_count</code></li>
+    <li><code>fallback_recovery_count</code></li>
+    <li><code>minimal_patch_ratio</code></li>
+    </ul>
+    <p>また <code>observe_runs.sh</code> の summary.csv には
+    <code>system_prompt_hash</code>、<code>rollback_used</code>、<code>rollback_actions</code>、<code>rollback_postcheck_ok</code>、<code>postcheck_retry_attempts</code>、<code>postcheck_used_retry_window</code>、<code>planner_attempt_count</code>
+    も出力される。</p>
+    <h2 id="テスト">テスト</h2>
+    <p>最低限の基盤テストはプロジェクトの <code>.venv</code>
+    から回す。<code>./check.sh</code> は既定で Docker Compose を使う重い
+    integration test を除外する。</p>
+    <div class="sourceCode" id="cb21"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="ex">./check.sh</span></span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a><span class="ex">./.venv/bin/python</span> <span class="at">-m</span> pytest <span class="at">-q</span> <span class="at">-m</span> <span class="st">&quot;not integration&quot;</span></span></code></pre></div>
+    <p>Docker Compose を使う mock multi-agent の end-to-end
+    検証まで含めたい場合は、明示的に full / integration を指定する。</p>
+    <div class="sourceCode" id="cb22"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="ex">./check.sh</span> <span class="at">--all</span></span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a><span class="ex">./check.sh</span> <span class="at">-m</span> integration</span></code></pre></div>
+    <p>現在の主な対象は以下である。</p>
+    <ul>
+    <li><code>normalize_action / normalize_actions</code></li>
+    <li><code>replace_text</code> の 1 箇所一致制約</li>
+    <li><code>expand_execution_actions</code> の自動挿入</li>
+    <li>verifier の allowlist / restore policy</li>
+    <li>rollback 対象ファイルからの refresh action 選択</li>
+    <li><code>service_running</code> の統一ロジック</li>
+    <li><code>show_file</code> の単一 runner での reject</li>
+    <li>Docker Compose を伴う multi-agent mock cascade は
+    <code>integration</code> marker 付きで分離</li>
+    </ul>
+    <h2 id="実装上の要点">実装上の要点</h2>
+    <ul>
+    <li>Sensor
+    はログ丸投げではなく、<code>docker compose ps</code>、HTTP
+    ヘルスチェック、サービス別ログ抜粋、<code>app/main.py</code> /
+    <code>app/app.env</code> / <code>nginx/nginx.conf</code> の relevant
+    snippet を構造化して Triage に渡す</li>
+    <li>A シナリオでは <code>nginx/nginx.conf</code> の
+    <code>server app:</code> 周辺断片も観測情報へ含め、Worker が
+    <code>proxy_pass</code>
+    を推測するのではなく実断片ベースで修正できるようにしている</li>
+    <li>D/F/G では <code>app/main.py</code> の
+    <code>cursor.execute(...)</code> 周辺、E では
+    <code>APP_PORT=...</code> と app log の listen port evidence、H では
+    upstream host resolution failure を観測情報へ含める</li>
+    <li>worker-visible context は planner
+    安定性のために短く保ち、<code>compose ps</code> は要約、ログは
+    relevant excerpt 中心、長い pip install ログは落とす</li>
+    <li>TRIAGE は benchmark-specific scenario classifier
+    ではなく、抽象ドメイン仮説生成器として振る舞う</li>
+    <li>TRIAGE が証拠不足を返した場合のみ、追加観測ノードが狭い
+    excerpt/snippet/config-test を 1 回だけ取得する</li>
+    <li>worker は injected scenario
+    の真値を知らず、<code>suspected_domains</code>,
+    <code>candidate_scope</code>, <code>missing_evidence</code>
+    だけを見る</li>
+    <li>forced mode でも internal scenario label は evaluator
+    用にのみ保持し、worker-visible context には直接渡さない</li>
+    <li><code>restore_from_base</code> は baseline rollback だが、現在は
+    last resort として扱う。特に hard scenario の
+    <code>app/main.py</code> では初手 restore を verifier が拒否し、局所
+    <code>replace_text</code> を優先させる</li>
+    <li>Sensor 時点ですでにシナリオ成功条件を満たしている場合は、worker
+    を呼ばずにその場で成功として終了する</li>
+    <li>app 再作成直後の一時的な 502/connection refused をそのまま
+    planner に渡しにくくするため、sensor は短い stabilization wait
+    を入れて再観測する</li>
+    <li><code>current_state_evidence</code> と
+    <code>historical_evidence</code> を分けて保存し、L のような stale
+    log 混入シナリオでは現在有効な症状と古いノイズを分離する</li>
+    <li>K のような opaque 500 では triage が
+    <code>missing_evidence</code> と
+    <code>recommended_next_observations</code> を返し、追加観測で app
+    log や狭い <code>app/main.py</code> snippet を補う</li>
+    <li>I / I2 / M / N / O / R / U
+    のような多段障害では、初段修復後に二段目以降の障害が露出しうることを
+    postcheck、reviewer feedback、incident blackboard から追える</li>
+    <li>H のような nginx 障害では、同じ文字列が upstream group 名と
+    backend host/service 名の別レイヤで現れる可能性を prompt
+    と観測に反映し、<code>proxy_pass</code> と upstream member
+    を機械的に同一視しないようにしている</li>
+    <li>Worker は role 設定で解決された chat model を用いて JSON
+    プランを返す</li>
+    <li>provider/model/client の実解決は <a
+    href="core/agent_factory.py">core/agent_factory.py</a>
+    経由に寄せ、worker 本体は role 指定でモデルを取得する</li>
+    <li>Gemini 3 Flash 呼び出しは env で timeout / model / thinking
+    level を調整でき、attempt ごとの elapsed time と exception を
+    <code>planner_attempts</code> に記録する</li>
+    <li>retry は transient transport failure に対してのみ行い、指数
+    backoff と jitter を使う</li>
+    <li><code>planner invocation failed</code> と
+    <code>planner returned no executable actions</code>
+    は別カテゴリで扱い、results JSON から transport failure と reasoning
+    failure を区別できる</li>
+    <li>高信頼・低曖昧で snippet に直接 fault
+    が見えている場合に限り、transport failure 時だけ strict fallback
+    planner を使う</li>
+    <li>fallback planner は shell を生成せず、既存の構造化 action
+    だけを返す。通常経路では引き続き LLM を優先する</li>
+    <li><code>mock_worker.py</code> は A-X 向け固定 plan を返し、LLM
+    なしで end-to-end を検証できる</li>
+    <li>Executor は whitelist されたアクションのみ実行する</li>
+    <li><code>show_file</code> は policy だけでなく executor 側でも hard
+    reject し、単一 runner では実質実行不能にしている</li>
+    <li><code>nginx/nginx.conf</code> を編集した場合、明示 action
+    がなくても executor が自動で <code>nginx -t</code> を実行する</li>
+    <li>docker compose / shell command は timeout
+    付きで実行し、<code>timed_out</code>, <code>timeout_seconds</code>,
+    <code>exception_class</code> を構造化して結果へ残す</li>
+    <li>Verifier は LLM を使わずルールベースで判定する</li>
+    <li>Rollback は少なくとも <code>edit_file</code>
+    系で機能し、復元後の service refresh と short postcheck
+    まで行う</li>
+    <li>result JSON には prompt 再現性のため
+    <code>system_prompt_hash</code> と
+    <code>worker_context_mode_hash</code> を残す</li>
+    </ul>
+    <h2 id="既知の制約">既知の制約</h2>
+    <ul>
+    <li>single-agent one-shot は 1 回の計画で復旧を試みる。比較用に
+    iterative self-critique baseline も実装済みである</li>
+    <li>multi-agent orchestration は shared blackboard と reviewer/judge
+    分離を持つが、まだ直列制御であり、並列協調やサービス別 agent
+    は未実装である</li>
+    <li>multi-agent orchestration の loop は既定で最大 5
+    ターンで止まる</li>
+    <li><code>restore_from_base</code> は完全禁止ではなく last resort
+    であり、特に hard scenario の code file では初手利用を verifier
+    が拒否する</li>
+    <li>postcheck
+    のログ判定は簡易的であり、履歴ログ由来のノイズを含むことがある</li>
+    <li><code>rebuild_compose_service</code> は現状
+    <code>docker compose up -d --force-recreate &lt;service&gt;</code>
+    を指す</li>
+    <li>Gemini API キー未設定時は安全側に倒して空プランとなり、precheck
+    で停止する</li>
+    <li>Gemini API timeout は推論失敗そのものではなく
+    transport/invocation failure として別記録する。transient failure
+    には retry
+    をかけるが、恒久的障害やモデル側混雑時はなお失敗しうる</li>
+    <li>strict fallback planner は高信頼・低曖昧・直接可視 fault
+    というかなり狭い条件でのみ発動する。未知障害や曖昧ケースを解く一般解ではない</li>
+    <li>mock worker は A-X の固定 plan を持つが、E と Q は LLM で
+    competing repair choice がぶれうる難シナリオとして残している</li>
+    <li>hard scenario すべてで LLM multi-agent success
+    を保証するものではなく、I2 / M / N / O / R / U は reviewer feedback
+    と blackboard による再計画価値を観測するためのケースである</li>
+    <li>auto mode の triage は open-world
+    前提で候補集合を広めに返すため、candidate scope は
+    benchmark-specific optimum より広いことがある</li>
+    <li>additional observation は 1
+    回までであり、それでも証拠が足りない場合は planner が empty plan
+    を返すことがある</li>
+    </ul>
+    <h2
+    id="次にマルチエージェント化するときの拡張ポイント">次にマルチエージェント化するときの拡張ポイント</h2>
+    <ul>
+    <li><code>agents/worker.py</code> を planner / fixer / reviewer
+    に分割する</li>
+    <li><code>core/verifier.py</code> の postcheck 結果を reviewer
+    エージェントへ渡す</li>
+    <li><code>scenarios/definitions.yaml</code>
+    をより詳細なプレイブック記述へ拡張する</li>
+    <li><code>results/</code> の JSON
+    を複数試行比較用に集計しやすい形式へ寄せる</li>
+    <li>既存の <code>multi_agent.py</code>
+    は参考実装として置いているため、段階的に新 <code>core/</code>
+    系へ寄せていく</li>
+    </ul>
+    <div class="footer">
+      <span>Safe Emergency Recovery Experiment — Research Wiki</span>
+      <span>ソース: <a href="../../README.md">../../README.md</a></span>
+    </div>
+  </main>
+</div>
+<script src="wiki.js"></script>
+</body>
+</html>
