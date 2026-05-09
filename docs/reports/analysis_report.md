@@ -2,6 +2,8 @@
 
 卒業研究用検証環境 (Safe Emergency Recovery Experiment Baseline) の全ソースコードを精読した上での、設計上の弱点・潜在バグ・改善提案をまとめる。
 
+> 2026-05-08 注記: このレビューは過去時点の設計レビューであり、現在の実装状態とは一致しない指摘を含む。特に rollback refresh、`show_file` reject、テスト整備、Phase 4.5 の self-critique / hypothesis metrics などはこの後に進んでいる。現在地の整理は [../current_status_20260508.md](../current_status_20260508.md) を参照する。
+
 ---
 
 ## 🔴 バグ・設計上の問題点

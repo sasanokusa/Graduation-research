@@ -15,6 +15,7 @@
     </div>
     <nav class="topnav">
       <a href="index.html">ホーム</a>
+      <a href="current-status.html">現在地</a>
       <a href="overview.html">概要</a>
       <a href="roadmap-revised.html">最新ロードマップ</a>
     </nav>
@@ -25,6 +26,7 @@
       <ul>
         <li><a href="index.html" data-id="index">Wiki トップ</a></li>
         <li><a href="overview.html" data-id="overview">プロジェクト概要 (README)</a></li>
+        <li><a href="current-status.html" data-id="current-status">現在地メモ (2026-05-08)</a></li>
       </ul>
     </div>
     <div class="group">
@@ -70,6 +72,14 @@
     システム設計レビュー・改善提案</h1>
     <p>卒業研究用検証環境 (Safe Emergency Recovery Experiment Baseline)
     の全ソースコードを精読した上での、設計上の弱点・潜在バグ・改善提案をまとめる。</p>
+    <blockquote>
+    <p>2026-05-08 注記:
+    このレビューは過去時点の設計レビューであり、現在の実装状態とは一致しない指摘を含む。特に
+    rollback refresh、<code>show_file</code> reject、テスト整備、Phase
+    4.5 の self-critique / hypothesis metrics
+    などはこの後に進んでいる。現在地の整理は <a
+    href="current-status.html">current-status.html</a> を参照する。</p>
+    </blockquote>
     <hr />
     <h2 id="red_circle-バグ設計上の問題点">🔴 バグ・設計上の問題点</h2>
     <h3 id="1-_service_running-関数の重複定義">1. <a

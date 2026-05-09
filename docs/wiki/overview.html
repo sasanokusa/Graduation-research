@@ -15,6 +15,7 @@
     </div>
     <nav class="topnav">
       <a href="index.html">ホーム</a>
+      <a href="current-status.html">現在地</a>
       <a href="overview.html">概要</a>
       <a href="roadmap-revised.html">最新ロードマップ</a>
     </nav>
@@ -25,6 +26,7 @@
       <ul>
         <li><a href="index.html" data-id="index">Wiki トップ</a></li>
         <li><a href="overview.html" data-id="overview">プロジェクト概要 (README)</a></li>
+        <li><a href="current-status.html" data-id="current-status">現在地メモ (2026-05-08)</a></li>
       </ul>
     </div>
     <div class="group">
@@ -77,6 +79,28 @@
     A-X シナリオ真値を保持しつつ、sensor / triage / planner 側は
     closed-set の scenario classifier ではなく、open-world
     の仮説生成器として動作する構成へ寄せている。</p>
+    <h2 id="2026-05-08-時点の研究ステータス">2026-05-08
+    時点の研究ステータス</h2>
+    <p>機能開発としては、卒論に必要な核はおおむね揃っている。現在の主眼は、新しい修復機能を増やすことではなく、比較実験、仮説遷移メトリクス、図表、ケーススタディ、卒論本文への変換である。</p>
+    <p>現在地の詳細は <a
+    href="current-status.html">current-status.html</a>
+    にまとめている。古い調査レポートやロードマップは履歴資料として残しているため、最新の進捗判断ではこの現在地メモを優先する。</p>
+    <p>現時点での主な実績:</p>
+    <ul>
+    <li>A-X の 24 シナリオを定義済み</li>
+    <li>single-agent one-shot、single-agent iterative
+    self-critique、multi-agent orchestration を実行可能</li>
+    <li><code>results/</code> に 200 件の result
+    JSON、<code>observations/</code> に 9 本の summary.csv
+    を保存済み</li>
+    <li><code>hypothesis_metrics</code> 入り result JSON は 13 件</li>
+    <li><code>./check.sh</code> は 99 passed, 6 deselected</li>
+    <li>予備実験では、hard scenario で single-agent one-shot より
+    multi-agent が有利な傾向を確認済み</li>
+    </ul>
+    <p>中間発表では、安全制約付き LLM 応急復旧基盤と multi-agent
+    再観測・再計画の予備効果までを出し、self-critique
+    との詳細比較、仮説遷移分析、反復実験、卒論用図表化は今後の作業として残す。</p>
     <h2 id="応急復旧の成功条件">応急復旧の成功条件</h2>
     <p>本リポジトリにおける「応急復旧成功」は、元の構成を一字一句再現することではない。以下を満たし、かつ被害拡大を起こしていない状態を成功とみなす。</p>
     <ul>
@@ -104,11 +128,19 @@
     <h2 id="現在の主系構成">現在の主系構成</h2>
     <pre class="text"><code>.
 ├── agent.py                      # 単一エージェント版の薄い入口
+├── self_critique_agent.py         # iterative self-critique baseline の入口
+├── multi_agent.py                 # blackboard-driven multi-agent runner の入口
 ├── runners
-│   └── run_single.py             # 構造化アクション方式の runner
+│   ├── run_single.py             # 構造化アクション方式の runner
+│   ├── run_self_critique.py      # self-critique baseline runner
+│   └── run_multi_minimal.py      # reviewer / judge を含む multi-agent runner
 ├── agents
+│   ├── judge.py                  # safety judge
 │   ├── mock_worker.py            # LLM 非依存の固定 plan
+│   ├── reviewer.py               # verification reviewer
 │   ├── sensor.py                 # 観測情報の収集
+│   ├── triage_agent.py           # LLM triage parser / wrapper
+│   ├── self_critic.py            # self-critique baseline 用 critic
 │   └── worker.py                 # role 設定経由の構造化アクション計画
 ├── core
 │   ├── agent_factory.py          # role -&gt; provider/model/client 解決
@@ -126,9 +158,9 @@
 │   └── verifier.py               # pre/post check
 ├── scenarios
 │   └── definitions.yaml          # シナリオ定義
+├── experimental/production_poc    # 実ホスト向け guarded repair PoC
 ├── tests                         # pytest ベースの unit / integration test
 ├── results                       # 実験結果 JSON と backup（ローカル生成物）
-├── multi_agent.py                # blackboard-driven multi-agent runner の薄い入口
 ├── docker-compose.yml
 ├── break.sh
 └── reset.sh</code></pre>
@@ -1039,20 +1071,20 @@ POSTCHECK_RETRY_INTERVAL_SECONDS=2</code></pre>
     回までであり、それでも証拠が足りない場合は planner が empty plan
     を返すことがある</li>
     </ul>
-    <h2
-    id="次にマルチエージェント化するときの拡張ポイント">次にマルチエージェント化するときの拡張ポイント</h2>
+    <h2 id="今後の拡張候補">今後の拡張候補</h2>
+    <p>卒論に向けた優先度は、機能追加よりも実験・図表・本文化の方が高い。拡張を行う場合は、比較実験の安定性や説明力に直結するものに絞る。</p>
     <ul>
-    <li><code>agents/worker.py</code> を planner / fixer / reviewer
-    に分割する</li>
-    <li><code>core/verifier.py</code> の postcheck 結果を reviewer
-    エージェントへ渡す</li>
-    <li><code>scenarios/definitions.yaml</code>
-    をより詳細なプレイブック記述へ拡張する</li>
-    <li><code>results/</code> の JSON
-    を複数試行比較用に集計しやすい形式へ寄せる</li>
-    <li>既存の <code>multi_agent.py</code>
-    は参考実装として置いているため、段階的に新 <code>core/</code>
-    系へ寄せていく</li>
+    <li><code>results/</code> の JSON と
+    <code>observations/*/summary.csv</code>
+    から、条件別の比較表を安定して生成する</li>
+    <li><code>hypothesis_metrics</code> を one-shot / self-critique /
+    multi-agent の各条件で揃える</li>
+    <li>hard scenario の turn-by-turn case study
+    を図表化しやすい形式で出力する</li>
+    <li>planner の scope 遵守や empty plan
+    の原因分類を、実験集計に反映する</li>
+    <li>余力があれば dual-planner / planner diversity
+    を追加比較として扱う</li>
     </ul>
     <div class="footer">
       <span>Safe Emergency Recovery Experiment — Research Wiki</span>

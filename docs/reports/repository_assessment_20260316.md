@@ -3,6 +3,8 @@
 作成日: 2026-03-16  
 対象: `/Users/ryoike/Documents/Graduation Research` の現在のワーキングツリー
 
+> 2026-05-08 注記: このファイルは 2026-03-16 時点の調査スナップショットであり、現在地の評価としては古い。A-X シナリオ、self-critique baseline、hypothesis metrics、production PoC の guard / runbook / approval 周りはこの後に進んでいる。最新の進捗判断は [../current_status_20260508.md](../current_status_20260508.md) を参照する。
+
 ## 1. 調査の前提
 
 - 本レポートは `HEAD` ではなく、未コミット変更を含む現在のワーキングツリーを対象にした。

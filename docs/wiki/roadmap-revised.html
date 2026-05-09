@@ -16,6 +16,7 @@
     </div>
     <nav class="topnav">
       <a href="index.html">ホーム</a>
+      <a href="current-status.html">現在地</a>
       <a href="overview.html">概要</a>
       <a href="roadmap-revised.html">最新ロードマップ</a>
     </nav>
@@ -26,6 +27,7 @@
       <ul>
         <li><a href="index.html" data-id="index">Wiki トップ</a></li>
         <li><a href="overview.html" data-id="overview">プロジェクト概要 (README)</a></li>
+        <li><a href="current-status.html" data-id="current-status">現在地メモ (2026-05-08)</a></li>
       </ul>
     </div>
     <div class="group">
@@ -71,12 +73,45 @@
     id="実装ロードマップphase-2-完了前提改訂版">実装ロードマップ（Phase
     2 完了前提・改訂版）</h1>
     <p>作成日: 2026-04-15<br />
-    前提: <strong>Phase 0〜2
+    更新メモ: 2026-05-08 前提: <strong>Phase 0〜2
     は完了している</strong>ものとして、以降の進め方を再設計する。<br />
     基礎資料: <a
     href="roadmap-initial.html"><code>roadmap-initial.html</code></a>,
     <a
-    href="report-phase1-cost.html"><code>report-phase1-cost.html</code></a></p>
+    href="report-phase1-cost.html"><code>report-phase1-cost.html</code></a>,
+    <a
+    href="current-status.html"><code>current-status.html</code></a></p>
+    <hr />
+    <h2 id="0-2026-05-08-時点の読み替え">0. 2026-05-08
+    時点の読み替え</h2>
+    <p>このロードマップは 2026-04-15 時点では「Phase 2
+    完了後に何を作るか」を整理したものだった。2026-05-08
+    時点では、機能面の中核はさらに進み、次の状態として読む。</p>
+    <ul>
+    <li>Phase 3 の安全 action 拡張は、production PoC 側で allowlist
+    restart / runbook / backup / approval gate / rollback runbook
+    まで要素実装済み</li>
+    <li>Phase 4 の production PoC
+    は、本番自動修復システムというより、提案・低リスク初動・human-in-the-loop
+    を示す補助成果として扱う</li>
+    <li>Phase 4.5 の self-critique baseline と hypothesis log / metrics
+    は実装済みで、少数の result JSON に保存されている</li>
+    <li>Phase 5
+    は未完了であり、反復実験、集計、図表化、ケーススタディ、卒論本文化が現在の主作業である</li>
+    </ul>
+    <p>したがって、今後の優先順位は「新機能を足す」から「実験と卒論成果物へ変換する」へ移っている。詳細な現在地は
+    <a href="current-status.html">current-status.html</a>
+    を優先して参照する。</p>
+    <h3 id="現在の次タスク">現在の次タスク</h3>
+    <ol type="1">
+    <li>比較条件を固定する</li>
+    <li><code>i2/m/n/o/r/u</code> と <code>v/w/x</code>
+    を中心に反復実験を回す</li>
+    <li><code>hypothesis_metrics</code> を条件間で揃える</li>
+    <li>成功率、turn、stop reason、コスト、仮説固執を表にする</li>
+    <li>中間発表用には予備結果までを出し、詳細比較は卒論向けに残す</li>
+    <li>卒論用の図表と case study を作る</li>
+    </ol>
     <hr />
     <h2 id="1-改訂の目的">1. 改訂の目的</h2>
     <p>本改訂版の目的は、既存ロードマップをそのまま延長するのではなく、
@@ -478,6 +513,54 @@
     <h2 id="5-まず着手すべき具体タスクphase-2-完了前提">5.
     まず着手すべき具体タスク（Phase 2 完了前提）</h2>
     <p>次に着手するべきものを、現実的な順番で並べる。</p>
+    <p>2026-05-08
+    時点では、以下は当初タスク一覧ではなく進捗表として読む。</p>
+    <table>
+    <thead>
+    <tr>
+    <th>当初タスク</th>
+    <th>現在の状態</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>single-agent iterative self-critique baseline を実装する</td>
+    <td>完了。<code>self_critique_agent.py</code> と
+    <code>runners/run_self_critique.py</code> で実行可能</td>
+    </tr>
+    <tr>
+    <td>仮説ログ schema を決め、構造化保存する</td>
+    <td>完了。<code>hypothesis_log</code> /
+    <code>hypothesis_metrics</code> / <code>self_critique_history</code>
+    を保存可能</td>
+    </tr>
+    <tr>
+    <td><code>i2/m/n/o/r/u</code> の同条件比較を回す</td>
+    <td>予備実験は実施済み。本実験としては反復数を増やす</td>
+    </tr>
+    <tr>
+    <td>仮説変更・固執メトリクスを集計する</td>
+    <td>実装済み。条件間比較に使う CSV 整備が残り</td>
+    </tr>
+    <tr>
+    <td>hard / easy / fault class ごとの集計を整える</td>
+    <td>これから優先</td>
+    </tr>
+    <tr>
+    <td>Phase 3 の安全 action 拡張</td>
+    <td>production PoC 側で要素実装済み。卒論では補助成果扱い</td>
+    </tr>
+    <tr>
+    <td>production PoC の live-run artifact</td>
+    <td>これから必要最小限を確保</td>
+    </tr>
+    <tr>
+    <td>dual-planner / planner diversity</td>
+    <td>余力枠。中間発表・卒論本線では必須にしない</td>
+    </tr>
+    </tbody>
+    </table>
+    <p>当初の順序:</p>
     <ol type="1">
     <li>single-agent iterative self-critique baseline を実装する</li>
     <li>仮説ログ schema を決め、planner / reviewer / judge

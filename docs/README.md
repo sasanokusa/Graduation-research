@@ -4,6 +4,7 @@
 
 ## ディレクトリ
 
+- [`current_status_20260508.md`](current_status_20260508.md) — **2026-05-08 時点の研究現在地メモ。最新の進捗判断はこれを優先する。**
 - [`roadmap/`](roadmap/) — 実装ロードマップ（時系列）
   - [`implementation_roadmap_20260316.md`](roadmap/implementation_roadmap_20260316.md) — 初版（2026-03-16）
   - [`implementation_roadmap_revised_20260415.md`](roadmap/implementation_roadmap_revised_20260415.md) — 改訂版（2026-04-15）。**現在の指針はこちら。**

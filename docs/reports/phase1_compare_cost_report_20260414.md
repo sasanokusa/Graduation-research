@@ -2,6 +2,8 @@
 
 作成日: 2026-04-14
 
+> 2026-05-08 注記: このレポートは Phase 1 時点の予備比較である。現在は self-critique baseline、hypothesis metrics、A-X シナリオ、production PoC の安全 gate が追加されている。最新の進捗判断は [../current_status_20260508.md](../current_status_20260508.md) を参照する。
+
 対象は `i2/m/n/o/r/u` の6シナリオで、single-agent と multi-agent を各1回ずつ走らせる比較実験である。ここでの「1回あたり」は、この6シナリオ比較実験1セットあたりを指す。
 
 ## 前提

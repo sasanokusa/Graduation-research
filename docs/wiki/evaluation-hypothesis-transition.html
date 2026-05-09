@@ -15,6 +15,7 @@
     </div>
     <nav class="topnav">
       <a href="index.html">ホーム</a>
+      <a href="current-status.html">現在地</a>
       <a href="overview.html">概要</a>
       <a href="roadmap-revised.html">最新ロードマップ</a>
     </nav>
@@ -25,6 +26,7 @@
       <ul>
         <li><a href="index.html" data-id="index">Wiki トップ</a></li>
         <li><a href="overview.html" data-id="overview">プロジェクト概要 (README)</a></li>
+        <li><a href="current-status.html" data-id="current-status">現在地メモ (2026-05-08)</a></li>
       </ul>
     </div>
     <div class="group">
@@ -70,6 +72,33 @@
     Evaluation</h1>
     <p>Phase 4.5
     は、成功率だけでなく「どの制御構造が仮説固執を減らしたか」を見るための評価準備フェーズである。</p>
+    <h2 id="2026-05-08-時点の状態">2026-05-08 時点の状態</h2>
+    <p>この評価フェーズは「設計中」ではなく、一部実装済みの状態である。</p>
+    <ul>
+    <li><code>single_agent_iterative_self_critique</code> は
+    <code>self_critique_agent.py</code> として実行可能</li>
+    <li>result JSON に <code>baseline_condition</code>,
+    <code>hypothesis_log</code>, <code>hypothesis_metrics</code>,
+    <code>self_critique_history</code> を保存できる</li>
+    <li><code>aggregate_hypothesis_metrics.py</code> で result JSON
+    または observation summary から CSV を生成できる</li>
+    <li><code>hypothesis_metrics</code> 入り result JSON は現時点で 13
+    件ある</li>
+    </ul>
+    <p>ただし、最終評価としてはまだ反復数が不足している。2026-04-19 の
+    multi-agent / self-critique 比較と 2026-04-24 の metric
+    付き成功例は、Phase 5 の本実験に向けた予備結果として扱う。</p>
+    <p>卒論向けには、最低限次の比較を同条件で揃える。</p>
+    <ul>
+    <li>hard cascade: <code>i2/m/n/o/r/u</code></li>
+    <li>topology / contract mismatch: <code>v/w/x</code></li>
+    <li>条件: <code>single_agent_one_shot</code>,
+    <code>single_agent_iterative_self_critique</code>,
+    <code>multi_agent_single_planner</code></li>
+    <li>指標: success rate, full recovery, turn count, stop reason,
+    top-1 hypothesis changes, wrong hypothesis stickiness, critique
+    change rate</li>
+    </ul>
     <h2 id="比較条件">比較条件</h2>
     <p>最低限の比較条件は次の 4 つに固定する。</p>
     <ul>

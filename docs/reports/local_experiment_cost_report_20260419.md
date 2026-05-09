@@ -15,6 +15,8 @@
 - 今回の実APIログは Phase 4.5 の `hypothesis_log` / `hypothesis_metrics` 実装前に取得したため、仮説遷移メトリクスはこの結果JSONには含まれていない。
 - 実行時点では `.env` の `MULTI_AGENT_MAX_TURNS=3` がコード側の既定値 `5` を上書きしていたため、この実験は3ターン上限として読む。確認後、現行 `.env` / `.env.example` / README は5ターン上限に修正済みである。
 
+2026-05-08 時点では、後続の result JSON に `hypothesis_metrics` が保存されるようになっている。このレポートの multi-agent 本体結果は「metrics 実装前の予備比較」として扱い、仮説遷移の本集計では 2026-04-24 以降の metric 付き結果、または再実験結果を使う。
+
 ## 現在のモデルと単価
 
 | 役割 | Provider | Model | 単価 |

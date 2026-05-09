@@ -3,6 +3,8 @@
 作成日: 2026-03-16  
 基礎資料: [`../reports/repository_assessment_20260316.md`](../reports/repository_assessment_20260316.md)
 
+> 2026-05-08 注記: このロードマップは初期計画であり、現在は Phase 2 以降の改訂版と現在地メモを優先する。最新の進捗判断は [../current_status_20260508.md](../current_status_20260508.md)、計画の更新版は [implementation_roadmap_revised_20260415.md](implementation_roadmap_revised_20260415.md) を参照する。
+
 ## 1. 目的
 
 本ロードマップの目的は、現状の

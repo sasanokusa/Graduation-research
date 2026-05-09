@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>研究現在地メモ
+(2026-05-08) — Safe Emergency Recovery Wiki</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="layout">
+  <header class="topbar">
+    <div class="brand">
+      <a href="index.html">Safe Emergency Recovery</a>
+      <span class="sub">研究ドキュメント Wiki</span>
+    </div>
+    <nav class="topnav">
+      <a href="index.html">ホーム</a>
+      <a href="current-status.html">現在地</a>
+      <a href="overview.html">概要</a>
+      <a href="roadmap-revised.html">最新ロードマップ</a>
+    </nav>
+  </header>
+  <aside class="sidebar">
+    <div class="group">
+      <div class="group-title">スタート</div>
+      <ul>
+        <li><a href="index.html" data-id="index">Wiki トップ</a></li>
+        <li><a href="overview.html" data-id="overview">プロジェクト概要 (README)</a></li>
+        <li><a href="current-status.html" data-id="current-status">現在地メモ (2026-05-08)</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">ロードマップ</div>
+      <ul>
+        <li><a href="roadmap-initial.html" data-id="roadmap-initial">初版ロードマップ (2026-03-16)</a></li>
+        <li><a href="roadmap-revised.html" data-id="roadmap-revised">改訂版ロードマップ (2026-04-15)</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">調査・レポート</div>
+      <ul>
+        <li><a href="report-repository-assessment.html" data-id="report-repository-assessment">リポジトリ調査レポート</a></li>
+        <li><a href="report-analysis.html" data-id="report-analysis">設計レビュー・改善提案</a></li>
+        <li><a href="report-phase1-cost.html" data-id="report-phase1-cost">Phase 1 比較実験コスト</a></li>
+        <li><a href="report-local-experiment-cost.html" data-id="report-local-experiment-cost">局所実験コスト</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">評価</div>
+      <ul>
+        <li><a href="evaluation-hypothesis-transition.html" data-id="evaluation-hypothesis-transition">仮説遷移評価 (Phase 4.5)</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">Production PoC</div>
+      <ul>
+        <li><a href="poc-architecture.html" data-id="poc-architecture">アーキテクチャ</a></li>
+        <li><a href="poc-deploy.html" data-id="poc-deploy">導入手順</a></li>
+        <li><a href="poc-validation-scenarios.html" data-id="poc-validation-scenarios">実機検証シナリオ</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">シナリオ</div>
+      <ul>
+        <li><a href="scenario-ictsc5023.html" data-id="scenario-ictsc5023">ICTSC 5023</a></li>
+      </ul>
+    </div>
+  </aside>
+  <main class="content">
+    <div class="breadcrumb"><a href="index.html">Wiki</a> / 現在地</div>
+    <h1 id="研究現在地メモ">研究現在地メモ</h1>
+    <p>作成日: 2026-05-08</p>
+    <p>このメモは、実装・実験ログ・既存ドキュメントを見直したうえで、卒業研究としての現在地と次に優先する作業を整理したものである。古い調査レポートは当時のスナップショットとして残し、今後はこのメモと
+    README を入口にして進捗を読む。</p>
+    <h2 id="要約">要約</h2>
+    <p>現時点では、機能開発として卒論に必要な核はおおむね揃っている。今後の主作業は、新機能を増やすことではなく、比較実験、集計、図表化、ケーススタディ、卒論本文への変換である。</p>
+    <p>全体進捗の目安は 65〜70%
+    程度と見る。実装基盤はかなり進んでいる一方で、卒論提出物としての実験章・図表・本文はまだ整備途中である。</p>
+    <table>
+    <thead>
+    <tr>
+    <th>項目</th>
+    <th style="text-align: right;">目安</th>
+    <th>状態</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>研究テーマ・問題設定</td>
+    <td style="text-align: right;">75%</td>
+    <td>安全な LLM
+    応急復旧と仮説固執の比較に寄せる方針が固まっている</td>
+    </tr>
+    <tr>
+    <td>実装基盤</td>
+    <td style="text-align: right;">85%</td>
+    <td>構造化アクション、Verifier、Rollback、A-X シナリオ、multi-agent
+    loop が揃っている</td>
+    </tr>
+    <tr>
+    <td>比較基盤</td>
+    <td style="text-align: right;">75%</td>
+    <td>one-shot / self-critique / multi-agent を走らせられる</td>
+    </tr>
+    <tr>
+    <td>実験ログ・初期結果</td>
+    <td style="text-align: right;">65%</td>
+    <td>予備比較と局所実験はあるが、反復実験と統計整理はこれから</td>
+    </tr>
+    <tr>
+    <td>図表・ケーススタディ</td>
+    <td style="text-align: right;">35%</td>
+    <td>材料はあるが、発表・論文用の図表には未変換</td>
+    </tr>
+    <tr>
+    <td>卒論本文</td>
+    <td style="text-align: right;">25%</td>
+    <td>レポート断片は多いが、卒論原稿としては未統合</td>
+    </tr>
+    </tbody>
+    </table>
+    <h2 id="既に出せる成果">既に出せる成果</h2>
+    <ul>
+    <li>Docker Compose ベースの破壊可能な評価環境がある</li>
+    <li>A-X の 24 シナリオを定義済み</li>
+    <li>single-agent one-shot、single-agent iterative
+    self-critique、multi-agent orchestration を比較できる</li>
+    <li>LLM には任意 shell
+    を実行させず、構造化アクションだけを許可している</li>
+    <li>Verifier が scope、許可ファイル、restore policy、success checks
+    を検証する</li>
+    <li>失敗時の rollback は service refresh と short postcheck
+    まで含む</li>
+    <li>current-state evidence と historical evidence を分け、stale log
+    混入を扱える</li>
+    <li><code>incident_blackboard</code>、reviewer、judge、hypothesis
+    log により multi-turn の判断履歴を保存できる</li>
+    <li>production PoC は propose-only を基本に、allowlist restart /
+    runbook / backup / approval gate を扱える</li>
+    </ul>
+    <p>現時点のローカル実績:</p>
+    <ul>
+    <li><code>results/</code> の結果 JSON: 200 件</li>
+    <li><code>observations/*/summary.csv</code>: 9 本、合計 98
+    試行行</li>
+    <li><code>hypothesis_metrics</code> 入り result JSON: 13 件</li>
+    <li>pytest テスト関数: 102 件</li>
+    <li><code>./check.sh</code>: 99 passed, 6 deselected</li>
+    </ul>
+    <h2 id="代表的な予備結果">代表的な予備結果</h2>
+    <p>中間発表や卒論の導入実験としては、次の結果が使いやすい。</p>
+    <table>
+    <thead>
+    <tr>
+    <th>実験</th>
+    <th>結果</th>
+    <th>位置づけ</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>2026-04-14 hard scenario 予備比較</td>
+    <td>single-agent one-shot 0/6、multi-agent 5/6</td>
+    <td>multi-turn 再観測・再計画の有効性を示す初期結果</td>
+    </tr>
+    <tr>
+    <td>2026-04-19 multi-agent 局所実験</td>
+    <td><code>m/n/o/r/u/v/w/x</code> で 7/8 成功</td>
+    <td>cascade と topology / contract mismatch
+    をまとめて扱えた結果</td>
+    </tr>
+    <tr>
+    <td>2026-04-19 OpenAI self-critique baseline</td>
+    <td>同 8 シナリオで 3/8 成功</td>
+    <td>self-critique は安いが masked cascade
+    で空プランに落ちやすい比較材料</td>
+    </tr>
+    <tr>
+    <td>2026-04-24 hypothesis metrics 付き試行</td>
+    <td><code>i2</code> / <code>n</code> などで success result
+    を保存</td>
+    <td>Phase 4.5 の仮説遷移ログが動いている証拠</td>
+    </tr>
+    </tbody>
+    </table>
+    <p>これらはまだ単発・少数回の予備結果であり、最終的な定量評価としては反復数を増やす必要がある。</p>
+    <h2 id="中間発表で出す範囲">中間発表で出す範囲</h2>
+    <p>中間発表では、現在あるものを全部出さず、次の切り方にすると卒論までの余白が自然に残る。</p>
+    <blockquote>
+    <p>安全制約付き LLM 応急復旧基盤を実装し、単発 LLM
+    では難しい多段障害に対して、multi-agent
+    の再観測・再計画が有効そうだと分かった。</p>
+    </blockquote>
+    <p>出すもの:</p>
+    <ul>
+    <li>背景: LLM に自由な shell を実行させる危険性</li>
+    <li>提案方針: 構造化アクション、Verifier、Rollback</li>
+    <li>評価環境: Docker Compose の
+    <code>nginx -&gt; app -&gt; db</code> と障害注入</li>
+    <li>シナリオ: A-X 24 件、特に masked cascade</li>
+    <li>実装: single-agent、multi-agent、reviewer /
+    judge、blackboard</li>
+    <li>予備結果: hard scenario で single-agent one-shot より
+    multi-agent が良い傾向</li>
+    <li>今後: self-critique baseline
+    を含む反復実験、仮説遷移分析、卒論用図表化</li>
+    </ul>
+    <p>温存するもの:</p>
+    <ul>
+    <li>self-critique との詳細比較</li>
+    <li>hypothesis metrics の細かい指標設計</li>
+    <li>production PoC の詳細</li>
+    <li>全シナリオの網羅的成功率表</li>
+    <li>API コスト比較の細部</li>
+    </ul>
+    <h2 id="これから優先する作業">これから優先する作業</h2>
+    <ol type="1">
+    <li><p>比較条件を固定する</p>
+    <ul>
+    <li>single-agent one-shot</li>
+    <li>single-agent iterative self-critique</li>
+    <li>multi-agent single-planner</li>
+    <li>必要なら improved multi-agent</li>
+    </ul></li>
+    <li><p>反復実験を回す</p>
+    <ul>
+    <li><code>i2/m/n/o/r/u</code> を hard scenario セットにする</li>
+    <li><code>v/w/x</code> を topology / contract mismatch
+    セットにする</li>
+    <li>各条件で複数回実行し、成功率、turn、stop reason、cost
+    を揃える</li>
+    </ul></li>
+    <li><p>仮説遷移メトリクスを揃える</p>
+    <ul>
+    <li>Top-1 仮説変更回数</li>
+    <li>誤仮説固着長</li>
+    <li>批判後の仮説変化率</li>
+    <li>first-fix success と full recovery</li>
+    <li>re-observation benefit</li>
+    </ul></li>
+    <li><p>図表を作る</p>
+    <ul>
+    <li>アーキテクチャ図</li>
+    <li>実行フロー図</li>
+    <li>成功率比較表</li>
+    <li>hard scenario の turn-by-turn case study</li>
+    <li>仮説遷移図</li>
+    </ul></li>
+    <li><p>卒論本文へ変換する</p>
+    <ul>
+    <li>既存レポートは本文の材料として再利用する</li>
+    <li>古い進捗評価や既に解決済みのバグ指摘は、本文ではそのまま使わない</li>
+    </ul></li>
+    </ol>
+    <h2 id="機能追加の扱い">機能追加の扱い</h2>
+    <p>ここから大きな新機能を増やす優先度は低い。入れるとしても、比較実験の安定性や卒論の説明力に直結するものに限る。</p>
+    <p>優先してよいもの:</p>
+    <ul>
+    <li>実験を壊す parser / invocation / scope 遵守の修正</li>
+    <li>集計スクリプトや CSV 出力の整備</li>
+    <li>図表生成補助</li>
+    <li>ログ schema の小さな補正</li>
+    </ul>
+    <p>後回しでよいもの:</p>
+    <ul>
+    <li>並列 multi-agent</li>
+    <li>dual-planner / planner diversity の本格実装</li>
+    <li>UI / dashboard</li>
+    <li>production PoC の長期運用機能</li>
+    <li>自動修復アクションの大幅拡張</li>
+    </ul>
+    <h2 id="現時点の研究ストーリー">現時点の研究ストーリー</h2>
+    <p>卒論では、次の流れが最も通しやすい。</p>
+    <ol type="1">
+    <li>LLM による応急復旧は有望だが、自由な実行は危険である</li>
+    <li>そこで、構造化アクション、Verifier、Rollback
+    を備えた安全な評価基盤を作った</li>
+    <li>単純故障だけでなく、stale evidence、masked cascade、topology
+    contract mismatch を含む A-X シナリオを用意した</li>
+    <li>単発の single-agent では、多段障害の初段で止まりやすい</li>
+    <li>multi-agent の reviewer / judge / blackboard
+    を使うと、再観測と再計画によって後段故障に進みやすい</li>
+    <li>self-critique baseline
+    も比較し、自己反省だけで足りる範囲と、外部化された批判・共有状態が効く範囲を整理する</li>
+    <li>最終的に、どの制御構造が仮説固執を減らし、full recovery
+    に寄与するかを示す</li>
+    </ol>
+    <div class="footer">
+      <span>Safe Emergency Recovery Experiment — Research Wiki</span>
+      <span>ソース: <a href="../current_status_20260508.md">../current_status_20260508.md</a></span>
+    </div>
+  </main>
+</div>
+<script src="wiki.js"></script>
+</body>
+</html>

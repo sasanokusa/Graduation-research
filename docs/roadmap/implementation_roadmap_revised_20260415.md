@@ -1,8 +1,31 @@
 # 実装ロードマップ（Phase 2 完了前提・改訂版）
 
 作成日: 2026-04-15  
+更新メモ: 2026-05-08
 前提: **Phase 0〜2 は完了している**ものとして、以降の進め方を再設計する。  
-基礎資料: [`implementation_roadmap_20260316.md`](implementation_roadmap_20260316.md), [`../reports/phase1_compare_cost_report_20260414.md`](../reports/phase1_compare_cost_report_20260414.md)
+基礎資料: [`implementation_roadmap_20260316.md`](implementation_roadmap_20260316.md), [`../reports/phase1_compare_cost_report_20260414.md`](../reports/phase1_compare_cost_report_20260414.md), [`../current_status_20260508.md`](../current_status_20260508.md)
+
+---
+
+## 0. 2026-05-08 時点の読み替え
+
+このロードマップは 2026-04-15 時点では「Phase 2 完了後に何を作るか」を整理したものだった。2026-05-08 時点では、機能面の中核はさらに進み、次の状態として読む。
+
+- Phase 3 の安全 action 拡張は、production PoC 側で allowlist restart / runbook / backup / approval gate / rollback runbook まで要素実装済み
+- Phase 4 の production PoC は、本番自動修復システムというより、提案・低リスク初動・human-in-the-loop を示す補助成果として扱う
+- Phase 4.5 の self-critique baseline と hypothesis log / metrics は実装済みで、少数の result JSON に保存されている
+- Phase 5 は未完了であり、反復実験、集計、図表化、ケーススタディ、卒論本文化が現在の主作業である
+
+したがって、今後の優先順位は「新機能を足す」から「実験と卒論成果物へ変換する」へ移っている。詳細な現在地は [../current_status_20260508.md](../current_status_20260508.md) を優先して参照する。
+
+### 現在の次タスク
+
+1. 比較条件を固定する
+2. `i2/m/n/o/r/u` と `v/w/x` を中心に反復実験を回す
+3. `hypothesis_metrics` を条件間で揃える
+4. 成功率、turn、stop reason、コスト、仮説固執を表にする
+5. 中間発表用には予備結果までを出し、詳細比較は卒論向けに残す
+6. 卒論用の図表と case study を作る
 
 ---
 
@@ -380,6 +403,21 @@ Phase 5 の比較実験を成立させるために、
 ## 5. まず着手すべき具体タスク（Phase 2 完了前提）
 
 次に着手するべきものを、現実的な順番で並べる。
+
+2026-05-08 時点では、以下は当初タスク一覧ではなく進捗表として読む。
+
+| 当初タスク | 現在の状態 |
+| --- | --- |
+| single-agent iterative self-critique baseline を実装する | 完了。`self_critique_agent.py` と `runners/run_self_critique.py` で実行可能 |
+| 仮説ログ schema を決め、構造化保存する | 完了。`hypothesis_log` / `hypothesis_metrics` / `self_critique_history` を保存可能 |
+| `i2/m/n/o/r/u` の同条件比較を回す | 予備実験は実施済み。本実験としては反復数を増やす |
+| 仮説変更・固執メトリクスを集計する | 実装済み。条件間比較に使う CSV 整備が残り |
+| hard / easy / fault class ごとの集計を整える | これから優先 |
+| Phase 3 の安全 action 拡張 | production PoC 側で要素実装済み。卒論では補助成果扱い |
+| production PoC の live-run artifact | これから必要最小限を確保 |
+| dual-planner / planner diversity | 余力枠。中間発表・卒論本線では必須にしない |
+
+当初の順序:
 
 1. single-agent iterative self-critique baseline を実装する
 2. 仮説ログ schema を決め、planner / reviewer / judge 出力を構造化保存する

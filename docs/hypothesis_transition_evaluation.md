@@ -2,6 +2,24 @@
 
 Phase 4.5 は、成功率だけでなく「どの制御構造が仮説固執を減らしたか」を見るための評価準備フェーズである。
 
+## 2026-05-08 時点の状態
+
+この評価フェーズは「設計中」ではなく、一部実装済みの状態である。
+
+- `single_agent_iterative_self_critique` は `self_critique_agent.py` として実行可能
+- result JSON に `baseline_condition`, `hypothesis_log`, `hypothesis_metrics`, `self_critique_history` を保存できる
+- `aggregate_hypothesis_metrics.py` で result JSON または observation summary から CSV を生成できる
+- `hypothesis_metrics` 入り result JSON は現時点で 13 件ある
+
+ただし、最終評価としてはまだ反復数が不足している。2026-04-19 の multi-agent / self-critique 比較と 2026-04-24 の metric 付き成功例は、Phase 5 の本実験に向けた予備結果として扱う。
+
+卒論向けには、最低限次の比較を同条件で揃える。
+
+- hard cascade: `i2/m/n/o/r/u`
+- topology / contract mismatch: `v/w/x`
+- 条件: `single_agent_one_shot`, `single_agent_iterative_self_critique`, `multi_agent_single_planner`
+- 指標: success rate, full recovery, turn count, stop reason, top-1 hypothesis changes, wrong hypothesis stickiness, critique change rate
+
 ## 比較条件
 
 最低限の比較条件は次の 4 つに固定する。

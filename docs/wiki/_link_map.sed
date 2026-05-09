@@ -11,3 +11,6 @@ s|production_poc/architecture\.md|poc-architecture.html|g
 s|production_poc/deploy\.md|poc-deploy.html|g
 s|production_poc/validation_scenarios\.md|poc-validation-scenarios.html|g
 s|scenarios/ictsc_5023\.md|scenario-ictsc5023.html|g
+s|\.\./current_status_20260508\.md|current-status.html|g
+s|docs/current_status_20260508\.md|current-status.html|g
+s|current_status_20260508\.md|current-status.html|g

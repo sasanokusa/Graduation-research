@@ -42,6 +42,11 @@ build "README.md" "overview.html" \
   '<a href="index.html">Wiki</a> / 概要' \
   "../../README.md"
 
+build "docs/current_status_20260508.md" "current-status.html" \
+  "研究現在地メモ (2026-05-08)" \
+  '<a href="index.html">Wiki</a> / 現在地' \
+  "../current_status_20260508.md"
+
 build "docs/roadmap/implementation_roadmap_20260316.md" "roadmap-initial.html" \
   "初版ロードマップ (2026-03-16)" \
   '<a href="index.html">Wiki</a> / ロードマップ / 初版' \
