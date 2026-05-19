@@ -21,7 +21,10 @@ SELF_CRITIQUE_SYSTEM_PROMPT = (
     '"recommended_next_observations":[...]}. '
     "Use only current evidence, the prior plan, and postcheck results. "
     "If a newly exposed downstream fault is repairable within scope, return retry. "
-    "If there is no evidence-backed next step or the prior action repeated without progress, return stop."
+    "If there is no evidence-backed next step or the prior action repeated without progress, return stop. "
+    "When requesting more observations, prefer these canonical request strings exactly when applicable: "
+    "'extract narrower relevant snippet from app/main.py', 'extract narrower relevant snippet from app/app.env', "
+    "'extract narrower relevant snippet from nginx/nginx.conf', 'expand app log excerpt', 'expand nginx log excerpt'."
 )
 
 
@@ -37,13 +40,31 @@ def _self_critique_prompt(state: SingleAgentState) -> str:
         "turn": state.get("planner_turn", 1),
         "suspected_domains": state.get("suspected_domains", []),
         "candidate_scope": state.get("candidate_scope", {}),
+        "ambiguity_level": state.get("ambiguity_level", ""),
+        "triage_summary": state.get("triage_summary", ""),
         "current_state_evidence": state.get("observation", {}).get("current_state_evidence", []),
         "historical_evidence": state.get("observation", {}).get("historical_evidence", []),
         "previous_plans": state.get("planner_history", []),
+        "previous_reviewer_history": state.get("reviewer_history", []),
         "latest_actions": state.get("proposed_actions", []),
-        "precheck": state.get("verifier_precheck_result", {}),
-        "execution": state.get("execution_result", {}),
-        "postcheck": state.get("verifier_postcheck_result", {}),
+        "validated_actions": state.get("verifier_precheck_result", {}).get("validated_actions", []),
+        "precheck_summary": {
+            "ok": state.get("verifier_precheck_result", {}).get("ok", False),
+            "errors": state.get("verifier_precheck_result", {}).get("errors", []),
+            "scope_validation_errors": state.get("verifier_precheck_result", {}).get("scope_validation_errors", []),
+        },
+        "action_results": state.get("execution_result", {}).get("action_results", []),
+        "postcheck_summary": {
+            "ok": state.get("verifier_postcheck_result", {}).get("ok", False),
+            "checks": state.get("verifier_postcheck_result", {}).get("checks", {}),
+            "warnings": state.get("verifier_postcheck_result", {}).get("warnings", []),
+            "healthz": state.get("verifier_postcheck_result", {}).get("healthz", {}),
+            "api_items": state.get("verifier_postcheck_result", {}).get("api_items", {}),
+            "topology": state.get("verifier_postcheck_result", {}).get("topology", {}),
+        },
+        "rollback_used": state.get("rollback_used", False),
+        "rollback_result": state.get("rollback_result", {}),
+        "incident_blackboard": state.get("incident_blackboard", {}),
         "hypothesis_log": state.get("hypothesis_log", []),
     }
     return "Self-critique the latest single-agent repair turn and decide whether to replan.\n" + json.dumps(

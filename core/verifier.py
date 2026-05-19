@@ -76,6 +76,34 @@ def _simulate_edit(action: dict[str, Any]) -> tuple[str, list[str]]:
     return current, errors
 
 
+def _is_contextual_code_old_text(old_text: str) -> bool:
+    stripped = old_text.strip()
+    if len(stripped) < 8:
+        return False
+    if "\n" in stripped:
+        return True
+    return any(char in stripped for char in [" ", "(", ")", "[", "]", "{", "}", "=", ".", ":", "\"", "'"])
+
+
+def _validate_replace_text_evidence(action: dict[str, Any], observation: dict[str, Any] | None) -> list[str]:
+    if action.get("operation") != "replace_text":
+        return []
+    path = action.get("path", "")
+    old_text = str(action.get("old_text", ""))
+    errors: list[str] = []
+    if is_code_file(path) and not _is_contextual_code_old_text(old_text):
+        errors.append(
+            f"replace_text for {path} must use a contextual old_text from a visible snippet; broad single-token code replacements are forbidden"
+        )
+    if observation:
+        snippet = str(observation.get("file_snippets", {}).get(path, ""))
+        if snippet and old_text not in snippet:
+            errors.append(
+                f"replace_text old_text for {path} is not present in the current observed file snippet"
+            )
+    return errors
+
+
 def _validate_success_checks(success_checks: list[str]) -> tuple[list[str], list[str]]:
     validated: list[str] = []
     errors: list[str] = []
@@ -201,6 +229,10 @@ def run_precheck(
                 action_validation_errors.append(
                     f"action[{index}] targets file outside the executor whitelist: {path}"
                 )
+                continue
+            evidence_errors = _validate_replace_text_evidence(action, observation)
+            action_validation_errors.extend(f"action[{index}] {error}" for error in evidence_errors)
+            if evidence_errors:
                 continue
             if (
                 action.get("operation") == "restore_from_base"

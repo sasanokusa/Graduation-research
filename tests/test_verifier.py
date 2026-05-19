@@ -35,6 +35,99 @@ def test_precheck_replace_text_requires_single_occurrence(monkeypatch, tmp_path:
     assert any("exactly one occurrence" in error for error in result["action_validation_errors"])
 
 
+def test_precheck_rejects_broad_single_token_code_replacement(monkeypatch, tmp_path: Path) -> None:
+    target = tmp_path / "main.py"
+    target.write_text('cursor.execute("SELECT id, name FROM itemz ORDER BY id")\n')
+
+    monkeypatch.setattr("core.verifier.compose_config_check", lambda: {"returncode": 0, "stdout": "", "stderr": ""})
+    monkeypatch.setattr(
+        "core.verifier.resolve_repo_path",
+        lambda path_value: target if path_value == "app/main.py" else Path(path_value),
+    )
+
+    result = run_precheck(
+        {
+            "summary": "test",
+            "actions": [
+                {
+                    "type": "edit_file",
+                    "path": "app/main.py",
+                    "operation": "replace_text",
+                    "old_text": "itemz",
+                    "new_text": "items",
+                }
+            ],
+        },
+        {"allowed_files": ["app/main.py"], "allowed_actions": ["edit_file"], "success_checks": []},
+        observation={"file_snippets": {"app/main.py": 'cursor.execute("SELECT id, name FROM itemz ORDER BY id")'}},
+        scope_policy={"files": ["app/main.py"], "services": [], "allowed_actions": ["edit_file"]},
+    )
+    assert result["ok"] is False
+    assert any("single-token code replacements" in error for error in result["action_validation_errors"])
+
+
+def test_precheck_accepts_contextual_code_replacement_from_visible_snippet(monkeypatch, tmp_path: Path) -> None:
+    target = tmp_path / "main.py"
+    target.write_text('cursor.execute("SELECT id, name FROM itemz ORDER BY id")\n')
+    old_text = "FROM itemz ORDER BY id"
+
+    monkeypatch.setattr("core.verifier.compose_config_check", lambda: {"returncode": 0, "stdout": "", "stderr": ""})
+    monkeypatch.setattr(
+        "core.verifier.resolve_repo_path",
+        lambda path_value: target if path_value == "app/main.py" else Path(path_value),
+    )
+
+    result = run_precheck(
+        {
+            "summary": "test",
+            "actions": [
+                {
+                    "type": "edit_file",
+                    "path": "app/main.py",
+                    "operation": "replace_text",
+                    "old_text": old_text,
+                    "new_text": "FROM items ORDER BY id",
+                }
+            ],
+        },
+        {"allowed_files": ["app/main.py"], "allowed_actions": ["edit_file"], "success_checks": []},
+        observation={"file_snippets": {"app/main.py": 'cursor.execute("SELECT id, name FROM itemz ORDER BY id")'}},
+        scope_policy={"files": ["app/main.py"], "services": [], "allowed_actions": ["edit_file"]},
+    )
+    assert result["ok"] is True
+
+
+def test_precheck_requires_replace_text_to_be_visible_in_observed_snippet(monkeypatch, tmp_path: Path) -> None:
+    target = tmp_path / "main.py"
+    target.write_text('cursor.execute("SELECT id, name FROM itemz ORDER BY id")\n')
+
+    monkeypatch.setattr("core.verifier.compose_config_check", lambda: {"returncode": 0, "stdout": "", "stderr": ""})
+    monkeypatch.setattr(
+        "core.verifier.resolve_repo_path",
+        lambda path_value: target if path_value == "app/main.py" else Path(path_value),
+    )
+
+    result = run_precheck(
+        {
+            "summary": "test",
+            "actions": [
+                {
+                    "type": "edit_file",
+                    "path": "app/main.py",
+                    "operation": "replace_text",
+                    "old_text": "FROM itemz ORDER BY id",
+                    "new_text": "FROM items ORDER BY id",
+                }
+            ],
+        },
+        {"allowed_files": ["app/main.py"], "allowed_actions": ["edit_file"], "success_checks": []},
+        observation={"file_snippets": {"app/main.py": '@app.get("/api/items")\n...\ndef list_items():'}},
+        scope_policy={"files": ["app/main.py"], "services": [], "allowed_actions": ["edit_file"]},
+    )
+    assert result["ok"] is False
+    assert any("not present in the current observed file snippet" in error for error in result["action_validation_errors"])
+
+
 def test_precheck_rejects_show_file(monkeypatch) -> None:
     monkeypatch.setattr("core.verifier.compose_config_check", lambda: {"returncode": 0, "stdout": "", "stderr": ""})
     result = run_precheck(

@@ -193,6 +193,8 @@ def _runtime_guidance(state: SingleAgentState) -> str:
         "- Do not return run_health_check for nginx_running, healthz_200, or api_items_200; verifier handles them.",
         "- If an editable file snippet already shows an exact faulty line, prioritize edit_file before any restart action.",
         "- Prefer replace_text as the first choice when a local fault is directly visible.",
+        "- For code files, replace_text.old_text must be copied from the visible file snippet with enough context; broad single-token replacements such as only a table name are forbidden.",
+        "- Do not edit code from an HTTP error alone. If the relevant code line is not visible, request or rely on a narrower code snippet before proposing edit_file.",
         "- Treat restore_from_base as a last resort rather than a default repair strategy.",
         "- If you return restart_compose_service, it must come after a state-changing edit_file action.",
         "- A plan containing only run_config_test and/or restart_compose_service is invalid when the observation already shows an editable fault.",
@@ -228,8 +230,8 @@ def _runtime_guidance(state: SingleAgentState) -> str:
     if app_main_snippet and ("Unknown column" in str(http_error_evidence) or "doesn't exist" in str(http_error_evidence)):
         guidance_lines.extend(
             [
-                "- The visible editable app/main.py snippet already contains the failing SQL statement.",
-                "- Prefer the smallest replace_text on app/main.py and then rebuild_compose_service for app.",
+                "- The visible editable app/main.py snippet should contain the failing SQL statement before a code edit is proposed.",
+                "- Prefer the smallest contextual replace_text copied from app/main.py and then rebuild_compose_service for app.",
             ]
         )
     if "APP_PORT=9000" in env_snippet and "server app:8000" in nginx_snippet:

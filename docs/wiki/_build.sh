@@ -77,6 +77,11 @@ build "docs/reports/local_experiment_cost_report_20260419.md" "report-local-expe
   '<a href="index.html">Wiki</a> / レポート / 局所実験コスト' \
   "../reports/local_experiment_cost_report_20260419.md"
 
+build "docs/reports/self_critique_gpt54_local_experiment_20260509.md" "report-selfcritique-gpt54-local.html" \
+  "GPT-5.4 self-critique 局所実験" \
+  '<a href="index.html">Wiki</a> / レポート / GPT-5.4 self-critique 局所実験' \
+  "../reports/self_critique_gpt54_local_experiment_20260509.md"
+
 build "docs/hypothesis_transition_evaluation.md" "evaluation-hypothesis-transition.html" \
   "仮説遷移評価 (Phase 4.5)" \
   '<a href="index.html">Wiki</a> / 評価 / 仮説遷移' \

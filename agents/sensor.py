@@ -227,7 +227,7 @@ def _has_db_auth_blocker(service_logs: dict[str, str], healthz: dict[str, Any], 
     )
     return any(
         marker in combined_text
-        for marker in ["Access denied", "using password: YES", "database error", "OperationalError", "Can't connect", "Connection refused"]
+        for marker in ["Access denied", "using password: YES", "OperationalError", "Can't connect", "Connection refused"]
     )
 
 
@@ -709,8 +709,66 @@ def _narrower_snippet(
     return _extract_relevant_snippet(path_value, needle_map[path_value], context=3 if path_value == "app/main.py" else 1)
 
 
+def _canonical_observation_requests(requested: list[str]) -> list[str]:
+    canonical: list[str] = []
+    for raw_request in requested:
+        request = str(raw_request).strip()
+        normalized = request.lower()
+        if not request:
+            continue
+        if request in {
+            "expand app log excerpt",
+            "expand nginx log excerpt",
+            "extract narrower relevant snippet from app/main.py",
+            "extract narrower relevant snippet from app/app.env",
+            "extract narrower relevant snippet from nginx/nginx.conf",
+            "run nginx config test as observation",
+        }:
+            canonical.append(request)
+            continue
+        if "app/main.py" in normalized and any(
+            marker in normalized
+            for marker in [
+                "inspect",
+                "read",
+                "open",
+                "search",
+                "locate",
+                "snippet",
+                "query",
+                "sql",
+                "itemz",
+                "items",
+                "table",
+                "/api/items",
+            ]
+        ):
+            canonical.append("extract narrower relevant snippet from app/main.py")
+            continue
+        if "app/app.env" in normalized and any(
+            marker in normalized
+            for marker in ["inspect", "read", "open", "search", "locate", "snippet", "db_", "password", "host", "cache", "queue"]
+        ):
+            canonical.append("extract narrower relevant snippet from app/app.env")
+            continue
+        if "nginx/nginx.conf" in normalized and any(
+            marker in normalized
+            for marker in ["inspect", "read", "open", "search", "locate", "snippet", "upstream", "proxy_pass"]
+        ):
+            canonical.append("extract narrower relevant snippet from nginx/nginx.conf")
+            continue
+        if "app log" in normalized or "app service log" in normalized or "traceback" in normalized:
+            canonical.append("expand app log excerpt")
+            continue
+        if "nginx log" in normalized:
+            canonical.append("expand nginx log excerpt")
+            continue
+        canonical.append(request)
+    return list(dict.fromkeys(canonical))
+
+
 def additional_observation_node(state: SingleAgentState) -> SingleAgentState:
-    requested = state.get("recommended_next_observations", [])
+    requested = _canonical_observation_requests(state.get("recommended_next_observations", []))
     collected: dict[str, Any] = {}
     count = state.get("additional_observation_count", 0) + 1
     observation = {

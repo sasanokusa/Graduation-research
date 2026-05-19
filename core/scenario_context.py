@@ -102,6 +102,8 @@ def build_worker_visible_context(
             "edit_operations": ["replace_text", "restore_from_base"],
             "no_repository_wide_edits": True,
             "no_shell_commands": True,
+            "replace_text_old_text_must_be_visible": True,
+            "broad_single_token_code_replacements_forbidden": True,
             "restore_from_base_role": "last_resort",
             "prefer_minimal_patch_for_code_files": ["app/main.py"],
             "initial_code_restore_is_discouraged": True,

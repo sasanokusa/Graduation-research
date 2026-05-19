@@ -27,7 +27,10 @@ REVIEWER_SYSTEM_PROMPT_BLIND = (
     "Do not assume hidden benchmark labels. "
     "Prioritize current-state evidence over historical noise. "
     "If a first-stage repair appears correct but a new downstream fault is now exposed, return decision=retry and explain the remaining fault. "
-    "If the previous plan was unsafe, redundant, or there is no evidence-backed next step, return decision=stop."
+    "If the previous plan was unsafe, redundant, or there is no evidence-backed next step, return decision=stop. "
+    "When requesting more observations, prefer these canonical request strings exactly when applicable: "
+    "'extract narrower relevant snippet from app/main.py', 'extract narrower relevant snippet from app/app.env', "
+    "'extract narrower relevant snippet from nginx/nginx.conf', 'expand app log excerpt', 'expand nginx log excerpt'."
 )
 
 REVIEWER_SYSTEM_PROMPT_HINTED = (

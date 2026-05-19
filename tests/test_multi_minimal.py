@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from agents.reviewer import parse_reviewer_text
-from runners.run_multi_minimal import after_review_gate, after_turn_gate
+from runners.run_multi_minimal import after_review_gate, after_turn_gate, build_app as build_multi_app
 from runners.run_self_critique import build_app as build_self_critique_app
 from runners.run_single import build_app as build_single_app
 
@@ -123,6 +123,11 @@ def test_single_agent_app_still_builds() -> None:
 
 def test_self_critique_app_builds() -> None:
     assert build_self_critique_app("mock") is not None
+
+
+def test_multi_agent_app_builds_without_judge(monkeypatch) -> None:
+    monkeypatch.setenv("MULTI_AGENT_JUDGE_MODE", "disabled")
+    assert build_multi_app("mock") is not None
 
 
 def _run_mock_multi_scenario(scenario: str) -> dict:

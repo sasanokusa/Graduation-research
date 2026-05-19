@@ -66,6 +66,11 @@ def multi_agent_max_additional_observations() -> int:
     return _env_int("MULTI_AGENT_MAX_ADDITIONAL_OBSERVATIONS", 3)
 
 
+def multi_agent_judge_enabled() -> bool:
+    value = os.getenv("MULTI_AGENT_JUDGE_MODE", os.getenv("MULTI_AGENT_ENABLE_JUDGE", "enabled")).strip().lower()
+    return value not in {"0", "false", "no", "off", "disabled", "none"}
+
+
 def healthy_end_node(state: SingleAgentState) -> SingleAgentState:
     _section("🏁 [MULTI] HEALTHY")
     print("System is already healthy. Multi-agent loop will not start.")
@@ -365,6 +370,7 @@ def build_app(worker_mode: str):
     builder.add_node("judge_node", safety_judge_agent_node)
     builder.add_node("success_end_node", success_end_node)
     builder.add_node("max_turns_end_node", max_turns_end_node)
+    builder.add_node("reviewer_stop_node", reviewer_stop_node)
     builder.add_node("judge_stop_node", judge_stop_node)
     builder.add_node("prepare_replan_node", prepare_replan_node)
 
@@ -395,12 +401,20 @@ def build_app(worker_mode: str):
     )
     builder.add_edge("success_end_node", END)
     builder.add_edge("max_turns_end_node", END)
-    builder.add_edge("reviewer_node", "judge_node")
-    builder.add_conditional_edges(
-        "judge_node",
-        after_judge_gate,
-        {"retry": "prepare_replan_node", "stop": "judge_stop_node"},
-    )
+    if multi_agent_judge_enabled():
+        builder.add_edge("reviewer_node", "judge_node")
+        builder.add_conditional_edges(
+            "judge_node",
+            after_judge_gate,
+            {"retry": "prepare_replan_node", "stop": "judge_stop_node"},
+        )
+    else:
+        builder.add_conditional_edges(
+            "reviewer_node",
+            after_review_gate,
+            {"retry": "prepare_replan_node", "stop": "reviewer_stop_node"},
+        )
+    builder.add_edge("reviewer_stop_node", END)
     builder.add_edge("judge_stop_node", END)
     builder.add_edge("prepare_replan_node", "sensor_node")
     return builder.compile()
@@ -520,7 +534,9 @@ def main(argv: list[str] | None = None) -> int:
         "triage_llm_fallback": False,
         "hypothesis_log": [],
         "hypothesis_metrics": {},
-        "baseline_condition": "multi_agent_single_planner",
+        "baseline_condition": (
+            "multi_agent_single_planner" if multi_agent_judge_enabled() else "multi_agent_reviewer_only"
+        ),
         "self_critique_history": [],
         "judge_decision": "",
         "judge_output_raw": "",

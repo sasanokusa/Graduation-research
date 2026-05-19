@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GPT-5.4 self-critique
+局所実験 — Safe Emergency Recovery Wiki</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="layout">
+  <header class="topbar">
+    <div class="brand">
+      <a href="index.html">Safe Emergency Recovery</a>
+      <span class="sub">研究ドキュメント Wiki</span>
+    </div>
+    <nav class="topnav">
+      <a href="index.html">ホーム</a>
+      <a href="current-status.html">現在地</a>
+      <a href="overview.html">概要</a>
+      <a href="roadmap-revised.html">最新ロードマップ</a>
+    </nav>
+  </header>
+  <aside class="sidebar">
+    <div class="group">
+      <div class="group-title">スタート</div>
+      <ul>
+        <li><a href="index.html" data-id="index">Wiki トップ</a></li>
+        <li><a href="overview.html" data-id="overview">プロジェクト概要 (README)</a></li>
+        <li><a href="current-status.html" data-id="current-status">現在地メモ (2026-05-08)</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">ロードマップ</div>
+      <ul>
+        <li><a href="roadmap-initial.html" data-id="roadmap-initial">初版ロードマップ (2026-03-16)</a></li>
+        <li><a href="roadmap-revised.html" data-id="roadmap-revised">改訂版ロードマップ (2026-04-15)</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">調査・レポート</div>
+      <ul>
+        <li><a href="report-repository-assessment.html" data-id="report-repository-assessment">リポジトリ調査レポート</a></li>
+        <li><a href="report-analysis.html" data-id="report-analysis">設計レビュー・改善提案</a></li>
+        <li><a href="report-phase1-cost.html" data-id="report-phase1-cost">Phase 1 比較実験コスト</a></li>
+        <li><a href="report-local-experiment-cost.html" data-id="report-local-experiment-cost">局所実験コスト</a></li>
+        <li><a href="report-selfcritique-gpt54-local.html" data-id="report-selfcritique-gpt54-local">GPT-5.4 self-critique 局所実験</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">評価</div>
+      <ul>
+        <li><a href="evaluation-hypothesis-transition.html" data-id="evaluation-hypothesis-transition">仮説遷移評価 (Phase 4.5)</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">Production PoC</div>
+      <ul>
+        <li><a href="poc-architecture.html" data-id="poc-architecture">アーキテクチャ</a></li>
+        <li><a href="poc-deploy.html" data-id="poc-deploy">導入手順</a></li>
+        <li><a href="poc-validation-scenarios.html" data-id="poc-validation-scenarios">実機検証シナリオ</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">シナリオ</div>
+      <ul>
+        <li><a href="scenario-ictsc5023.html" data-id="scenario-ictsc5023">ICTSC 5023</a></li>
+      </ul>
+    </div>
+  </aside>
+  <main class="content">
+    <div class="breadcrumb"><a href="index.html">Wiki</a> / レポート / GPT-5.4 self-critique 局所実験</div>
+    <h1 id="gpt-54-self-critique-局所実験レポート">GPT-5.4 self-critique
+    局所実験レポート</h1>
+    <p>作成日: 2026-05-09</p>
+    <p>対象は <code>m/n/o/r/u/v/w/x</code> の8シナリオで、single-agent
+    iterative self-critique baseline を OpenAI <code>gpt-5.4</code>
+    で各1回ずつ走らせた局所実験である。目的は、前回の
+    <code>gpt-5.4-mini</code> 実験で見えた「自己反省はするが、cascade
+    後段の query bug で安全な patch
+    に踏み切れず空プラン化する」挙動が、より賢いモデルで改善するかを確認することである。</p>
+    <h2 id="前提">前提</h2>
+    <ul>
+    <li>実験結果は
+    <code>observations/20260509T032704Z_selfcritique_openai_gpt54_mnoru_vwx_once/summary.csv</code>
+    を主結果として扱う。</li>
+    <li>同時刻付近の
+    <code>observations/20260509T032616Z_selfcritique_openai_gpt54_mnoru_vwx_once/</code>
+    は Docker daemon に接続できず <code>reset.sh</code>
+    で失敗した予備実行であり、本集計から除外する。</li>
+    <li>比較対象は
+    <code>observations/20260419T124231Z_selfcritique_openai_mnoru_vwx_once/summary.csv</code>
+    の <code>gpt-5.4-mini</code> self-critique 実験である。</li>
+    <li>実行時の <code>SINGLE_AGENT_PROVIDER</code> は
+    <code>openai</code>、<code>SINGLE_AGENT_MODEL</code> は
+    <code>gpt-5.4</code>、<code>MULTI_AGENT_MAX_TURNS</code> は
+    <code>5</code> である。</li>
+    <li><code>prompt-mode</code> は
+    <code>blind</code>、<code>scenario-mode</code> は
+    <code>forced</code>、entrypoint は
+    <code>self_critique_agent.py</code> である。</li>
+    <li>料金は OpenAI API
+    の標準オンデマンド単価による概算であり、税、為替、無料枠、キャッシュ、Batch、Priority、リージョン上乗せは含めない。</li>
+    <li>2026-05-09 時点の OpenAI
+    公式モデルページでは、<code>gpt-5.4</code> は input $2.50 / 1M
+    tokens、output $15.00 / 1M tokens、<code>gpt-5.4-mini</code> は
+    input $0.75 / 1M tokens、output $4.50 / 1M tokens
+    とされている。</li>
+    </ul>
+    <p>実行コマンド:</p>
+    <div class="sourceCode" id="cb1"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">env</span> SINGLE_AGENT_PROVIDER=openai SINGLE_AGENT_MODEL=gpt-5.4 MULTI_AGENT_MAX_TURNS=5 <span class="dt">\</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  ./observe_runs.sh m n o r u v w x <span class="dt">\</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">--agent-entrypoint</span> self_critique_agent.py <span class="dt">\</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">--worker</span> llm <span class="dt">\</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">--prompt-mode</span> blind <span class="dt">\</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">--scenario-mode</span> forced <span class="dt">\</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">--repeat</span> 1 <span class="dt">\</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>  <span class="at">--python</span> ./.venv/bin/python <span class="dt">\</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>  <span class="at">--label</span> selfcritique_openai_gpt54_mnoru_vwx_once</span></code></pre></div>
+    <p>集計コマンド:</p>
+    <div class="sourceCode" id="cb2"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="ex">./.venv/bin/python</span> aggregate_observations.py <span class="dt">\</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  observations/20260509T032704Z_selfcritique_openai_gpt54_mnoru_vwx_once/summary.csv <span class="dt">\</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">--group-by</span> scenario <span class="dt">\</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">--show-overall</span> <span class="dt">\</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">--show-failure-breakdown</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="ex">./.venv/bin/python</span> aggregate_hypothesis_metrics.py <span class="dt">\</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>  observations/20260509T032704Z_selfcritique_openai_gpt54_mnoru_vwx_once/summary.csv <span class="dt">\</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>  <span class="at">--output</span> observations/20260509T032704Z_selfcritique_openai_gpt54_mnoru_vwx_once/hypothesis_metrics.csv</span></code></pre></div>
+    <h2 id="結果">結果</h2>
+    <table>
+    <thead>
+    <tr>
+    <th>Scenario</th>
+    <th>結果</th>
+    <th style="text-align: right;">turn</th>
+    <th style="text-align: right;">self-critique 回数</th>
+    <th>stop reason</th>
+    <th>detected fault</th>
+    <th style="text-align: right;">elapsed</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td><code>m</code></td>
+    <td>failure</td>
+    <td style="text-align: right;">4</td>
+    <td style="text-align: right;">4</td>
+    <td><code>self_critique_stop</code></td>
+    <td><code>query_bug_front</code></td>
+    <td style="text-align: right;">158.836s</td>
+    </tr>
+    <tr>
+    <td><code>n</code></td>
+    <td>failure</td>
+    <td style="text-align: right;">3</td>
+    <td style="text-align: right;">3</td>
+    <td><code>self_critique_stop</code></td>
+    <td><code>application_query_or_schema_mismatch</code></td>
+    <td style="text-align: right;">110.271s</td>
+    </tr>
+    <tr>
+    <td><code>o</code></td>
+    <td>failure</td>
+    <td style="text-align: right;">3</td>
+    <td style="text-align: right;">3</td>
+    <td><code>self_critique_stop</code></td>
+    <td><code>application_query_bug</code></td>
+    <td style="text-align: right;">100.781s</td>
+    </tr>
+    <tr>
+    <td><code>r</code></td>
+    <td>failure</td>
+    <td style="text-align: right;">2</td>
+    <td style="text-align: right;">2</td>
+    <td><code>self_critique_stop</code></td>
+    <td><code>application_db_auth_misconfiguration</code></td>
+    <td style="text-align: right;">134.140s</td>
+    </tr>
+    <tr>
+    <td><code>u</code></td>
+    <td>failure</td>
+    <td style="text-align: right;">3</td>
+    <td style="text-align: right;">3</td>
+    <td><code>self_critique_stop</code></td>
+    <td><code>application_query_bug</code></td>
+    <td style="text-align: right;">99.449s</td>
+    </tr>
+    <tr>
+    <td><code>v</code></td>
+    <td>success</td>
+    <td style="text-align: right;">1</td>
+    <td style="text-align: right;">0</td>
+    <td><code>success</code></td>
+    <td><code>topology_or_service_discovery_fault</code></td>
+    <td style="text-align: right;">13.314s</td>
+    </tr>
+    <tr>
+    <td><code>w</code></td>
+    <td>success</td>
+    <td style="text-align: right;">1</td>
+    <td style="text-align: right;">0</td>
+    <td><code>success</code></td>
+    <td><code>failover_contract_mismatch</code></td>
+    <td style="text-align: right;">13.309s</td>
+    </tr>
+    <tr>
+    <td><code>x</code></td>
+    <td>success</td>
+    <td style="text-align: right;">1</td>
+    <td style="text-align: right;">0</td>
+    <td><code>success</code></td>
+    <td><code>failover_contract_mismatch</code></td>
+    <td style="text-align: right;">13.111s</td>
+    </tr>
+    </tbody>
+    </table>
+    <p>成功率は 3/8 だった。成功したのは <code>v/w/x</code> の topology
+    / contract mismatch 系であり、<code>m/n/o/r/u</code> の cascade
+    系はすべて失敗した。</p>
+    <p>失敗内訳は次のとおりである。</p>
+    <table>
+    <thead>
+    <tr>
+    <th>Bucket</th>
+    <th style="text-align: right;">件数</th>
+    <th>Scenario</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td><code>planner_reasoning_failure</code></td>
+    <td style="text-align: right;">4</td>
+    <td><code>m/n/o/u</code></td>
+    </tr>
+    <tr>
+    <td><code>postcheck_failure</code></td>
+    <td style="text-align: right;">1</td>
+    <td><code>r</code></td>
+    </tr>
+    </tbody>
+    </table>
+    <p><code>m/n/o/u</code> は、いずれも後段の <code>appdb.itemz</code>
+    missing table evidence まで到達したが、<code>app/main.py</code> の
+    exact substring が観測 payload
+    に見えていないことを理由に空プランを返して停止した。<code>r</code>
+    は依存修復後に DB auth drift まで進み、<code>app/app.env</code> の
+    restore と app rebuild を実行したが、最終 postcheck は query bug
+    露出後に失敗した。</p>
+    <h2 id="コスト概算">コスト概算</h2>
+    <p>今回の <code>gpt-5.4</code> self-critique 実験の token usage
+    は以下である。</p>
+    <table>
+    <thead>
+    <tr>
+    <th>Model</th>
+    <th style="text-align: right;">input tokens</th>
+    <th style="text-align: right;">output tokens</th>
+    <th style="text-align: right;">total tokens</th>
+    <th style="text-align: right;">概算コスト</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td><code>gpt-5.4</code></td>
+    <td style="text-align: right;">71,078</td>
+    <td style="text-align: right;">2,201</td>
+    <td style="text-align: right;">73,279</td>
+    <td style="text-align: right;">$0.2107</td>
+    </tr>
+    </tbody>
+    </table>
+    <table>
+    <thead>
+    <tr>
+    <th>指標</th>
+    <th style="text-align: right;">値</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>8シナリオ1セットあたり</td>
+    <td style="text-align: right;">$0.2107</td>
+    </tr>
+    <tr>
+    <td>1シナリオ平均</td>
+    <td style="text-align: right;">$0.0263</td>
+    </tr>
+    <tr>
+    <td>成功1件あたり</td>
+    <td style="text-align: right;">$0.0702</td>
+    </tr>
+    </tbody>
+    </table>
+    <p>前回の <code>gpt-5.4-mini</code> self-critique 実験は input
+    92,060 / output 2,228 tokens で、当時と同じ定価換算では $0.0791
+    だった。今回の <code>gpt-5.4</code> は token 総量は 94,288 から
+    73,279 へ減ったが、単価差により概算コストは約 2.7 倍になった。</p>
+    <h2 id="gpt-54-mini-との比較"><code>gpt-5.4-mini</code>
+    との比較</h2>
+    <table>
+    <thead>
+    <tr>
+    <th>Scenario</th>
+    <th><code>gpt-5.4-mini</code></th>
+    <th><code>gpt-5.4</code></th>
+    <th>比較メモ</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td><code>m</code></td>
+    <td>failure</td>
+    <td>failure</td>
+    <td><code>gpt-5.4</code> は nginx、DB auth、query bug
+    まで段階的に進み、mini より深く到達した。ただし最終的には exact code
+    snippet 不足で空プラン停止。</td>
+    </tr>
+    <tr>
+    <td><code>n</code></td>
+    <td>failure</td>
+    <td>failure</td>
+    <td>両者とも startup 復旧後の <code>appdb.itemz</code>
+    で停止。<code>gpt-5.4</code> も安全な <code>replace_text</code>
+    対象が見えないとして空プラン化した。</td>
+    </tr>
+    <tr>
+    <td><code>o</code></td>
+    <td>failure</td>
+    <td>failure</td>
+    <td><code>gpt-5.4</code> は DB auth 修復後の query bug
+    まで到達したが、mini と同様に code edit に踏み切れなかった。</td>
+    </tr>
+    <tr>
+    <td><code>r</code></td>
+    <td>failure</td>
+    <td>failure</td>
+    <td>mini は query/schema mismatch
+    まで到達して空プラン停止。<code>gpt-5.4</code> は今回 DB auth 修復
+    turn の postcheck failure で止まり、最後の code fix
+    までは進まなかった。</td>
+    </tr>
+    <tr>
+    <td><code>u</code></td>
+    <td>failure</td>
+    <td>failure</td>
+    <td>両者とも DB_HOST / topology 修復後に query bug
+    まで到達し、<code>app/main.py</code> の exact substring
+    不足で停止。</td>
+    </tr>
+    <tr>
+    <td><code>v</code></td>
+    <td>success</td>
+    <td>success</td>
+    <td>どちらも <code>CACHE_HOST=cache-missing</code> を
+    <code>cache</code> に戻して1ターン成功。</td>
+    </tr>
+    <tr>
+    <td><code>w</code></td>
+    <td>success</td>
+    <td>success</td>
+    <td>どちらも <code>CACHE_HOST=queue</code> を <code>cache</code>
+    に戻して1ターン成功。</td>
+    </tr>
+    <tr>
+    <td><code>x</code></td>
+    <td>success</td>
+    <td>success</td>
+    <td>mini は2ターン、<code>gpt-5.4</code>
+    は1ターンで成功。<code>gpt-5.4</code> は <code>app/app.env</code> の
+    base restore を選び、bilateral drift を一括で解消した。</td>
+    </tr>
+    </tbody>
+    </table>
+    <p>定量的には、成功率はどちらも 3/8
+    で変わらなかった。一方で、<code>m</code> では
+    <code>gpt-5.4-mini</code> が初段 nginx
+    周辺で止まったのに対し、<code>gpt-5.4</code> は query bug
+    まで到達したため、診断の深さは改善している。ただし、最終的な full
+    recovery にはつながらなかった。</p>
+    <h2 id="シナリオ別メモ">シナリオ別メモ</h2>
+    <h3 id="m"><code>m</code></h3>
+    <p>1ターン目で nginx upstream host mismatch を直し、2ターン目で DB
+    auth drift を直し、3ターン目で <code>appdb.itemz</code> missing
+    table まで到達した。self-critique は3ターン目で「この問題は in-scope
+    であり app/main.py を直すべき」と retry を返している。しかし planner
+    は <code>app/main.py</code> の exact faulty line
+    が見えないことを理由に空プランを返し、4ターン目でも同じ空プランを繰り返したため
+    self-critique が stop した。</p>
+    <p>評価としては、段階的な仮説遷移はかなり良い。失敗原因は root cause
+    の見落としではなく、観測境界と action schema
+    の制約下で、証拠不足を過度に安全側へ倒したことである。</p>
+    <h3 id="n"><code>n</code></h3>
+    <p>1ターン目で <code>uvicorn</code> 欠落を直し、app startup
+    は復旧した。その後 <code>/api/items</code> の
+    <code>appdb.itemz</code> missing table が露出したが、2ターン目以降は
+    exact source snippet 不足を理由に空プラン化した。mini とほぼ同じ
+    failure mode である。</p>
+    <h3 id="o"><code>o</code></h3>
+    <p>1ターン目で DB credential drift を修復し、<code>/healthz</code>
+    は成功した。その後 <code>appdb.itemz</code> missing table
+    が露出したが、<code>app/main.py</code> の actual SQL line
+    が見えないため空プランで停止した。stale nginx evidence
+    には引っ張られておらず、前面障害の見極めはできている。</p>
+    <h3 id="r"><code>r</code></h3>
+    <p>1ターン目で dependency failure を直し、2ターン目で DB auth drift
+    を修復した。postcheck では <code>/healthz</code> が 200
+    になり、<code>/api/items</code> の query bug
+    が露出したが、この時点で self-critique は「現在の validated scope
+    では app/main.py が含まれない」と判断して stop した。<code>r</code>
+    では multi-agent の reviewer / blackboard と比べ、次ターンの scope
+    拡張・再観測誘導が弱いことが見える。</p>
+    <h3 id="u"><code>u</code></h3>
+    <p>1ターン目で <code>DB_HOST=127.0.0.1</code> 系の topology fault を
+    base restore で修復し、<code>/healthz</code> は成功した。その後
+    <code>appdb.itemz</code> missing table
+    が露出したが、<code>m/n/o</code> と同じく <code>app/main.py</code>
+    の exact substring 不足で空プラン停止した。</p>
+    <h3 id="v"><code>v</code></h3>
+    <p><code>CACHE_HOST=cache-missing</code> と topology endpoint の
+    <code>expected_host=cache</code>
+    が直接見えていたため、<code>replace_text</code> で
+    <code>CACHE_HOST=cache</code> に戻し、app rebuild
+    で1ターン成功した。</p>
+    <h3 id="w"><code>w</code></h3>
+    <p><code>CACHE_HOST=queue</code> が visible snippet と topology
+    evidence の両方から確認でき、<code>CACHE_HOST=cache</code> への
+    minimal patch で1ターン成功した。</p>
+    <h3 id="x"><code>x</code></h3>
+    <p><code>CACHE_HOST=queue</code>、<code>QUEUE_HOST=cache</code>、<code>DEGRADED_MODE</code>
+    系の bilateral dependency drift を、<code>app/app.env</code> の
+    <code>restore_from_base</code> と app rebuild
+    で1ターン成功した。mini は2ターンだったため、ここは
+    <code>gpt-5.4</code> の改善が見える。</p>
+    <h2 id="所感">所感</h2>
+    <p>今回の結果は、「賢いモデルなら自己反省ループだけで cascade
+    を解けるのではないか」という期待には否定的だった。<code>gpt-5.4</code>
+    は mini より診断が深く、特に <code>m</code> では3層目の query bug
+    まで到達した。しかし full recovery は増えず、成功率は前回と同じ 3/8
+    に留まった。</p>
+    <p>重要なのは、自己反省が無意味だったわけではない点である。self-critique
+    は多くの turn で正しく retry
+    を返し、前段修復によって新しい下流故障が露出したことを認識していた。問題は、その
+    feedback を受けた planner
+    が同じ情報境界の中で再び行動を選ぶため、<code>app/main.py</code> の
+    exact line が見えない局面では「安全に patch
+    できない」と判断して空プランに戻りやすいことである。</p>
+    <p>したがって、卒論上の整理としては次の主張が強い。</p>
+    <ul>
+    <li><code>gpt-5.4</code> self-critique は mini
+    より深い段階まで診断を進める場合がある</li>
+    <li>しかし、自己反省だけでは action schema
+    と観測境界による閉塞を破れない</li>
+    <li>cascade 後段の full recovery には、追加観測、scope
+    更新、blackboard、外部 reviewer / judge のような制御構造が効く</li>
+    <li>topology / contract mismatch のように fault と修復文字列が観測
+    payload に直接見えている場合は、self-critique 以前に single-agent
+    でも十分解ける</li>
+    </ul>
+    <p>結論として、<code>GPT-5.4</code>
+    を使っても「頭のよさ」だけでは今回の self-critique baseline
+    の弱点は解消しなかった。改善すべき対象はモデル単体ではなく、<code>app/main.py</code>
+    の狭い追加観測を許可する設計、または reviewer guidance を planner の
+    candidate scope / observation request
+    に確実に反映する制御構造である。</p>
+    <h2 id="価格ソース">価格ソース</h2>
+    <ul>
+    <li>OpenAI: <a
+    href="https://developers.openai.com/api/docs/models/gpt-5.4/">GPT-5.4
+    model page</a></li>
+    <li>OpenAI: <a
+    href="https://developers.openai.com/api/docs/models/gpt-5.4-mini/">GPT-5.4
+    mini model page</a></li>
+    <li>OpenAI: <a href="https://openai.com/api/pricing/">API
+    pricing</a></li>
+    </ul>
+    <div class="footer">
+      <span>Safe Emergency Recovery Experiment — Research Wiki</span>
+      <span>ソース: <a href="../reports/self_critique_gpt54_local_experiment_20260509.md">../reports/self_critique_gpt54_local_experiment_20260509.md</a></span>
+    </div>
+  </main>
+</div>
+<script src="wiki.js"></script>
+</body>
+</html>

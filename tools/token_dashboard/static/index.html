@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Experiment Token Dashboard</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">observations</p>
+        <h1>Experiment Token Dashboard</h1>
+      </div>
+      <div class="actions">
+        <label class="search">
+          <span>Filter</span>
+          <input id="searchInput" type="search" placeholder="scenario / model / experiment" />
+        </label>
+        <button id="refreshButton" class="icon-button" type="button" aria-label="Refresh">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M20 6v5h-5" />
+            <path d="M4 18v-5h5" />
+            <path d="M6.1 9A7 7 0 0 1 18 6.8L20 11" />
+            <path d="M17.9 15A7 7 0 0 1 6 17.2L4 13" />
+          </svg>
+          <span>更新</span>
+        </button>
+      </div>
+    </header>
+
+    <main>
+      <section id="status" class="status">読み込み中...</section>
+
+      <section class="kpi-grid" aria-label="summary">
+        <article class="kpi">
+          <span class="kpi-label">総コスト</span>
+          <strong id="totalCost">$0.0000</strong>
+          <small id="pricedRows">0 priced runs</small>
+        </article>
+        <article class="kpi">
+          <span class="kpi-label">総トークン</span>
+          <strong id="totalTokens">0</strong>
+          <small id="tokenRows">0 token rows</small>
+        </article>
+        <article class="kpi split">
+          <span class="kpi-label">Input / Output</span>
+          <strong><span id="inputTokens">0</span> / <span id="outputTokens">0</span></strong>
+          <small id="reasoningTokens">Reasoning 0</small>
+        </article>
+        <article class="kpi">
+          <span class="kpi-label">成功1件あたり</span>
+          <strong id="costPerSuccess">$0.0000</strong>
+          <small id="unpricedTokens">Unpriced 0 tokens</small>
+        </article>
+      </section>
+
+      <section class="layout">
+        <article class="panel wide">
+          <div class="panel-title chart-title">
+            <h2>モデル構成</h2>
+            <div class="segmented" role="group" aria-label="Chart metric">
+              <button class="segment active" type="button" data-chart-metric="cost">Cost</button>
+              <button class="segment" type="button" data-chart-metric="tokens">Tokens</button>
+            </div>
+          </div>
+          <div class="model-chart-layout">
+            <div class="donut-wrap">
+              <svg id="modelDonut" class="donut" viewBox="0 0 220 220" aria-label="Model usage chart"></svg>
+              <div class="donut-center">
+                <span id="donutMetric">Cost</span>
+                <strong id="donutTotal">$0.0000</strong>
+              </div>
+            </div>
+            <div id="modelLegend" class="legend"></div>
+          </div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-title">
+            <h2>効率メモ</h2>
+          </div>
+          <div id="efficiencyList" class="efficiency-list"></div>
+        </article>
+
+        <article class="panel wide">
+          <div class="panel-title">
+            <h2>実験別コスト</h2>
+            <span id="experimentCount"></span>
+          </div>
+          <div id="experimentBars" class="bars"></div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-title">
+            <h2>モデル別</h2>
+          </div>
+          <div id="modelBars" class="bars compact"></div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-title">
+            <h2>実行モード</h2>
+          </div>
+          <div id="modeBars" class="bars compact"></div>
+        </article>
+
+        <article class="panel wide">
+          <div class="panel-title">
+            <h2>シナリオ別</h2>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Scenario</th>
+                  <th>Runs</th>
+                  <th>Success</th>
+                  <th>Tokens</th>
+                  <th>Cost</th>
+                </tr>
+              </thead>
+              <tbody id="scenarioRows"></tbody>
+            </table>
+          </div>
+        </article>
+
+        <article class="panel wide collapsible-panel">
+          <details id="runDetailToggle">
+            <summary class="panel-title">
+              <h2>Run detail</h2>
+              <span id="runCount"></span>
+            </summary>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Started</th>
+                  <th>Experiment</th>
+                  <th>Scenario</th>
+                  <th>Mode</th>
+                  <th>Status</th>
+                  <th>Model</th>
+                  <th>Input</th>
+                  <th>Output</th>
+                  <th>Cost</th>
+                </tr>
+              </thead>
+              <tbody id="runRows"></tbody>
+            </table>
+          </div>
+          </details>
+        </article>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>
