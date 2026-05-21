@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>次のステップ計画
+(2026-05-21) — Safe Emergency Recovery Wiki</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="layout">
+  <header class="topbar">
+    <div class="brand">
+      <a href="index.html">Safe Emergency Recovery</a>
+      <span class="sub">研究ドキュメント Wiki</span>
+    </div>
+    <nav class="topnav">
+      <a href="index.html">ホーム</a>
+      <a href="current-status.html">現在地</a>
+      <a href="overview.html">概要</a>
+      <a href="roadmap-revised.html">最新ロードマップ</a>
+    </nav>
+  </header>
+  <aside class="sidebar">
+    <div class="group">
+      <div class="group-title">スタート</div>
+      <ul>
+        <li><a href="index.html" data-id="index">Wiki トップ</a></li>
+        <li><a href="overview.html" data-id="overview">プロジェクト概要 (README)</a></li>
+        <li><a href="current-status.html" data-id="current-status">現在地メモ (2026-05-08)</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">ロードマップ</div>
+      <ul>
+        <li><a href="roadmap-initial.html" data-id="roadmap-initial">初版ロードマップ (2026-03-16)</a></li>
+        <li><a href="roadmap-revised.html" data-id="roadmap-revised">改訂版ロードマップ (2026-04-15)</a></li>
+        <li><a href="roadmap-next-steps.html" data-id="roadmap-next-steps">次のステップ計画 (2026-05-21)</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">調査・レポート</div>
+      <ul>
+        <li><a href="report-repository-assessment.html" data-id="report-repository-assessment">リポジトリ調査レポート</a></li>
+        <li><a href="report-analysis.html" data-id="report-analysis">設計レビュー・改善提案</a></li>
+        <li><a href="report-phase1-cost.html" data-id="report-phase1-cost">Phase 1 比較実験コスト</a></li>
+        <li><a href="report-local-experiment-cost.html" data-id="report-local-experiment-cost">局所実験コスト</a></li>
+        <li><a href="report-selfcritique-gpt54-local.html" data-id="report-selfcritique-gpt54-local">GPT-5.4 self-critique 局所実験</a></li>
+        <li><a href="report-safety-metrics.html" data-id="report-safety-metrics">安全性メトリクス・Judge介入</a></li>
+        <li><a href="report-controlled-gpt54-fairness.html" data-id="report-controlled-gpt54-fairness">GPT-5.4 公平条件比較実験</a></li>
+        <li><a href="report-planner-escalation-cost.html" data-id="report-planner-escalation-cost">Planner Escalation コスト比較</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">評価</div>
+      <ul>
+        <li><a href="evaluation-hypothesis-transition.html" data-id="evaluation-hypothesis-transition">仮説遷移評価 (Phase 4.5)</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">Production PoC</div>
+      <ul>
+        <li><a href="poc-architecture.html" data-id="poc-architecture">アーキテクチャ</a></li>
+        <li><a href="poc-deploy.html" data-id="poc-deploy">導入手順</a></li>
+        <li><a href="poc-validation-scenarios.html" data-id="poc-validation-scenarios">実機検証シナリオ</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">シナリオ</div>
+      <ul>
+        <li><a href="scenario-ictsc5023.html" data-id="scenario-ictsc5023">ICTSC 5023</a></li>
+      </ul>
+    </div>
+  </aside>
+  <main class="content">
+    <div class="breadcrumb"><a href="index.html">Wiki</a> / ロードマップ / 次のステップ</div>
+    <h1 id="2026-05-21-次のステップ計画">2026-05-21
+    次のステップ計画</h1>
+    <p>作成日: 2026-05-21 基礎資料: <a
+    href="current-status.html"><code>current-status.html</code></a>, <a
+    href="roadmap-revised.html"><code>roadmap-revised.html</code></a>,
+    <a
+    href="report-controlled-gpt54-fairness.html"><code>report-controlled-gpt54-fairness.html</code></a>,
+    <a
+    href="report-safety-metrics.html"><code>report-safety-metrics.html</code></a></p>
+    <h2 id="0-状況確認">0. 状況確認</h2>
+    <ul>
+    <li>中間発表: 夏頃</li>
+    <li>最終発表 / 卒論提出: 2027 年 2 月後半</li>
+    <li>残期間: 約 9 ヶ月 (中間発表まで 2-3 ヶ月、その後 6-7 ヶ月)</li>
+    </ul>
+    <p>機能実装は卒論の核としてほぼ揃っており、ここからは比較実験を厚くして卒論本文へ変換することに重心を移す。</p>
+    <h2 id="1-全体方針">1. 全体方針</h2>
+    <p>順序:</p>
+    <ol type="1">
+    <li>Experiment 2 (役割別モデル割り当て) を smoke → 質的挙動確認 →
+    本走行で立ち上げる</li>
+    <li>Experiment 1 と Experiment 2 を <code>repeat 3</code>
+    で反復実験する</li>
+    <li>反復実験の結果を受けて、DC インフラ向けシナリオ追加 (Y1/Z1)
+    の要否を判断する</li>
+    <li>中間発表 (夏) では Experiment 2 までの結果を出し、その後 case
+    study と本文化を進める</li>
+    </ol>
+    <p>初期案にあった「API ルーティングによるコスト最適化」claim
+    は、Experiment 2 の役割別モデル割り当てで回収する。</p>
+    <h2 id="2-experiment-2-役割別モデル割り当て">2. Experiment 2:
+    役割別モデル割り当て</h2>
+    <h3 id="目的">目的</h3>
+    <p>検証 / 判断系を高性能モデルに集中させ、計画 /
+    観測系に軽量モデルを割り当てる構成が、reviewer+judge を同一モデル
+    (gpt-5.4) で揃えた Experiment 1-D と比べて、success rate / safety
+    override / cost のいずれに有利かを示す。</p>
+    <h3 id="役割割り当て">役割割り当て</h3>
+    <table>
+    <thead>
+    <tr>
+    <th>役割</th>
+    <th>provider</th>
+    <th>model</th>
+    <th>理由</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>planner</td>
+    <td>openai</td>
+    <td>gpt-5.4</td>
+    <td>修正案生成。Experiment 1 と揃えて planner 軸を固定</td>
+    </tr>
+    <tr>
+    <td>reviewer</td>
+    <td>anthropic</td>
+    <td>claude-sonnet-4-6</td>
+    <td>検証。批判性能を高くする</td>
+    </tr>
+    <tr>
+    <td>judge</td>
+    <td>anthropic</td>
+    <td>claude-sonnet-4-6</td>
+    <td>最終判断。安全側 override 性能を高くする</td>
+    </tr>
+    <tr>
+    <td>triage</td>
+    <td>google</td>
+    <td>gemini-3-flash-preview</td>
+    <td>観測解釈。安価かつ低レイテンシ</td>
+    </tr>
+    </tbody>
+    </table>
+    <p><code>MULTI_AGENT_JUDGE_MODE=enabled</code>,
+    <code>MULTI_AGENT_MAX_TURNS=5</code>,
+    <code>MULTI_AGENT_MAX_ADDITIONAL_OBSERVATIONS=3</code> を維持。</p>
+    <h3 id="事前確認">事前確認</h3>
+    <p>このセッションで <code>core/settings.py</code>,
+    <code>core/agent_factory.py</code>,
+    <code>requirements_agent.txt</code>,
+    <code>agents/triage_agent.py</code> を確認した結果、コード側は 3
+    provider (google / openai / anthropic) を扱える状態。ブロッカーは
+    <code>.env</code> (provider 3 つの API key 設定) のみ。本走行は main
+    側で実行する。</p>
+    <h3 id="step-1-smoke-v-シナリオ約-0005-002">Step 1: smoke (v
+    シナリオ、約 $0.005-0.02)</h3>
+    <p>目的: pipeline (env 解決、各 provider API call、JSON parse)
+    が動くかを最小コストで確認する。</p>
+    <div class="sourceCode" id="cb1"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">env</span> <span class="dt">\</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  PLANNER_PROVIDER=openai <span class="dt">\</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>  PLANNER_MODEL=gpt-5.4 <span class="dt">\</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>  REVIEWER_PROVIDER=anthropic <span class="dt">\</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>  REVIEWER_MODEL=claude-sonnet-4-6 <span class="dt">\</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>  JUDGE_PROVIDER=anthropic <span class="dt">\</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>  JUDGE_MODEL=claude-sonnet-4-6 <span class="dt">\</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>  TRIAGE_PROVIDER=google <span class="dt">\</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>  TRIAGE_MODEL=gemini-3-flash-preview <span class="dt">\</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>  MULTI_AGENT_JUDGE_MODE=enabled <span class="dt">\</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>  MULTI_AGENT_MAX_TURNS=5 <span class="dt">\</span></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>  MULTI_AGENT_MAX_ADDITIONAL_OBSERVATIONS=3 <span class="dt">\</span></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>  ./observe_runs.sh v <span class="dt">\</span></span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>  <span class="at">--agent-entrypoint</span> multi_agent.py <span class="dt">\</span></span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>  <span class="at">--worker</span> llm <span class="dt">\</span></span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>  <span class="at">--prompt-mode</span> blind <span class="dt">\</span></span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>  <span class="at">--scenario-mode</span> forced <span class="dt">\</span></span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>  <span class="at">--repeat</span> 1 <span class="dt">\</span></span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>  <span class="at">--python</span> ./.venv/bin/python <span class="dt">\</span></span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a>  <span class="at">--label</span> exp2_smoke_role_split_v_once</span></code></pre></div>
+    <p>注意: Experiment 1-D で <code>v</code> は <strong>no-op
+    success</strong> だった (<a
+    href="report-controlled-gpt54-fairness.html"><code>report-controlled-gpt54-fairness.html:109</code></a>).
+    Claude reviewer/judge が呼ばれるとは限らないため、本 smoke は
+    pipeline 確認に留める。</p>
+    <h3 id="step-2-claude-質的挙動確認-n-シナリオ約-005-015">Step 2:
+    Claude 質的挙動確認 (n シナリオ、約 $0.05-0.15)</h3>
+    <p>目的: Claude reviewer/judge が multi-turn
+    で動いたときに、Experiment 1-D の gpt-5.4 reviewer/judge
+    と挙動が大きく違わないか (override の方向性、stop/retry 判断の傾向)
+    を確認する。<code>n</code> は dependency failure → query bug の 2
+    段マスクで、Experiment 1-D で reviewer/judge が retry を回して
+    success した実績がある。</p>
+    <div class="sourceCode" id="cb2"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">env</span> <span class="dt">\</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  PLANNER_PROVIDER=openai <span class="dt">\</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>  PLANNER_MODEL=gpt-5.4 <span class="dt">\</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>  REVIEWER_PROVIDER=anthropic <span class="dt">\</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>  REVIEWER_MODEL=claude-sonnet-4-6 <span class="dt">\</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>  JUDGE_PROVIDER=anthropic <span class="dt">\</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>  JUDGE_MODEL=claude-sonnet-4-6 <span class="dt">\</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>  TRIAGE_PROVIDER=google <span class="dt">\</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>  TRIAGE_MODEL=gemini-3-flash-preview <span class="dt">\</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>  MULTI_AGENT_JUDGE_MODE=enabled <span class="dt">\</span></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>  MULTI_AGENT_MAX_TURNS=5 <span class="dt">\</span></span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>  MULTI_AGENT_MAX_ADDITIONAL_OBSERVATIONS=3 <span class="dt">\</span></span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>  ./observe_runs.sh n <span class="dt">\</span></span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>  <span class="at">--agent-entrypoint</span> multi_agent.py <span class="dt">\</span></span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>  <span class="at">--worker</span> llm <span class="dt">\</span></span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>  <span class="at">--prompt-mode</span> blind <span class="dt">\</span></span>
+<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a>  <span class="at">--scenario-mode</span> forced <span class="dt">\</span></span>
+<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a>  <span class="at">--repeat</span> 1 <span class="dt">\</span></span>
+<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a>  <span class="at">--python</span> ./.venv/bin/python <span class="dt">\</span></span>
+<span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a>  <span class="at">--label</span> exp2_quality_check_role_split_n_once</span></code></pre></div>
+    <h3 id="step-3-本走行-m-n-o-r-u-v-w-x--repeat-1約-04-12">Step 3:
+    本走行 (m n o r u v w x × repeat 1、約 $0.4-1.2)</h3>
+    <p><a href="../../AGENTS.md"><code>AGENTS.md</code></a> の
+    Experiment 2 draft command と同じ内容。label のみ更新する。</p>
+    <div class="sourceCode" id="cb3"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">env</span> <span class="dt">\</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>  PLANNER_PROVIDER=openai <span class="dt">\</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>  PLANNER_MODEL=gpt-5.4 <span class="dt">\</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>  REVIEWER_PROVIDER=anthropic <span class="dt">\</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>  REVIEWER_MODEL=claude-sonnet-4-6 <span class="dt">\</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>  JUDGE_PROVIDER=anthropic <span class="dt">\</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>  JUDGE_MODEL=claude-sonnet-4-6 <span class="dt">\</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>  TRIAGE_PROVIDER=google <span class="dt">\</span></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>  TRIAGE_MODEL=gemini-3-flash-preview <span class="dt">\</span></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>  MULTI_AGENT_JUDGE_MODE=enabled <span class="dt">\</span></span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>  MULTI_AGENT_MAX_TURNS=5 <span class="dt">\</span></span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>  MULTI_AGENT_MAX_ADDITIONAL_OBSERVATIONS=3 <span class="dt">\</span></span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a>  ./observe_runs.sh m n o r u v w x <span class="dt">\</span></span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a>  <span class="at">--agent-entrypoint</span> multi_agent.py <span class="dt">\</span></span>
+<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a>  <span class="at">--worker</span> llm <span class="dt">\</span></span>
+<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a>  <span class="at">--prompt-mode</span> blind <span class="dt">\</span></span>
+<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a>  <span class="at">--scenario-mode</span> forced <span class="dt">\</span></span>
+<span id="cb3-18"><a href="#cb3-18" aria-hidden="true" tabindex="-1"></a>  <span class="at">--repeat</span> 1 <span class="dt">\</span></span>
+<span id="cb3-19"><a href="#cb3-19" aria-hidden="true" tabindex="-1"></a>  <span class="at">--python</span> ./.venv/bin/python <span class="dt">\</span></span>
+<span id="cb3-20"><a href="#cb3-20" aria-hidden="true" tabindex="-1"></a>  <span class="at">--label</span> exp2_role_split_claude_review_judge_gemini_triage_once</span></code></pre></div>
+    <h3 id="step-4-結果整理">Step 4: 結果整理</h3>
+    <div class="sourceCode" id="cb4"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="ex">./.venv/bin/python</span> aggregate_observations.py <span class="dt">\</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>  observations/<span class="op">&lt;</span>run<span class="op">&gt;</span>/summary.csv <span class="dt">\</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">--group-by</span> scenario <span class="dt">\</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">--show-overall</span> <span class="dt">\</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">--show-failure-breakdown</span></span></code></pre></div>
+    <p>少なくとも以下を確認する。</p>
+    <ul>
+    <li>raw success rate / adjusted success rate</li>
+    <li><code>judge_stop</code>, <code>judge_retry</code>,
+    <code>unsafe_action_blocked</code>, <code>safe_empty_plan</code>,
+    <code>observability_bottleneck</code></li>
+    <li><code>planner_total_tokens</code>,
+    <code>reviewer_total_tokens</code>, <code>judge_total_tokens</code>,
+    <code>triage_total_tokens</code></li>
+    <li>平均 cost per run</li>
+    <li>Experiment 1-D (reviewer+judge gpt-5.4 only) との挙動差</li>
+    </ul>
+    <h2 id="3-反復実験">3. 反復実験</h2>
+    <h3 id="比較する-5-条件-基本案">比較する 5 条件 (基本案)</h3>
+    <p>Experiment 1 系で既に repeat 1 まで完了している 4 条件に
+    Experiment 2 を加えて、同じ反復数で揃える。</p>
+    <table>
+    <thead>
+    <tr>
+    <th>ID</th>
+    <th>条件</th>
+    <th>planner</th>
+    <th>reviewer</th>
+    <th>judge</th>
+    <th>triage</th>
+    <th>runner</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>1-A</td>
+    <td>one-shot</td>
+    <td>gpt-5.4</td>
+    <td>-</td>
+    <td>-</td>
+    <td>-</td>
+    <td><code>agent.py</code> (SINGLE_AGENT role)</td>
+    </tr>
+    <tr>
+    <td>1-B</td>
+    <td>self-critique</td>
+    <td>gpt-5.4</td>
+    <td>-</td>
+    <td>-</td>
+    <td>-</td>
+    <td><code>self_critique_agent.py</code> (SINGLE_AGENT role)</td>
+    </tr>
+    <tr>
+    <td>1-C</td>
+    <td>reviewer-only</td>
+    <td>gpt-5.4</td>
+    <td>gpt-5.4</td>
+    <td>-</td>
+    <td>(default)</td>
+    <td><code>multi_agent.py</code> (judge disabled)</td>
+    </tr>
+    <tr>
+    <td>1-D</td>
+    <td>reviewer+judge</td>
+    <td>gpt-5.4</td>
+    <td>gpt-5.4</td>
+    <td>gpt-5.4</td>
+    <td>(default)</td>
+    <td><code>multi_agent.py</code></td>
+    </tr>
+    <tr>
+    <td>2</td>
+    <td>役割別</td>
+    <td>gpt-5.4</td>
+    <td>Claude</td>
+    <td>Claude</td>
+    <td>Gemini</td>
+    <td><code>multi_agent.py</code></td>
+    </tr>
+    </tbody>
+    </table>
+    <p>注:</p>
+    <ul>
+    <li><code>(default)</code> はコード側 default
+    (<code>core/settings.py:14</code> の
+    <code>DEFAULT_PROVIDER_BY_ROLE</code>)。1-C/1-D の triage
+    は明示しなければ google/gemini-3-flash-preview
+    にフォールバック。Experiment 1-D の draft command (<a
+    href="../../AGENTS.md"><code>AGENTS.md</code></a>) でも triage
+    を明示していないため、1-C/1-D は default
+    維持で比較条件を揃える。</li>
+    <li>1-A / 1-B の runner はそれぞれ <code>agent.py</code> /
+    <code>self_critique_agent.py</code> で、内部的に
+    <code>SINGLE_AGENT_PROVIDER/MODEL</code> を読む (<a
+    href="../../agents/worker.py:560"><code>../../agents/worker.py:560</code></a>,
+    <a
+    href="../../agents/self_critic.py:92"><code>../../agents/self_critic.py:92</code></a>)。</li>
+    </ul>
+    <h3 id="簡略案-3-条件">簡略案 (3 条件)</h3>
+    <p>ストーリーをクリーンに保ちたいなら以下まで絞れる。</p>
+    <ul>
+    <li>1-A one-shot</li>
+    <li>1-D reviewer+judge (gpt-5.4 only)</li>
+    <li>2 役割別</li>
+    </ul>
+    <p>「single, multi (uniform), multi (role-split)」という 3
+    軸比較になる代わりに、self-critique と reviewer-only
+    の差は語れない。卒論の章立てを考えてから 5 条件 / 3
+    条件を最終決定する。</p>
+    <h3 id="規模試算-repeat-35-条件">規模試算 (repeat 3、5 条件)</h3>
+    <ul>
+    <li>試行数: 5 × 8 × 3 = 120 試行</li>
+    <li>既存実績からの推定 cost: $6-18</li>
+    <li>実行時間: 4-10 時間 (シリアル)</li>
+    </ul>
+    <p>repeat 5 なら 200 試行 / $10-30 / 7-17
+    時間。論文での標準偏差・95% CI を厚くしたいなら 5
+    まで上げる選択肢もある。</p>
+    <h3 id="実行-command-repeat-3-5-条件分">実行 command (repeat 3, 5
+    条件分)</h3>
+    <h4 id="1-a-one-shot-repeat-3">1-A one-shot (repeat 3)</h4>
+    <div class="sourceCode" id="cb5"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="fu">env</span> <span class="dt">\</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>  SINGLE_AGENT_PROVIDER=openai <span class="dt">\</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>  SINGLE_AGENT_MODEL=gpt-5.4 <span class="dt">\</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>  ./observe_runs.sh m n o r u v w x <span class="dt">\</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">--agent-entrypoint</span> agent.py <span class="dt">\</span></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">--worker</span> llm <span class="dt">\</span></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">--prompt-mode</span> blind <span class="dt">\</span></span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>  <span class="at">--scenario-mode</span> forced <span class="dt">\</span></span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>  <span class="at">--repeat</span> 3 <span class="dt">\</span></span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a>  <span class="at">--python</span> ./.venv/bin/python <span class="dt">\</span></span>
+<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a>  <span class="at">--label</span> iter_controlled_oneshot_gpt54_r3</span></code></pre></div>
+    <h4 id="1-b-self-critique-repeat-3">1-B self-critique (repeat
+    3)</h4>
+    <div class="sourceCode" id="cb6"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="fu">env</span> <span class="dt">\</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>  SINGLE_AGENT_PROVIDER=openai <span class="dt">\</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>  SINGLE_AGENT_MODEL=gpt-5.4 <span class="dt">\</span></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>  ./observe_runs.sh m n o r u v w x <span class="dt">\</span></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">--agent-entrypoint</span> self_critique_agent.py <span class="dt">\</span></span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">--worker</span> llm <span class="dt">\</span></span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">--prompt-mode</span> blind <span class="dt">\</span></span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>  <span class="at">--scenario-mode</span> forced <span class="dt">\</span></span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>  <span class="at">--repeat</span> 3 <span class="dt">\</span></span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>  <span class="at">--python</span> ./.venv/bin/python <span class="dt">\</span></span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>  <span class="at">--label</span> iter_controlled_selfcritique_gpt54_r3</span></code></pre></div>
+    <h4 id="1-c-reviewer-only-repeat-3">1-C reviewer-only (repeat
+    3)</h4>
+    <div class="sourceCode" id="cb7"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="fu">env</span> <span class="dt">\</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>  PLANNER_PROVIDER=openai <span class="dt">\</span></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>  PLANNER_MODEL=gpt-5.4 <span class="dt">\</span></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>  REVIEWER_PROVIDER=openai <span class="dt">\</span></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>  REVIEWER_MODEL=gpt-5.4 <span class="dt">\</span></span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>  MULTI_AGENT_JUDGE_MODE=disabled <span class="dt">\</span></span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>  MULTI_AGENT_MAX_TURNS=5 <span class="dt">\</span></span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>  MULTI_AGENT_MAX_ADDITIONAL_OBSERVATIONS=3 <span class="dt">\</span></span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>  ./observe_runs.sh m n o r u v w x <span class="dt">\</span></span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a>  <span class="at">--agent-entrypoint</span> multi_agent.py <span class="dt">\</span></span>
+<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a>  <span class="at">--worker</span> llm <span class="dt">\</span></span>
+<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a>  <span class="at">--prompt-mode</span> blind <span class="dt">\</span></span>
+<span id="cb7-13"><a href="#cb7-13" aria-hidden="true" tabindex="-1"></a>  <span class="at">--scenario-mode</span> forced <span class="dt">\</span></span>
+<span id="cb7-14"><a href="#cb7-14" aria-hidden="true" tabindex="-1"></a>  <span class="at">--repeat</span> 3 <span class="dt">\</span></span>
+<span id="cb7-15"><a href="#cb7-15" aria-hidden="true" tabindex="-1"></a>  <span class="at">--python</span> ./.venv/bin/python <span class="dt">\</span></span>
+<span id="cb7-16"><a href="#cb7-16" aria-hidden="true" tabindex="-1"></a>  <span class="at">--label</span> iter_controlled_reviewer_only_gpt54_r3</span></code></pre></div>
+    <h4 id="1-d-reviewerjudge-repeat-3">1-D reviewer+judge (repeat
+    3)</h4>
+    <div class="sourceCode" id="cb8"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="fu">env</span> <span class="dt">\</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>  PLANNER_PROVIDER=openai <span class="dt">\</span></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>  PLANNER_MODEL=gpt-5.4 <span class="dt">\</span></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>  REVIEWER_PROVIDER=openai <span class="dt">\</span></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>  REVIEWER_MODEL=gpt-5.4 <span class="dt">\</span></span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>  JUDGE_PROVIDER=openai <span class="dt">\</span></span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>  JUDGE_MODEL=gpt-5.4 <span class="dt">\</span></span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>  MULTI_AGENT_JUDGE_MODE=enabled <span class="dt">\</span></span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a>  MULTI_AGENT_MAX_TURNS=5 <span class="dt">\</span></span>
+<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a>  MULTI_AGENT_MAX_ADDITIONAL_OBSERVATIONS=3 <span class="dt">\</span></span>
+<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a>  ./observe_runs.sh m n o r u v w x <span class="dt">\</span></span>
+<span id="cb8-12"><a href="#cb8-12" aria-hidden="true" tabindex="-1"></a>  <span class="at">--agent-entrypoint</span> multi_agent.py <span class="dt">\</span></span>
+<span id="cb8-13"><a href="#cb8-13" aria-hidden="true" tabindex="-1"></a>  <span class="at">--worker</span> llm <span class="dt">\</span></span>
+<span id="cb8-14"><a href="#cb8-14" aria-hidden="true" tabindex="-1"></a>  <span class="at">--prompt-mode</span> blind <span class="dt">\</span></span>
+<span id="cb8-15"><a href="#cb8-15" aria-hidden="true" tabindex="-1"></a>  <span class="at">--scenario-mode</span> forced <span class="dt">\</span></span>
+<span id="cb8-16"><a href="#cb8-16" aria-hidden="true" tabindex="-1"></a>  <span class="at">--repeat</span> 3 <span class="dt">\</span></span>
+<span id="cb8-17"><a href="#cb8-17" aria-hidden="true" tabindex="-1"></a>  <span class="at">--python</span> ./.venv/bin/python <span class="dt">\</span></span>
+<span id="cb8-18"><a href="#cb8-18" aria-hidden="true" tabindex="-1"></a>  <span class="at">--label</span> iter_controlled_multi_gpt54_r3</span></code></pre></div>
+    <h4 id="2-役割別-repeat-3">2 役割別 (repeat 3)</h4>
+    <div class="sourceCode" id="cb9"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="fu">env</span> <span class="dt">\</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>  PLANNER_PROVIDER=openai <span class="dt">\</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>  PLANNER_MODEL=gpt-5.4 <span class="dt">\</span></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>  REVIEWER_PROVIDER=anthropic <span class="dt">\</span></span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>  REVIEWER_MODEL=claude-sonnet-4-6 <span class="dt">\</span></span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>  JUDGE_PROVIDER=anthropic <span class="dt">\</span></span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>  JUDGE_MODEL=claude-sonnet-4-6 <span class="dt">\</span></span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a>  TRIAGE_PROVIDER=google <span class="dt">\</span></span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a>  TRIAGE_MODEL=gemini-3-flash-preview <span class="dt">\</span></span>
+<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a>  MULTI_AGENT_JUDGE_MODE=enabled <span class="dt">\</span></span>
+<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a>  MULTI_AGENT_MAX_TURNS=5 <span class="dt">\</span></span>
+<span id="cb9-12"><a href="#cb9-12" aria-hidden="true" tabindex="-1"></a>  MULTI_AGENT_MAX_ADDITIONAL_OBSERVATIONS=3 <span class="dt">\</span></span>
+<span id="cb9-13"><a href="#cb9-13" aria-hidden="true" tabindex="-1"></a>  ./observe_runs.sh m n o r u v w x <span class="dt">\</span></span>
+<span id="cb9-14"><a href="#cb9-14" aria-hidden="true" tabindex="-1"></a>  <span class="at">--agent-entrypoint</span> multi_agent.py <span class="dt">\</span></span>
+<span id="cb9-15"><a href="#cb9-15" aria-hidden="true" tabindex="-1"></a>  <span class="at">--worker</span> llm <span class="dt">\</span></span>
+<span id="cb9-16"><a href="#cb9-16" aria-hidden="true" tabindex="-1"></a>  <span class="at">--prompt-mode</span> blind <span class="dt">\</span></span>
+<span id="cb9-17"><a href="#cb9-17" aria-hidden="true" tabindex="-1"></a>  <span class="at">--scenario-mode</span> forced <span class="dt">\</span></span>
+<span id="cb9-18"><a href="#cb9-18" aria-hidden="true" tabindex="-1"></a>  <span class="at">--repeat</span> 3 <span class="dt">\</span></span>
+<span id="cb9-19"><a href="#cb9-19" aria-hidden="true" tabindex="-1"></a>  <span class="at">--python</span> ./.venv/bin/python <span class="dt">\</span></span>
+<span id="cb9-20"><a href="#cb9-20" aria-hidden="true" tabindex="-1"></a>  <span class="at">--label</span> iter_role_split_r3</span></code></pre></div>
+    <p>備考:</p>
+    <ul>
+    <li>1-C の reviewer-only モードは
+    <code>MULTI_AGENT_JUDGE_MODE=disabled</code> を立てる。コード側で
+    disabled が正しく triple-bypass しているかは smoke で確認しておく
+    (<a
+    href="../../runners/run_multi_minimal.py:71"><code>../../runners/run_multi_minimal.py:71</code></a>)。</li>
+    <li>1-C/1-D の triage は default で google/gemini-3-flash-preview
+    になる。Experiment 1-D との公平性のため、ここでも triage を明示せず
+    default に任せる。</li>
+    </ul>
+    <h3 id="集計指標">集計指標</h3>
+    <p><code>aggregate_observations.py</code> と
+    <code>aggregate_hypothesis_metrics.py</code> で以下を出す。</p>
+    <ul>
+    <li>raw success rate / adjusted success rate (平均, 標準偏差, 95%
+    CI)</li>
+    <li><code>judge_stop</code>, <code>judge_retry</code>,
+    <code>unsafe_action_blocked</code>, <code>safe_empty_plan</code>,
+    <code>observability_bottleneck</code></li>
+    <li>仮説変更回数, 誤仮説固着長, 批判後の仮説変化率</li>
+    <li>各 role の token 消費 (planner / reviewer / judge / triage)</li>
+    <li>平均 cost per run, cost per successful recovery</li>
+    </ul>
+    <p>集計結果は
+    <code>docs/reports/iteration_r3_summary_20260???.md</code>
+    にまとめる。</p>
+    <h2 id="4-シナリオ追加-将来枠experiment-2--反復実験後に判断">4.
+    シナリオ追加 (将来枠、Experiment 2 + 反復実験後に判断)</h2>
+    <p>DC インフラ説明を厚くするために、リソース枯渇系と
+    HA/スケーリング系を 1 つずつ追加候補に置く。実装は Experiment 2
+    と反復実験の結果を見てから判断する。</p>
+    <h3 id="y1-メモリ枯渇-oom-kill---実装難度-低">Y1: メモリ枯渇 (OOM
+    kill) - 実装難度 低</h3>
+    <ul>
+    <li>注入: <code>break.sh y1</code> で
+    <code>docker-compose.yml</code> の <code>app</code> サービスに
+    <code>mem_limit: 32m</code> を一時付与し、
+    <code>docker compose up -d --force-recreate app</code> を実行</li>
+    <li>症状: app が起動直後にカーネル OOM kill (exit 137)、
+    <code>docker compose ps</code> で Exited (137) と STATUS に出る</li>
+    <li>観測拡張: sensor に <code>oomkilled_flag</code> (compose ps の
+    Exit code = 137 を見る) を追加</li>
+    <li>復旧: <code>docker-compose.yml</code> の <code>mem_limit</code>
+    を緩める or 削除</li>
+    <li>success_checks: <code>app_status_running</code>,
+    <code>api_items_200</code>, <code>healthz_200</code></li>
+    <li>卒論での意義:
+    「リソース制約による起動失敗」というクラウド頻発障害の代表</li>
+    </ul>
+    <h3 id="z1-ヘルスチェック起因の-restart-loop---実装難度-中">Z1:
+    ヘルスチェック起因の restart loop - 実装難度 中</h3>
+    <ul>
+    <li>注入: <code>break.sh z1</code> で app の <code>/healthz</code>
+    を常に 500 にする。compose の healthcheck (interval, retries,
+    start_period) で unhealthy 判定 → restart 連鎖</li>
+    <li>症状: <code>docker compose ps</code> の RESTART
+    回数が増え続ける、 <code>Restarting (1)</code> などが見える</li>
+    <li>観測拡張: sensor に <code>app_restart_count</code> (compose
+    inspect の RestartCount) を追加</li>
+    <li>復旧: app の <code>/healthz</code> ロジックを正常化、または
+    healthcheck の対象エンドポイントを変更</li>
+    <li>success_checks: <code>app_restart_stable</code> (一定時間
+    restart count が増えない), <code>api_items_200</code></li>
+    <li>卒論での意義: 「自己治癒機構が逆に被害を増幅する」という HA
+    設計の典型課題</li>
+    </ul>
+    <h3 id="後回し">後回し</h3>
+    <ul>
+    <li>Y2: disk full (writable volume 操作が必要)</li>
+    <li>Z2: rolling deploy stuck (multi-replica 構成が必要)</li>
+    </ul>
+    <p>これらは docker-compose の構成変更を伴うので、Y1/Z1
+    が型として固まってから検討する。</p>
+    <h2 id="5-中間発表-夏頃-までの目安スケジュール">5. 中間発表 (夏頃)
+    までの目安スケジュール</h2>
+    <table>
+    <thead>
+    <tr>
+    <th>期間</th>
+    <th>作業</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>2026-05 後半</td>
+    <td>Experiment 2 smoke (v) → 質的挙動確認 (n) → 本走行 (8
+    シナリオ)</td>
+    </tr>
+    <tr>
+    <td>2026-06</td>
+    <td>反復実験 (repeat 3 を 3-5 条件)</td>
+    </tr>
+    <tr>
+    <td>2026-06 後半 - 07</td>
+    <td>反復結果の集計 + 仮説遷移メトリクス + 図表化</td>
+    </tr>
+    <tr>
+    <td>2026-07</td>
+    <td>ケーススタディ (代表 1-2 シナリオの turn-by-turn)</td>
+    </tr>
+    <tr>
+    <td>2026-07 後半 - 08</td>
+    <td>中間発表資料</td>
+    </tr>
+    </tbody>
+    </table>
+    <p>中間発表で示す範囲:</p>
+    <ul>
+    <li>安全制約付き LLM 応急復旧基盤</li>
+    <li>A-X 24 シナリオ</li>
+    <li>one-shot / self-critique / multi-agent (uniform) / multi-agent
+    (role-split) の 4-5 条件比較 (repeat 3)</li>
+    <li>仮説遷移メトリクスと safety override の集計</li>
+    </ul>
+    <h2 id="6-中間発表後-秋---2027-年-2-月-スケジュール案">6. 中間発表後
+    (秋 - 2027 年 2 月) スケジュール案</h2>
+    <table>
+    <thead>
+    <tr>
+    <th>期間</th>
+    <th>作業</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>2026-09 - 10</td>
+    <td>(必要なら) Y1/Z1 シナリオ追加 + 追加実験 (Exp 2 と同等の条件で
+    8+2 シナリオ)</td>
+    </tr>
+    <tr>
+    <td>2026-10 - 11</td>
+    <td>卒論本文ドラフト (背景・関連研究・提案手法・実装・実験)</td>
+    </tr>
+    <tr>
+    <td>2026-12</td>
+    <td>卒論本文ドラフト (考察・結論) + 図表整備</td>
+    </tr>
+    <tr>
+    <td>2027-01</td>
+    <td>修正・最終化</td>
+    </tr>
+    <tr>
+    <td>2027-02</td>
+    <td>提出</td>
+    </tr>
+    </tbody>
+    </table>
+    <h2 id="7-未決の論点">7. 未決の論点</h2>
+    <ul>
+    <li>worktree <code>focused-chaum-c92eca</code> の位置づけ (実験専用
+    / 実験+軽微なコード修正 / 廃棄して main で作業)</li>
+    <li>反復実験の条件数を 5 (1-A〜1-D + 2) にするか 3 (1-A / 1-D / 2)
+    にするか</li>
+    <li>repeat を 3 で固定するか 5 まで上げて 95% CI を厚くするか</li>
+    <li>シナリオ追加 (Y1/Z1) のスコープ (Experiment 2
+    と反復実験の結果次第で再評価)</li>
+    </ul>
+    <div class="footer">
+      <span>Safe Emergency Recovery Experiment — Research Wiki</span>
+      <span>ソース: <a href="../roadmap/next_steps_20260521.md">../roadmap/next_steps_20260521.md</a></span>
+    </div>
+  </main>
+</div>
+<script src="wiki.js"></script>
+</body>
+</html>

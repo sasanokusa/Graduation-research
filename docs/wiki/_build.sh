@@ -57,6 +57,11 @@ build "docs/roadmap/implementation_roadmap_revised_20260415.md" "roadmap-revised
   '<a href="index.html">Wiki</a> / ロードマップ / 改訂版' \
   "../roadmap/implementation_roadmap_revised_20260415.md"
 
+build "docs/roadmap/next_steps_20260521.md" "roadmap-next-steps.html" \
+  "次のステップ計画 (2026-05-21)" \
+  '<a href="index.html">Wiki</a> / ロードマップ / 次のステップ' \
+  "../roadmap/next_steps_20260521.md"
+
 build "docs/reports/repository_assessment_20260316.md" "report-repository-assessment.html" \
   "リポジトリ調査レポート" \
   '<a href="index.html">Wiki</a> / レポート / リポジトリ調査' \

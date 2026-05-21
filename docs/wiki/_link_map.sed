@@ -21,3 +21,6 @@ s|scenarios/ictsc_5023\.md|scenario-ictsc5023.html|g
 s|\.\./current_status_20260508\.md|current-status.html|g
 s|docs/current_status_20260508\.md|current-status.html|g
 s|current_status_20260508\.md|current-status.html|g
+s|\.\./roadmap/next_steps_20260521\.md|roadmap-next-steps.html|g
+s|docs/roadmap/next_steps_20260521\.md|roadmap-next-steps.html|g
+s|next_steps_20260521\.md|roadmap-next-steps.html|g

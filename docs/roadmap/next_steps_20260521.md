@@ -101,7 +101,7 @@ env \
 
 ### Step 3: 本走行 (m n o r u v w x × repeat 1、約 $0.4-1.2)
 
-[`../AGENTS.md`](../AGENTS.md) の Experiment 2 draft command と同じ内容。label のみ更新する。
+[`AGENTS.md`](../../AGENTS.md) の Experiment 2 draft command と同じ内容。label のみ更新する。
 
 ```bash
 env \
@@ -159,7 +159,7 @@ Experiment 1 系で既に repeat 1 まで完了している 4 条件に Experime
 | 2 | 役割別 | gpt-5.4 | Claude | Claude | Gemini | `multi_agent.py` |
 
 注:
-- `(default)` はコード側 default (`core/settings.py:14` の `DEFAULT_PROVIDER_BY_ROLE`)。1-C/1-D の triage は明示しなければ google/gemini-3-flash-preview にフォールバック。Experiment 1-D の draft command (`docs/AGENTS.md`) でも triage を明示していないため、1-C/1-D は default 維持で比較条件を揃える。
+- `(default)` はコード側 default (`core/settings.py:14` の `DEFAULT_PROVIDER_BY_ROLE`)。1-C/1-D の triage は明示しなければ google/gemini-3-flash-preview にフォールバック。Experiment 1-D の draft command ([`AGENTS.md`](../../AGENTS.md)) でも triage を明示していないため、1-C/1-D は default 維持で比較条件を揃える。
 - 1-A / 1-B の runner はそれぞれ `agent.py` / `self_critique_agent.py` で、内部的に `SINGLE_AGENT_PROVIDER/MODEL` を読む ([`../../agents/worker.py:560`](../../agents/worker.py:560), [`../../agents/self_critic.py:92`](../../agents/self_critic.py:92))。
 
 ### 簡略案 (3 条件)
