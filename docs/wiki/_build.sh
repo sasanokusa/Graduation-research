@@ -82,6 +82,21 @@ build "docs/reports/self_critique_gpt54_local_experiment_20260509.md" "report-se
   '<a href="index.html">Wiki</a> / レポート / GPT-5.4 self-critique 局所実験' \
   "../reports/self_critique_gpt54_local_experiment_20260509.md"
 
+build "docs/reports/safety_metrics_report.md" "report-safety-metrics.html" \
+  "安全性メトリクス・Judge介入分析レポート" \
+  '<a href="index.html">Wiki</a> / レポート / 安全性メトリクス・Judge介入' \
+  "../reports/safety_metrics_report.md"
+
+build "docs/reports/controlled_gpt54_fairness_experiment_20260520.md" "report-controlled-gpt54-fairness.html" \
+  "GPT-5.4 公平条件比較実験" \
+  '<a href="index.html">Wiki</a> / レポート / GPT-5.4 公平条件比較実験' \
+  "../reports/controlled_gpt54_fairness_experiment_20260520.md"
+
+build "docs/reports/planner_escalation_cost_comparison_20260520.md" "report-planner-escalation-cost.html" \
+  "Planner Escalation コスト比較" \
+  '<a href="index.html">Wiki</a> / レポート / Planner Escalation コスト比較' \
+  "../reports/planner_escalation_cost_comparison_20260520.md"
+
 build "docs/hypothesis_transition_evaluation.md" "evaluation-hypothesis-transition.html" \
   "仮説遷移評価 (Phase 4.5)" \
   '<a href="index.html">Wiki</a> / 評価 / 仮説遷移' \

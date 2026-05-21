@@ -44,6 +44,9 @@
         <li><a href="report-phase1-cost.html" data-id="report-phase1-cost">Phase 1 比較実験コスト</a></li>
         <li><a href="report-local-experiment-cost.html" data-id="report-local-experiment-cost">局所実験コスト</a></li>
         <li><a href="report-selfcritique-gpt54-local.html" data-id="report-selfcritique-gpt54-local">GPT-5.4 self-critique 局所実験</a></li>
+        <li><a href="report-safety-metrics.html" data-id="report-safety-metrics">安全性メトリクス・Judge介入</a></li>
+        <li><a href="report-controlled-gpt54-fairness.html" data-id="report-controlled-gpt54-fairness">GPT-5.4 公平条件比較実験</a></li>
+        <li><a href="report-planner-escalation-cost.html" data-id="report-planner-escalation-cost">Planner Escalation コスト比較</a></li>
       </ul>
     </div>
     <div class="group">
@@ -133,6 +136,21 @@
         <span class="tag">2026-05-09</span>
         <h3><a href="report-selfcritique-gpt54-local.html">GPT-5.4 self-critique 局所実験</a></h3>
         <p>m/n/o/r/u/v/w/x の 8 シナリオで GPT-5.4 self-critique baseline を再実行した比較レポート。</p>
+      </div>
+      <div class="card">
+        <span class="tag">2026-05-20</span>
+        <h3><a href="report-safety-metrics.html">安全性メトリクス・Judge介入分析</a></h3>
+        <p>全実験のJSON結果を対象に、Verifierによるアクション却下とLLM Judgeの意思決定介入（早期停止の覆し）を集計したレポート。</p>
+      </div>
+      <div class="card">
+        <span class="tag">2026-05-20</span>
+        <h3><a href="report-controlled-gpt54-fairness.html">GPT-5.4 公平条件比較実験</a></h3>
+        <p>one-shot、self-critique、reviewer-only、reviewer + judgeを同条件で比較し、危険動作ブロックとpip起動待ち補正を整理したレポート。</p>
+      </div>
+      <div class="card">
+        <span class="tag">2026-05-20</span>
+        <h3><a href="report-planner-escalation-cost.html">Planner Escalation コスト比較</a></h3>
+        <p>常時GPT-5.5 plannerと、GPT-5.4から開始してreviewer/judge判断でGPT-5.5へ上げる条件をシナリオxで比較したレポート。</p>
       </div>
     </div>
 

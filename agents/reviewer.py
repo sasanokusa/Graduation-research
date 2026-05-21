@@ -12,6 +12,7 @@ from core.hypothesis import (
     categorize_reviewer_feedback,
     reviewer_changed_hypothesis,
 )
+from core.escalation import planner_escalation_request_from_review
 from core.llm_usage import extract_token_usage
 from core.state import SingleAgentState
 
@@ -22,12 +23,20 @@ REVIEWER_SYSTEM_PROMPT_BLIND = (
     "Return JSON only with the shape "
     '{"decision":"retry|stop","summary":"...","failure_analysis":"...","feedback_for_planner":"...",'
     '"suspected_remaining_domains":[...],"recommended_scope_adjustment":{"editable_files":[...],"services":[...],"allowed_actions":[...]},'
-    '"recommended_next_observations":[...]}. '
+    '"recommended_next_observations":[...],"escalate_planner":true|false,"escalation_reason":"..."}. '
     "Reason only from the provided evidence and prior turn outcomes. "
     "Do not assume hidden benchmark labels. "
     "Prioritize current-state evidence over historical noise. "
     "If a first-stage repair appears correct but a new downstream fault is now exposed, return decision=retry and explain the remaining fault. "
+    "If the remaining fault is in scope and a canonical additional observation could expose the exact editable line, you must return decision=retry with recommended_next_observations rather than stop. "
+    "Do not stop merely because the exact line is missing when a listed canonical observation can obtain it. "
     "If the previous plan was unsafe, redundant, or there is no evidence-backed next step, return decision=stop. "
+    "Set escalate_planner=true only when decision=retry and the next repair is evidence-backed, but the previous planner failed by returning an empty plan, "
+    "repeating an unsafe or precheck-blocked action despite sufficient evidence, or failing to use a bounded reviewer scope. "
+    "If a safe first-stage edit to a startup-time env/config file was applied but postcheck still shows multiple related contract failures in that same config domain, "
+    "a retry is evidence-backed only when additional observation or visible snippets expose the remaining exact editable lines. "
+    "Do not recommend restore_from_base; it restores hidden baseline answers and is blocked in controlled experiments. "
+    "Do not escalate for missing evidence; request additional observations instead. "
     "When requesting more observations, prefer these canonical request strings exactly when applicable: "
     "'extract narrower relevant snippet from app/main.py', 'extract narrower relevant snippet from app/app.env', "
     "'extract narrower relevant snippet from nginx/nginx.conf', 'expand app log excerpt', 'expand nginx log excerpt'."
@@ -78,6 +87,8 @@ def parse_reviewer_text(text: str) -> tuple[dict[str, Any], list[str]]:
             "allowed_actions": [],
         },
         "recommended_next_observations": [],
+        "escalate_planner": False,
+        "escalation_reason": "",
     }
     text = text.strip()
     if text.startswith("```"):
@@ -139,6 +150,15 @@ def parse_reviewer_text(text: str) -> tuple[dict[str, Any], list[str]]:
         normalized["recommended_next_observations"] = [str(item).strip() for item in next_obs if str(item).strip()]
     else:
         errors.append("recommended_next_observations must be a list")
+
+    escalate = payload.get("escalate_planner", False)
+    if isinstance(escalate, bool):
+        normalized["escalate_planner"] = escalate
+    elif isinstance(escalate, str):
+        normalized["escalate_planner"] = escalate.strip().lower() in {"true", "yes", "1"}
+    else:
+        normalized["escalate_planner"] = bool(escalate)
+    normalized["escalation_reason"] = str(payload.get("escalation_reason", "")).strip()
 
     return normalized, errors
 
@@ -337,7 +357,10 @@ def mock_reviewer_node(state: SingleAgentState) -> SingleAgentState:
         "suspected_remaining_domains": review["suspected_remaining_domains"],
         "recommended_scope_adjustment": review["recommended_scope_adjustment"],
         "recommended_next_observations": review["recommended_next_observations"],
+        "escalate_planner": review.get("escalate_planner", False),
+        "escalation_reason": review.get("escalation_reason", ""),
     }
+    escalate_planner, escalation_reason = planner_escalation_request_from_review(review)
     updated = {
         **state,
         "review_feedback": review["feedback_for_planner"],
@@ -346,6 +369,9 @@ def mock_reviewer_node(state: SingleAgentState) -> SingleAgentState:
         "reviewer_recommended_scope": review["recommended_scope_adjustment"],
         "reviewer_recommended_next_observations": review["recommended_next_observations"],
         "reviewer_suspected_remaining_domains": review["suspected_remaining_domains"],
+        "planner_escalation_requested": escalate_planner,
+        "planner_escalation_source": "reviewer" if escalate_planner else "",
+        "planner_escalation_reason": escalation_reason,
         "reviewer_provider": "mock",
         "reviewer_model": "mock-reviewer",
         "reviewer_history": [*state.get("reviewer_history", []), history_entry],
@@ -462,10 +488,13 @@ def reviewer_node(state: SingleAgentState) -> SingleAgentState:
         "suspected_remaining_domains": review["suspected_remaining_domains"],
         "recommended_scope_adjustment": review["recommended_scope_adjustment"],
         "recommended_next_observations": review["recommended_next_observations"],
+        "escalate_planner": review.get("escalate_planner", False),
+        "escalation_reason": review.get("escalation_reason", ""),
         "token_usage": token_usage,
         "invocation_failed": invocation_failed,
         "invocation_retry_count": invocation_retry_count,
     }
+    escalate_planner, escalation_reason = planner_escalation_request_from_review(review)
     updated = {
         **state,
         "review_feedback": review["feedback_for_planner"],
@@ -474,6 +503,9 @@ def reviewer_node(state: SingleAgentState) -> SingleAgentState:
         "reviewer_recommended_scope": review["recommended_scope_adjustment"],
         "reviewer_recommended_next_observations": review["recommended_next_observations"],
         "reviewer_suspected_remaining_domains": review["suspected_remaining_domains"],
+        "planner_escalation_requested": escalate_planner,
+        "planner_escalation_source": "reviewer" if escalate_planner else "",
+        "planner_escalation_reason": escalation_reason,
         "reviewer_token_usage": token_usage,
         "reviewer_invocation_failed": invocation_failed,
         "reviewer_invocation_retry_count": invocation_retry_count,

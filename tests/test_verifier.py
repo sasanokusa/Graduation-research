@@ -168,4 +168,29 @@ def test_precheck_blocks_initial_code_restore_for_hard_scenario(monkeypatch) -> 
     )
     assert result["ok"] is False
     assert result["restore_from_base_blocked"] is True
-    assert "last resort" in result["restore_from_base_block_reason"]
+    assert "forbidden" in result["restore_from_base_block_reason"]
+
+
+def test_precheck_blocks_restore_from_base_for_env_by_default(monkeypatch) -> None:
+    monkeypatch.delenv("RESTORE_FROM_BASE_MODE", raising=False)
+    monkeypatch.setattr("core.verifier.compose_config_check", lambda: {"returncode": 0, "stdout": "", "stderr": ""})
+
+    result = run_precheck(
+        {
+            "summary": "unsafe restore",
+            "actions": [
+                {"type": "edit_file", "path": "app/app.env", "operation": "restore_from_base"},
+                {"type": "rebuild_compose_service", "service": "app"},
+            ],
+        },
+        {"allowed_files": ["app/app.env"], "allowed_actions": ["edit_file", "rebuild_compose_service"], "success_checks": []},
+        scope_policy={
+            "files": ["app/app.env"],
+            "services": ["app"],
+            "allowed_actions": ["edit_file", "rebuild_compose_service"],
+        },
+    )
+
+    assert result["ok"] is False
+    assert result["restore_from_base_blocked"] is True
+    assert "forbidden" in result["restore_from_base_block_reason"]

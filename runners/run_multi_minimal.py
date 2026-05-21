@@ -13,6 +13,7 @@ from agents.reviewer import mock_reviewer_node, reviewer_node
 from agents.sensor import additional_observation_node, sensor_node
 from agents.worker import planner_node
 from core.hypothesis import append_hypothesis_log
+from core.escalation import planner_escalation_on_retry_enabled
 from core.incident_blackboard import (
     AGENT_ROLES,
     initial_incident_blackboard,
@@ -169,6 +170,9 @@ def turn_summary_node(state: SingleAgentState) -> SingleAgentState:
         "proposed_actions": state.get("proposed_actions", []),
         "validated_actions": state.get("verifier_precheck_result", {}).get("validated_actions", []),
         "planner_attempts": state.get("planner_attempts", []),
+        "planner_escalation_used": state.get("planner_escalation_used", False),
+        "planner_escalation_source": state.get("planner_escalation_source", ""),
+        "planner_escalation_reason": state.get("planner_escalation_reason", ""),
         "precheck_ok": precheck_ok,
         "execution_ok": execution_ok,
         "postcheck_ok": postcheck_ok,
@@ -257,6 +261,13 @@ def judge_stop_node(state: SingleAgentState) -> SingleAgentState:
 
 def prepare_replan_node(state: SingleAgentState) -> SingleAgentState:
     next_turn = state.get("planner_turn", 1) + 1
+    escalation_requested = state.get("planner_escalation_requested", False)
+    escalation_source = state.get("planner_escalation_source", "")
+    escalation_reason = state.get("planner_escalation_reason", "")
+    if planner_escalation_on_retry_enabled() and not escalation_requested:
+        escalation_requested = True
+        escalation_source = "judge" if state.get("judge_decision") == "retry" else "reviewer"
+        escalation_reason = "planner escalation mode is on_retry and the review loop approved another planning turn"
     _section(f"🔁 [REPLAN] NEXT TURN {next_turn}")
     print(state.get("review_feedback") or "Retrying with refreshed observation.")
     print()
@@ -276,6 +287,11 @@ def prepare_replan_node(state: SingleAgentState) -> SingleAgentState:
         "planner_fallback_used": False,
         "planner_fallback_reason": "",
         "planner_fallback_type": "",
+        "planner_escalation_requested": escalation_requested,
+        "planner_escalation_source": escalation_source,
+        "planner_escalation_reason": escalation_reason,
+        "planner_escalation_used": False,
+        "planner_escalation_history": state.get("planner_escalation_history", []),
         "planner_output_raw": "",
         "planner_summary": "",
         "normalized_actions": [],
@@ -496,6 +512,11 @@ def main(argv: list[str] | None = None) -> int:
         "planner_fallback_used": False,
         "planner_fallback_reason": "",
         "planner_fallback_type": "",
+        "planner_escalation_requested": False,
+        "planner_escalation_source": "",
+        "planner_escalation_reason": "",
+        "planner_escalation_used": False,
+        "planner_escalation_history": [],
         "planner_output_raw": "",
         "planner_summary": "",
         "planner_provider": "",

@@ -221,7 +221,7 @@ make_obs_dir() {
 
   SUMMARY_CSV="$OBS_DIR/summary.csv"
   cat > "$SUMMARY_CSV" <<'EOF'
-run_id,started_at_utc,scenario,repeat_index,worker,prompt_mode,scenario_mode,break_ok,agent_exit_code,final_status,detected_fault_class,elapsed_seconds,additional_observation_used,result_json,planner_error_type,planner_error_stage,planner_retry_count,planner_attempt_count,planner_transport_failure,planner_reasoning_failure,planner_fallback_used,planner_fallback_type,restore_from_base_used,restore_from_base_blocked,minimal_patch_used,rollback_used,rollback_actions,rollback_postcheck_ok,postcheck_retry_attempts,postcheck_used_retry_window,system_prompt_hash,precheck_ok,postcheck_ok,planner_summary,triage_summary,llm_input_tokens,llm_output_tokens,llm_total_tokens,llm_reasoning_tokens,planner_total_tokens,reviewer_total_tokens,judge_total_tokens,triage_total_tokens
+run_id,started_at_utc,scenario,repeat_index,worker,prompt_mode,scenario_mode,break_ok,agent_exit_code,final_status,detected_fault_class,elapsed_seconds,additional_observation_used,result_json,planner_error_type,planner_error_stage,planner_retry_count,planner_attempt_count,planner_transport_failure,planner_reasoning_failure,planner_fallback_used,planner_fallback_type,planner_escalation_used,planner_escalation_history,restore_from_base_used,restore_from_base_blocked,minimal_patch_used,rollback_used,rollback_actions,rollback_postcheck_ok,postcheck_retry_attempts,postcheck_used_retry_window,system_prompt_hash,precheck_ok,postcheck_ok,planner_summary,triage_summary,llm_input_tokens,llm_output_tokens,llm_total_tokens,llm_reasoning_tokens,planner_total_tokens,reviewer_total_tokens,judge_total_tokens,triage_total_tokens
 EOF
 }
 
@@ -296,6 +296,8 @@ append_summary_row() {
   local planner_reasoning_failure=""
   local planner_fallback_used=""
   local planner_fallback_type=""
+  local planner_escalation_used=""
+  local planner_escalation_history=""
   local restore_from_base_used=""
   local restore_from_base_blocked=""
   local minimal_patch_used=""
@@ -331,6 +333,8 @@ append_summary_row() {
     planner_reasoning_failure="$(json_field "$result_json" "planner_reasoning_failure")"
     planner_fallback_used="$(json_field "$result_json" "planner_fallback_used")"
     planner_fallback_type="$(json_field "$result_json" "planner_fallback_type")"
+    planner_escalation_used="$(json_field "$result_json" "planner_escalation_used")"
+    planner_escalation_history="$(json_field "$result_json" "planner_escalation_history")"
     restore_from_base_used="$(json_field "$result_json" "restore_from_base_used")"
     restore_from_base_blocked="$(json_field "$result_json" "restore_from_base_blocked")"
     minimal_patch_used="$(json_field "$result_json" "minimal_patch_used")"
@@ -377,6 +381,8 @@ append_summary_row() {
     escape_csv "$planner_reasoning_failure"; printf ","
     escape_csv "$planner_fallback_used"; printf ","
     escape_csv "$planner_fallback_type"; printf ","
+    escape_csv "$planner_escalation_used"; printf ","
+    escape_csv "$planner_escalation_history"; printf ","
     escape_csv "$restore_from_base_used"; printf ","
     escape_csv "$restore_from_base_blocked"; printf ","
     escape_csv "$minimal_patch_used"; printf ","

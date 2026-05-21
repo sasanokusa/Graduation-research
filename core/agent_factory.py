@@ -57,6 +57,10 @@ def _build_anthropic_client(settings: RoleModelSettings) -> Any:
 
 def build_chat_model_binding(role: AgentRole) -> ChatModelBinding:
     settings = get_role_model_settings(role)
+    return build_chat_model_binding_from_settings(settings)
+
+
+def build_chat_model_binding_from_settings(settings: RoleModelSettings) -> ChatModelBinding:
     if not settings.api_key:
         return ChatModelBinding(
             settings=settings,

@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from agents.judge import parse_judge_output
 from agents.reviewer import parse_reviewer_text
 from runners.run_multi_minimal import after_review_gate, after_turn_gate, build_app as build_multi_app
 from runners.run_self_critique import build_app as build_self_critique_app
@@ -55,6 +56,52 @@ def test_parse_reviewer_text_normalizes_schema() -> None:
     assert errors == []
     assert review["decision"] == "retry"
     assert review["recommended_scope_adjustment"]["editable_files"] == ["app/main.py"]
+    assert review["escalate_planner"] is False
+
+
+def test_parse_reviewer_text_accepts_planner_escalation_request() -> None:
+    payload = json.dumps(
+        {
+            "decision": "retry",
+            "summary": "retry with stronger planner",
+            "failure_analysis": "the prior planner produced an empty plan despite actionable evidence",
+            "feedback_for_planner": "use the visible app/main.py snippet",
+            "suspected_remaining_domains": ["query_or_code_bug"],
+            "recommended_scope_adjustment": {
+                "editable_files": ["app/main.py"],
+                "services": ["app"],
+                "allowed_actions": ["edit_file", "rebuild_compose_service"],
+            },
+            "recommended_next_observations": [],
+            "escalate_planner": True,
+            "escalation_reason": "empty plan after reviewer identified a bounded repair scope",
+        }
+    )
+
+    review, errors = parse_reviewer_text(payload)
+
+    assert errors == []
+    assert review["escalate_planner"] is True
+    assert "bounded repair scope" in review["escalation_reason"]
+
+
+def test_parse_judge_output_accepts_planner_escalation_request() -> None:
+    payload = json.dumps(
+        {
+            "decision": "retry",
+            "override": False,
+            "reasoning": "reviewer has a justified retry and the next planner should be stronger",
+            "escalate_planner": "true",
+            "escalation_reason": "unsafe action was blocked; use a higher reasoning planner for the retry",
+        }
+    )
+
+    judge, errors = parse_judge_output(payload)
+
+    assert errors == []
+    assert judge["decision"] == "retry"
+    assert judge["escalate_planner"] is True
+    assert "higher reasoning planner" in judge["escalation_reason"]
 
 
 def test_parse_reviewer_text_accepts_fenced_json() -> None:

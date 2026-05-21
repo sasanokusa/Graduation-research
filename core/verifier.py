@@ -125,6 +125,11 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
+def _restore_from_base_forbidden() -> bool:
+    value = os.getenv("RESTORE_FROM_BASE_MODE", "forbid").strip().lower()
+    return value not in {"allow", "allowed", "last_resort", "last-resort", "1", "true", "yes"}
+
+
 def _evaluate_success_check(
     check_id: str,
     *,
@@ -233,6 +238,16 @@ def run_precheck(
             evidence_errors = _validate_replace_text_evidence(action, observation)
             action_validation_errors.extend(f"action[{index}] {error}" for error in evidence_errors)
             if evidence_errors:
+                continue
+            if action.get("operation") == "restore_from_base" and _restore_from_base_forbidden():
+                restore_from_base_blocked = True
+                restore_from_base_block_reason = (
+                    "restore_from_base is forbidden for controlled experiments because it can restore hidden baseline answers"
+                )
+                action_validation_errors.append(
+                    f"action[{index}] restore_from_base for {path} is blocked by restore policy"
+                )
+                blocked_actions_reason.append(restore_from_base_block_reason)
                 continue
             if (
                 action.get("operation") == "restore_from_base"

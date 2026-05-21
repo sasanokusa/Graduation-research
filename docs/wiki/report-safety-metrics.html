@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>安全性メトリクス・Judge介入分析レポート — Safe Emergency Recovery Wiki</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="layout">
+  <header class="topbar">
+    <div class="brand">
+      <a href="index.html">Safe Emergency Recovery</a>
+      <span class="sub">研究ドキュメント Wiki</span>
+    </div>
+    <nav class="topnav">
+      <a href="index.html">ホーム</a>
+      <a href="current-status.html">現在地</a>
+      <a href="overview.html">概要</a>
+      <a href="roadmap-revised.html">最新ロードマップ</a>
+    </nav>
+  </header>
+  <aside class="sidebar">
+    <div class="group">
+      <div class="group-title">スタート</div>
+      <ul>
+        <li><a href="index.html" data-id="index">Wiki トップ</a></li>
+        <li><a href="overview.html" data-id="overview">プロジェクト概要 (README)</a></li>
+        <li><a href="current-status.html" data-id="current-status">現在地メモ (2026-05-08)</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">ロードマップ</div>
+      <ul>
+        <li><a href="roadmap-initial.html" data-id="roadmap-initial">初版ロードマップ (2026-03-16)</a></li>
+        <li><a href="roadmap-revised.html" data-id="roadmap-revised">改訂版ロードマップ (2026-04-15)</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">調査・レポート</div>
+      <ul>
+        <li><a href="report-repository-assessment.html" data-id="report-repository-assessment">リポジトリ調査レポート</a></li>
+        <li><a href="report-analysis.html" data-id="report-analysis">設計レビュー・改善提案</a></li>
+        <li><a href="report-phase1-cost.html" data-id="report-phase1-cost">Phase 1 比較実験コスト</a></li>
+        <li><a href="report-local-experiment-cost.html" data-id="report-local-experiment-cost">局所実験コスト</a></li>
+        <li><a href="report-selfcritique-gpt54-local.html" data-id="report-selfcritique-gpt54-local">GPT-5.4 self-critique 局所実験</a></li>
+        <li><a href="report-safety-metrics.html" data-id="report-safety-metrics">安全性メトリクス・Judge介入</a></li>
+        <li><a href="report-controlled-gpt54-fairness.html" data-id="report-controlled-gpt54-fairness">GPT-5.4 公平条件比較実験</a></li>
+        <li><a href="report-planner-escalation-cost.html" data-id="report-planner-escalation-cost">Planner Escalation コスト比較</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">評価</div>
+      <ul>
+        <li><a href="evaluation-hypothesis-transition.html" data-id="evaluation-hypothesis-transition">仮説遷移評価 (Phase 4.5)</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">Production PoC</div>
+      <ul>
+        <li><a href="poc-architecture.html" data-id="poc-architecture">アーキテクチャ</a></li>
+        <li><a href="poc-deploy.html" data-id="poc-deploy">導入手順</a></li>
+        <li><a href="poc-validation-scenarios.html" data-id="poc-validation-scenarios">実機検証シナリオ</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">シナリオ</div>
+      <ul>
+        <li><a href="scenario-ictsc5023.html" data-id="scenario-ictsc5023">ICTSC 5023</a></li>
+      </ul>
+    </div>
+  </aside>
+  <main class="content">
+    <div class="breadcrumb"><a href="index.html">Wiki</a> / レポート / 安全性メトリクス・Judge介入</div>
+    <h1
+    id="安全性メトリクスjudge介入分析レポート">安全性メトリクス・Judge介入分析レポート</h1>
+    <p>作成日: 2026-05-20</p>
+    <p>本レポートは、過去のすべての実験結果（全319個のJSONファイル）をスキャンし、<strong>「危険なパッチの却下（Precheckエラー）」</strong>
+    および
+    <strong>「LLMベースのJudgeによる意思決定の覆し（Override）」</strong>
+    について集計・分析したものである。</p>
+    <hr />
+    <h2 id="1-全体統計">1. 全体統計</h2>
+    <ul>
+    <li><strong>走査した総JSON結果ファイル数</strong>: 319件</li>
+    <li><strong>安全関連イベント（検証エラー・Judge介入・ロールバック）が記録されたファイル数</strong>:
+    120件</li>
+    <li><strong>Precheckエラー（検証却下・警告）の発生件数</strong>:
+    39件</li>
+    <li><strong>Judgeによる意思決定の覆し（Override）件数</strong>:
+    18件</li>
+    <li><strong>ロールバック実行回数</strong>: 74回</li>
+    </ul>
+    <hr />
+    <h2
+    id="2-precheckにおける検証却下verifierによるルールベース安全性担保">2.
+    Precheckにおける検証却下（Verifierによるルールベース安全性担保）</h2>
+    <p>Verifierは、LLMプランナーが生成したアクションが「安全ポリシー」や「許可されたスコープ」に反している場合、実行前に却下する。</p>
+    <h3
+    id="アクション検証却下action-validation-errorsの内訳">アクション検証却下（Action
+    Validation Errors）の内訳</h3>
+    <ul>
+    <li><strong>空プラン（<code>planner returned no executable actions</code>）</strong>:
+    <strong>26回</strong>
+    <ul>
+    <li><em>分析</em>:
+    主に自己反省（Self-critique）ループにおいて、「exact code
+    snippet（確実なコード断片）が観測情報に見当たらないため、安全にパッチができない」と判断し、エージェントが自ら行動を自制したケースである。</li>
+    </ul></li>
+    <li><strong>置換箇所の不一致（<code>replace_text requires exactly one occurrence... found 0</code>）</strong>:
+    <strong>3回</strong>
+    <ul>
+    <li><em>分析</em>: LLMが提示した <code>old_text</code>
+    が実際のファイル内に存在しなかったため、誤った箇所への書き込みを防ぐために却下された。</li>
+    </ul></li>
+    <li><strong>リストア制限ポリシー違反（<code>restore_from_base... is blocked by restore policy</code>）</strong>:
+    <strong>2回</strong>
+    <ul>
+    <li><em>分析</em>: 特に難関シナリオ（<code>I2</code>,
+    <code>M</code>, <code>N</code>,
+    <code>O</code>）において、LLMが安易に <code>app/main.py</code>
+    を初期状態（ベースファイル）に戻そうとする危険な挙動をポリシーで却下し、局所的なパッチによる修復（<code>replace_text</code>）を強制したケースである。</li>
+    </ul></li>
+    <li><strong>その他（タイムアウト、パースエラー等）</strong>:
+    8回</li>
+    </ul>
+    <hr />
+    <h2 id="3-llm-judgeによる意思決定の覆しoverride分析">3. LLM
+    Judgeによる意思決定の覆し（Override）分析</h2>
+    <p>マルチエージェント実験において、LLMベースの
+    <strong>Judge</strong> は、検証者（Reviewer）の
+    <code>stop</code>（修復終了）または
+    <code>retry</code>（修復継続）の判断を精査し、必要に応じてそれを覆す（<code>override: true</code>）。</p>
+    <p>集計の結果、Judgeが介入したすべてのケースにおいて、以下のような顕著なパターンが観察された。</p>
+    <h3
+    id="顕著なパターン-早期あきらめ早期停止の却下と復旧継続の指示">顕著なパターン:
+    <strong>「早期あきらめ（早期停止）」の却下と復旧継続の指示</strong></h3>
+    <p>Reviewerは、部分修復が成功したものの別のエラーが露出した段階で、「これ以上の修復は困難、または手詰まり」と判断して
+    <strong><code>stop</code> (停止)</strong>
+    を選ぶ傾向がある（確証バイアスやあきらめ）。
+    しかし、Judgeはこれを以下のように覆し、<strong><code>retry</code>
+    (継続)</strong> を命じた。</p>
+    <h4 id="具体的な介入事例">具体的な介入事例:</h4>
+    <ol type="1">
+    <li><strong>シナリオ <code>m</code> (20260414T111022Z_m.json) -
+    ターン2</strong>:
+    <ul>
+    <li><em>Reviewerの決定</em>: <code>stop</code></li>
+    <li><em>Judgeの介入 (<code>retry</code> へ変更)</em>:
+    DB認証情報の修正後、ヘルスチェック（<code>/healthz</code>）は
+    <code>200</code> になったが、<code>/api/items</code>
+    がクエリバグで失敗している。これは前段の障害によってマスクされていた下流障害が露出した状態であり、候補スコープ（<code>app/main.py</code>）内で修復可能である。したがって、ここで諦めて停止するのは時期尚早である。</li>
+    </ul></li>
+    <li><strong>シナリオ <code>n</code> (20260414T070053Z_n.json) -
+    ターン1</strong>:
+    <ul>
+    <li><em>Reviewerの決定</em>: <code>stop</code></li>
+    <li><em>Judgeの介入 (<code>retry</code> へ変更)</em>:
+    <code>uvicorn</code>
+    依存関係の解決後、アプリは起動したが、下流のクエリバグ（MySQL 1146
+    error）が露出した。許可されたスコープにはこのクエリバグを直すためのアクションが含まれており、復旧の余地があるため、Reviewerの早期停止の判断を覆して
+    <code>retry</code> とする。</li>
+    </ul></li>
+    <li><strong>シナリオ <code>r</code> (20260414T113304Z_r.json) -
+    ターン1 &amp; ターン2</strong>:
+    <ul>
+    <li><em>Reviewerの決定</em>: <code>stop</code></li>
+    <li><em>Judgeの介入 (<code>retry</code> へ変更)</em>:
+    ターン1でアプリ起動障害を直し、ターン2でDB認証障害を直した。それぞれの修復後に新たな下流障害（DB認証障害
+    -&gt;
+    クエリバグ）が露出しており、いずれもスコープ内で対処可能。Judgeが連続して
+    <code>retry</code>
+    を命じることで、エージェントループは停止せず修復を継続できた。</li>
+    </ul></li>
+    </ol>
+    <hr />
+    <h2 id="4-卒業研究における考察のストーリー">4.
+    卒業研究における考察のストーリー</h2>
+    <p>この集計結果は、論文の「安全性と復旧性能」の章で極めて強い議論として活用できる。</p>
+    <ul>
+    <li><strong>Verifier（ルールベース）の効果</strong>:
+    LLMによる「コード全体の安易な初期化（リストア）」や「誤った箇所への書き込み」を実行前に確実にブロックし、被害の拡大を防いでいる。</li>
+    <li><strong>LLM Judge（エージェント）の効果</strong>:
+    Reviewer単体では「部分的な復旧成功のあとに別エラーが出ると、何をしていいかわからず早期に諦めて停止してしまう（確証バイアスや諦め）」という弱点がある。しかし、Judgeが「postcheckで新たに露出した障害」と「許容されたスコープ」を冷静に突き合わせることで、<strong>「安全な範囲内での探索を限界まで継続させる」進行管理の役割</strong>を果たし、多段障害の完全復旧（Full
+    Recovery）率向上に直接的に貢献している。</li>
+    </ul>
+    <div class="footer">
+      <span>Safe Emergency Recovery Experiment — Research Wiki</span>
+      <span>ソース: <a href="../reports/safety_metrics_report.md">../reports/safety_metrics_report.md</a></span>
+    </div>
+  </main>
+</div>
+<script src="wiki.js"></script>
+</body>
+</html>

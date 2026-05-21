@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Planner Escalation
+コスト比較 — Safe Emergency Recovery Wiki</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="layout">
+  <header class="topbar">
+    <div class="brand">
+      <a href="index.html">Safe Emergency Recovery</a>
+      <span class="sub">研究ドキュメント Wiki</span>
+    </div>
+    <nav class="topnav">
+      <a href="index.html">ホーム</a>
+      <a href="current-status.html">現在地</a>
+      <a href="overview.html">概要</a>
+      <a href="roadmap-revised.html">最新ロードマップ</a>
+    </nav>
+  </header>
+  <aside class="sidebar">
+    <div class="group">
+      <div class="group-title">スタート</div>
+      <ul>
+        <li><a href="index.html" data-id="index">Wiki トップ</a></li>
+        <li><a href="overview.html" data-id="overview">プロジェクト概要 (README)</a></li>
+        <li><a href="current-status.html" data-id="current-status">現在地メモ (2026-05-08)</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">ロードマップ</div>
+      <ul>
+        <li><a href="roadmap-initial.html" data-id="roadmap-initial">初版ロードマップ (2026-03-16)</a></li>
+        <li><a href="roadmap-revised.html" data-id="roadmap-revised">改訂版ロードマップ (2026-04-15)</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">調査・レポート</div>
+      <ul>
+        <li><a href="report-repository-assessment.html" data-id="report-repository-assessment">リポジトリ調査レポート</a></li>
+        <li><a href="report-analysis.html" data-id="report-analysis">設計レビュー・改善提案</a></li>
+        <li><a href="report-phase1-cost.html" data-id="report-phase1-cost">Phase 1 比較実験コスト</a></li>
+        <li><a href="report-local-experiment-cost.html" data-id="report-local-experiment-cost">局所実験コスト</a></li>
+        <li><a href="report-selfcritique-gpt54-local.html" data-id="report-selfcritique-gpt54-local">GPT-5.4 self-critique 局所実験</a></li>
+        <li><a href="report-safety-metrics.html" data-id="report-safety-metrics">安全性メトリクス・Judge介入</a></li>
+        <li><a href="report-controlled-gpt54-fairness.html" data-id="report-controlled-gpt54-fairness">GPT-5.4 公平条件比較実験</a></li>
+        <li><a href="report-planner-escalation-cost.html" data-id="report-planner-escalation-cost">Planner Escalation コスト比較</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">評価</div>
+      <ul>
+        <li><a href="evaluation-hypothesis-transition.html" data-id="evaluation-hypothesis-transition">仮説遷移評価 (Phase 4.5)</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">Production PoC</div>
+      <ul>
+        <li><a href="poc-architecture.html" data-id="poc-architecture">アーキテクチャ</a></li>
+        <li><a href="poc-deploy.html" data-id="poc-deploy">導入手順</a></li>
+        <li><a href="poc-validation-scenarios.html" data-id="poc-validation-scenarios">実機検証シナリオ</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">シナリオ</div>
+      <ul>
+        <li><a href="scenario-ictsc5023.html" data-id="scenario-ictsc5023">ICTSC 5023</a></li>
+      </ul>
+    </div>
+  </aside>
+  <main class="content">
+    <div class="breadcrumb"><a href="index.html">Wiki</a> / レポート / Planner Escalation コスト比較</div>
+    <h1 id="planner-escalation-コスト比較-2026-05-20">Planner Escalation
+    コスト比較 (2026-05-20)</h1>
+    <h2 id="要約">要約</h2>
+    <p>最初に作成した scenario <code>x</code> の比較は、両方の成功 run
+    が <code>restore_from_base</code> を使っていたため、controlled
+    experiment の証拠としては無効である。<code>restore_from_base</code>
+    は hidden baseline answer
+    を復元できてしまい、復旧問題を短絡するためである。</p>
+    <p>その後、<code>RESTORE_FROM_BASE_MODE=forbid</code> で verifier が
+    <code>restore_from_base</code> をブロックする状態にし、scenario
+    <code>n</code> で比較をやり直した。置き換え後の比較では、両条件とも
+    <code>restore_from_base</code> なしで成功した。</p>
+    <p>結論として、この単発試行では <code>GPT-4.1-mini</code>
+    から開始し、retry が承認された次 turn だけ <code>GPT-5.5</code>
+    に上げる方針が、常時 <code>GPT-5.5</code> planner より約
+    <code>40.0%</code> 安かった。</p>
+    <h2 id="有効な置き換え実験">有効な置き換え実験</h2>
+    <h3 id="目的">目的</h3>
+    <p>以下の 2 条件を比較する。</p>
+    <ol type="1">
+    <li>planner を常に <code>GPT-5.5</code> で動かす。</li>
+    <li>まず安価な <code>GPT-4.1-mini</code> planner で開始し、reviewer
+    / judge が retry を承認した次の planner turn だけ
+    <code>GPT-5.5</code> に escalation する。</li>
+    </ol>
+    <p>今回の escalation 条件では、以下の policy variant を使った。</p>
+    <div class="sourceCode" id="cb1"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="va">PLANNER_ESCALATION_MODE</span><span class="op">=</span>on_retry</span></code></pre></div>
+    <p>このモードでは、reviewer / judge が retry
+    自体を判断する点は維持する。retry が承認された場合だけ、次の planner
+    call を上位モデルへ切り替える。</p>
+    <h3 id="条件">条件</h3>
+    <p>共通条件:</p>
+    <ul>
+    <li>scenario: <code>n</code></li>
+    <li>agent: <code>multi_agent.py</code></li>
+    <li>worker: <code>llm</code></li>
+    <li>prompt mode: <code>blind</code></li>
+    <li>scenario mode: <code>forced</code></li>
+    <li>restore policy: <code>RESTORE_FROM_BASE_MODE=forbid</code></li>
+    <li>judge: enabled</li>
+    <li>max turns: 5</li>
+    <li>max additional observations: 3</li>
+    <li>reviewer: <code>gpt-5.4-mini</code></li>
+    <li>judge: <code>gpt-5.4-mini</code></li>
+    </ul>
+    <p>観測ディレクトリ:</p>
+    <table>
+    <thead>
+    <tr>
+    <th>条件</th>
+    <th>観測ディレクトリ</th>
+    <th style="text-align: right;">結果</th>
+    <th style="text-align: right;">restore 使用</th>
+    <th style="text-align: right;">escalation 使用</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>常時上位 planner</td>
+    <td><code>observations/20260520T042551Z_cost_baseline_gpt55_planner_no_restore_n_retry3_once</code></td>
+    <td style="text-align: right;">success</td>
+    <td style="text-align: right;">no</td>
+    <td style="text-align: right;">no</td>
+    </tr>
+    <tr>
+    <td>下位開始 + on-retry escalation</td>
+    <td><code>observations/20260520T043444Z_cost_escalation_on_retry_gpt41mini_to_gpt55_no_restore_n_once</code></td>
+    <td style="text-align: right;">success</td>
+    <td style="text-align: right;">no</td>
+    <td style="text-align: right;">yes</td>
+    </tr>
+    </tbody>
+    </table>
+    <h3 id="コスト結果">コスト結果</h3>
+    <p>概算価格:</p>
+    <ul>
+    <li><code>gpt-5.5</code>: input $5 / 1M tokens, output $30 / 1M
+    tokens</li>
+    <li><code>gpt-5.4-mini</code>: input $0.75 / 1M tokens, output $4.50
+    / 1M tokens</li>
+    <li><code>gpt-4.1-mini</code>: input $0.40 / 1M tokens, output $1.60
+    / 1M tokens</li>
+    </ul>
+    <table>
+    <thead>
+    <tr>
+    <th>条件</th>
+    <th>planner flow</th>
+    <th style="text-align: right;">input tokens</th>
+    <th style="text-align: right;">output tokens</th>
+    <th style="text-align: right;">概算コスト</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>常時上位</td>
+    <td>GPT-5.5 -&gt; GPT-5.5</td>
+    <td style="text-align: right;">15,601</td>
+    <td style="text-align: right;">1,698</td>
+    <td style="text-align: right;">$0.0807</td>
+    </tr>
+    <tr>
+    <td>下位開始 + escalation</td>
+    <td>GPT-4.1-mini -&gt; GPT-5.5</td>
+    <td style="text-align: right;">15,620</td>
+    <td style="text-align: right;">1,248</td>
+    <td style="text-align: right;">$0.0484</td>
+    </tr>
+    </tbody>
+    </table>
+    <p>内訳:</p>
+    <table>
+    <thead>
+    <tr>
+    <th>条件</th>
+    <th>component</th>
+    <th>model</th>
+    <th style="text-align: right;">input</th>
+    <th style="text-align: right;">output</th>
+    <th style="text-align: right;">概算コスト</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>常時上位</td>
+    <td>planner total</td>
+    <td>GPT-5.5</td>
+    <td style="text-align: right;">7,680</td>
+    <td style="text-align: right;">1,125</td>
+    <td style="text-align: right;">$0.0722</td>
+    </tr>
+    <tr>
+    <td>常時上位</td>
+    <td>reviewer</td>
+    <td>GPT-5.4-mini</td>
+    <td style="text-align: right;">3,899</td>
+    <td style="text-align: right;">405</td>
+    <td style="text-align: right;">$0.0047</td>
+    </tr>
+    <tr>
+    <td>常時上位</td>
+    <td>judge</td>
+    <td>GPT-5.4-mini</td>
+    <td style="text-align: right;">4,022</td>
+    <td style="text-align: right;">168</td>
+    <td style="text-align: right;">$0.0038</td>
+    </tr>
+    <tr>
+    <td>下位開始 + escalation</td>
+    <td>planner turn 1</td>
+    <td>GPT-4.1-mini</td>
+    <td style="text-align: right;">2,979</td>
+    <td style="text-align: right;">179</td>
+    <td style="text-align: right;">$0.0015</td>
+    </tr>
+    <tr>
+    <td>下位開始 + escalation</td>
+    <td>planner turn 2</td>
+    <td>GPT-5.5</td>
+    <td style="text-align: right;">4,762</td>
+    <td style="text-align: right;">486</td>
+    <td style="text-align: right;">$0.0384</td>
+    </tr>
+    <tr>
+    <td>下位開始 + escalation</td>
+    <td>reviewer</td>
+    <td>GPT-5.4-mini</td>
+    <td style="text-align: right;">3,875</td>
+    <td style="text-align: right;">413</td>
+    <td style="text-align: right;">$0.0048</td>
+    </tr>
+    <tr>
+    <td>下位開始 + escalation</td>
+    <td>judge</td>
+    <td>GPT-5.4-mini</td>
+    <td style="text-align: right;">4,004</td>
+    <td style="text-align: right;">170</td>
+    <td style="text-align: right;">$0.0038</td>
+    </tr>
+    </tbody>
+    </table>
+    <p><code>on_retry</code> escalation 条件は、常時
+    <code>GPT-5.5</code> 条件より約 <code>$0.0323</code>
+    安かった。割合では約 <code>40.0%</code> のコスト削減である。</p>
+    <h3 id="挙動">挙動</h3>
+    <p>両 run は同じ 2 段階の復旧を行った。</p>
+    <ol type="1">
+    <li><code>app/requirements.txt</code> の missing startup dependency
+    を修正する。</li>
+    <li><code>/healthz</code> 復旧後に <code>/api/items</code> の
+    database/query fault が露出し、追加観測で見えた
+    <code>app/main.py</code> の query を修正する。</li>
+    </ol>
+    <p>escalation run の流れ:</p>
+    <ul>
+    <li>turn 1 planner: <code>gpt-4.1-mini</code></li>
+    <li>reviewer / judge: downstream fault 露出後に retry を承認</li>
+    <li>turn 2 planner: <code>gpt-5.5</code></li>
+    <li><code>planner_escalation_used</code>: true</li>
+    <li><code>restore_from_base_used</code>: false</li>
+    </ul>
+    <h3 id="解釈">解釈</h3>
+    <p>この置き換え結果は、<code>restore_from_base</code>
+    を使わない条件でも escalation policy
+    がコスト削減に寄与しうることを示している。</p>
+    <p>安価な planner が最初の比較的簡単な startup dependency repair
+    を処理し、review loop が retry を承認した後だけ <code>GPT-5.5</code>
+    を使った。常時 <code>GPT-5.5</code> では 2 回の planner turn
+    がどちらも高コストになるが、on-retry escalation では 1 turn
+    目をかなり安く抑えられた。</p>
+    <p>ただし、これは <code>repeat=1</code>
+    の単発試行であり、結論としてはまだ弱い。次は mixed benchmark
+    で確認する必要がある。</p>
+    <p>推奨される次実験:</p>
+    <ul>
+    <li>scenarios: <code>m n o r u v w x</code></li>
+    <li>baseline: always <code>GPT-5.5</code> planner</li>
+    <li>policy: <code>GPT-4.1-mini</code> planner with
+    <code>PLANNER_ESCALATION_MODE=on_retry</code></li>
+    <li>restore policy: <code>RESTORE_FROM_BASE_MODE=forbid</code></li>
+    <li>metrics: success, adjusted success, escalation rate, cost per
+    successful run, unsafe block count, observability bottleneck</li>
+    </ul>
+    <h2 id="無効化された以前の比較">無効化された以前の比較</h2>
+    <p>以下は実行記録として残すが、controlled experiment
+    の証拠としては使わない。</p>
+    <p>無効化理由:</p>
+    <ul>
+    <li>scenario <code>x</code> の成功 run がどちらも
+    <code>restore_from_base</code> を使っていた。</li>
+    <li><code>restore_from_base</code> は hidden baseline answer
+    を復元でき、修正対象の exact line
+    を推論・観測する必要を回避できてしまう。</li>
+    <li>そのため、公平な成功率比較・コスト比較に混ぜると、エージェント能力ではなく
+    baseline restore の有無を測ってしまう。</li>
+    </ul>
+    <p>以前の比較条件:</p>
+    <table>
+    <thead>
+    <tr>
+    <th>条件</th>
+    <th>観測ディレクトリ</th>
+    <th style="text-align: right;">表面上の結果</th>
+    <th>controlled 比較での扱い</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>常時上位 planner</td>
+    <td><code>observations/20260520T024134Z_cost_baseline_gpt55_planner_x_once</code></td>
+    <td style="text-align: right;">success</td>
+    <td>invalid</td>
+    </tr>
+    <tr>
+    <td>下位開始 + escalation</td>
+    <td><code>observations/20260520T025047Z_cost_escalation_gpt54_to_gpt55_x_retry2_once</code></td>
+    <td style="text-align: right;">success</td>
+    <td>invalid</td>
+    </tr>
+    </tbody>
+    </table>
+    <p>以前の概算:</p>
+    <table>
+    <thead>
+    <tr>
+    <th>条件</th>
+    <th>planner flow</th>
+    <th style="text-align: right;">input tokens</th>
+    <th style="text-align: right;">output tokens</th>
+    <th style="text-align: right;">概算コスト</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>常時上位</td>
+    <td>GPT-5.5 only</td>
+    <td style="text-align: right;">3,125</td>
+    <td style="text-align: right;">953</td>
+    <td style="text-align: right;">$0.0442</td>
+    </tr>
+    <tr>
+    <td>escalation</td>
+    <td>GPT-5.4 -&gt; GPT-5.5</td>
+    <td style="text-align: right;">17,081</td>
+    <td style="text-align: right;">1,143</td>
+    <td style="text-align: right;">$0.0518</td>
+    </tr>
+    </tbody>
+    </table>
+    <p>この <code>x</code> の比較では escalation の方が約
+    <code>17.1%</code> 高かったが、どちらも
+    <code>restore_from_base</code> に依存しているため、controlled
+    experiment の結論には使わない。</p>
+    <h2 id="価格参照">価格参照</h2>
+    <ul>
+    <li>OpenAI GPT-5.5 announcement / pricing: <a
+    href="https://openai.com/index/introducing-gpt-5-5/">https://openai.com/index/introducing-gpt-5-5/</a></li>
+    <li>OpenAI GPT-5.4 model docs / pricing: <a
+    href="https://developers.openai.com/api/docs/models/gpt-5.4/">https://developers.openai.com/api/docs/models/gpt-5.4/</a></li>
+    <li>OpenAI GPT-5.4 mini model docs / pricing: <a
+    href="https://developers.openai.com/api/docs/models/gpt-5.4-mini/">https://developers.openai.com/api/docs/models/gpt-5.4-mini/</a></li>
+    <li>OpenAI GPT-4.1 mini pricing: <a
+    href="https://openai.com/api/pricing/">https://openai.com/api/pricing/</a></li>
+    </ul>
+    <div class="footer">
+      <span>Safe Emergency Recovery Experiment — Research Wiki</span>
+      <span>ソース: <a href="../reports/planner_escalation_cost_comparison_20260520.md">../reports/planner_escalation_cost_comparison_20260520.md</a></span>
+    </div>
+  </main>
+</div>
+<script src="wiki.js"></script>
+</body>
+</html>

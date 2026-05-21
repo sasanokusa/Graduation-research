@@ -27,7 +27,7 @@ def _hinted_operational_hints(candidate_files: list[str]) -> list[str]:
         )
     if "app/app.env" in candidate_files:
         hints.append(
-            "Environment mismatches can affect startup-time behavior, backend connectivity, and DC topology contracts. Prefer restore_from_base over guessing unseen secret values."
+            "Environment mismatches can affect startup-time behavior, backend connectivity, and DC topology contracts. Use only evidence-backed replace_text edits; do not restore base files or guess unseen values."
         )
     return hints
 
@@ -99,12 +99,12 @@ def build_worker_visible_context(
         "safety_constraints": {
             "single_turn_runner": True,
             "show_file_allowed": False,
-            "edit_operations": ["replace_text", "restore_from_base"],
+            "edit_operations": ["replace_text"],
             "no_repository_wide_edits": True,
             "no_shell_commands": True,
             "replace_text_old_text_must_be_visible": True,
             "broad_single_token_code_replacements_forbidden": True,
-            "restore_from_base_role": "last_resort",
+            "restore_from_base_role": "forbidden_in_controlled_experiments",
             "prefer_minimal_patch_for_code_files": ["app/main.py"],
             "initial_code_restore_is_discouraged": True,
         },

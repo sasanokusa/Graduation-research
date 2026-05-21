@@ -215,6 +215,49 @@ def get_role_model_settings(role: AgentRole) -> RoleModelSettings:
     )
 
 
+def get_planner_escalation_model_settings(role: AgentRole) -> RoleModelSettings | None:
+    load_repo_env()
+
+    provider = _env_str("PLANNER_ESCALATION_PROVIDER").lower()
+    model = _env_str("PLANNER_ESCALATION_MODEL")
+    if not provider or not model:
+        return None
+    if provider not in PROVIDER_API_KEY_ENV:
+        return None
+
+    timeout_seconds = _env_int(
+        "PLANNER_ESCALATION_TIMEOUT_SECONDS",
+        DEFAULT_TIMEOUT_BY_PROVIDER[provider],
+    )
+    max_attempts = _env_int("PLANNER_ESCALATION_MAX_ATTEMPTS", 1)
+    backoff_base_seconds = _env_float(
+        "PLANNER_ESCALATION_BACKOFF_BASE_SECONDS",
+        DEFAULT_BACKOFF_BASE_SECONDS,
+    )
+    backoff_cap_seconds = _env_float(
+        "PLANNER_ESCALATION_BACKOFF_CAP_SECONDS",
+        DEFAULT_BACKOFF_CAP_SECONDS,
+    )
+    thinking_level = _env_str("PLANNER_ESCALATION_THINKING_LEVEL", DEFAULT_THINKING_LEVEL)
+    api_key_env_name = PROVIDER_API_KEY_ENV[provider]
+    api_key = _env_str(api_key_env_name)
+
+    return RoleModelSettings(
+        role=role,
+        provider=provider,
+        model=model,
+        api_key_env_name=api_key_env_name,
+        api_key=api_key,
+        timeout_seconds=timeout_seconds,
+        max_attempts=max_attempts,
+        backoff_base_seconds=backoff_base_seconds,
+        backoff_cap_seconds=backoff_cap_seconds,
+        thinking_level=thinking_level,
+        thinking_budget=_thinking_budget_from_level(thinking_level) if provider == "google" else None,
+        extra_options={"temperature": 0, "escalation": True},
+    )
+
+
 def refresh_role_settings_cache() -> None:
     get_role_model_settings.cache_clear()
     load_repo_env()

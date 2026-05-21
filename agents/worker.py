@@ -3,10 +3,12 @@ import time
 from typing import Any
 
 from core.actions import format_actions, parse_plan_text
-from core.agent_factory import build_chat_model_binding
+from core.agent_factory import build_chat_model_binding, build_chat_model_binding_from_settings
 from core.agent_roles import AgentRole
+from core.escalation import should_use_requested_planner_escalation
 from core.llm_usage import extract_token_usage
 from core.prompts import get_prompt_spec
+from core.settings import get_planner_escalation_model_settings
 from core.state import SingleAgentState
 
 
@@ -195,15 +197,14 @@ def _runtime_guidance(state: SingleAgentState) -> str:
         "- Prefer replace_text as the first choice when a local fault is directly visible.",
         "- For code files, replace_text.old_text must be copied from the visible file snippet with enough context; broad single-token replacements such as only a table name are forbidden.",
         "- Do not edit code from an HTTP error alone. If the relevant code line is not visible, request or rely on a narrower code snippet before proposing edit_file.",
-        "- Treat restore_from_base as a last resort rather than a default repair strategy.",
+        "- Do not use restore_from_base; it restores hidden baseline answers and is blocked in controlled experiments.",
         "- If you return restart_compose_service, it must come after a state-changing edit_file action.",
         "- A plan containing only run_config_test and/or restart_compose_service is invalid when the observation already shows an editable fault.",
-        "- If an editable env or config line appears wrong but the corrected value is not directly visible in the evidence, prefer restore_from_base over guessing.",
+        "- If an editable env or config line appears wrong but the corrected value is not directly visible in the evidence, return an empty action list or rely on additional observation rather than guessing.",
         "- If you edit startup-time settings such as app/app.env, prefer rebuild_compose_service for app instead of restart_compose_service.",
         "- If you edit app/main.py, prefer rebuild_compose_service for app so the running process reloads the changed code.",
         "- For topology contract faults, app/app.env is the source of app-visible dependency targets such as CACHE_HOST, QUEUE_HOST, METRICS_HOST, and DEGRADED_MODE.",
-        "- Avoid initial restore_from_base for app/main.py when a smaller replace_text patch is directly supported by the evidence.",
-        "- If you choose restore_from_base, include a short reason in the summary.",
+        "- restore_from_base is not an allowed repair strategy for app/main.py, app/app.env, nginx/nginx.conf, or requirements files.",
         "- Distinguish reference layers. In nginx, a proxy_pass target can be an upstream group name, while server entries inside that upstream block can be backend hosts or Docker services.",
     ]
     if state["prompt_mode"] == "hinted":
@@ -223,8 +224,8 @@ def _runtime_guidance(state: SingleAgentState) -> str:
         guidance_lines.extend(
             [
                 "- The visible editable environment snippet and HTTP error evidence indicate an application-side credential mismatch.",
-                "- If the correct credential value is not directly visible, prefer edit_file with operation restore_from_base for app/app.env.",
-                "- After editing app/app.env, use rebuild_compose_service for app so the container restarts with the restored env file.",
+                "- If the correct credential value is not directly visible, request more evidence or return an empty action list rather than restoring from base.",
+                "- After editing app/app.env with an evidence-backed replace_text, use rebuild_compose_service for app so the container restarts with the changed env file.",
             ]
         )
     if app_main_snippet and ("Unknown column" in str(http_error_evidence) or "doesn't exist" in str(http_error_evidence)):
@@ -320,16 +321,35 @@ def _planner_prompt(state: SingleAgentState) -> str:
 
 def _run_planner_with_role(state: SingleAgentState, role: AgentRole) -> SingleAgentState:
     prompt_spec = get_prompt_spec(state["prompt_mode"])
-    model_binding = build_chat_model_binding(role)
+    escalation_source = str(state.get("planner_escalation_source", "")).strip() or "reviewer"
+    use_escalation, escalation_reason = should_use_requested_planner_escalation(
+        state,
+        source=escalation_source,
+    )
+    escalation_settings = get_planner_escalation_model_settings(role) if use_escalation else None
+    model_binding = (
+        build_chat_model_binding_from_settings(escalation_settings)
+        if escalation_settings is not None
+        else build_chat_model_binding(role)
+    )
     planner_settings = model_binding.settings
     phase_title = _planner_phase_title(state, role)
-    agent_role_trace = [*state.get("agent_role_trace", []), f"{role.value}:{state.get('planner_turn', 1)}"]
+    planner_role_label = f"{role.value}_escalated" if escalation_settings is not None else role.value
+    agent_role_trace = [*state.get("agent_role_trace", []), f"{planner_role_label}:{state.get('planner_turn', 1)}"]
     role_model_trace = _append_role_trace(
         state.get("role_model_trace", []),
-        role=role.value,
+        role=planner_role_label,
         provider=planner_settings.provider,
         model=planner_settings.model,
     )
+    escalation_used = escalation_settings is not None
+    escalation_history_entry = {
+        "turn": state.get("planner_turn", 1),
+        "source": escalation_source,
+        "reason": escalation_reason,
+        "provider": planner_settings.provider,
+        "model": planner_settings.model,
+    }
     if model_binding.client is None:
         planner_output_raw = (
             '{"summary":"'
@@ -361,6 +381,15 @@ def _run_planner_with_role(state: SingleAgentState, role: AgentRole) -> SingleAg
             "planner_fallback_used": False,
             "planner_fallback_reason": "",
             "planner_fallback_type": "",
+            "planner_escalation_requested": False if escalation_used else state.get("planner_escalation_requested", False),
+            "planner_escalation_source": escalation_source if escalation_used else "",
+            "planner_escalation_reason": escalation_reason if escalation_used else "",
+            "planner_escalation_used": escalation_used,
+            "planner_escalation_history": (
+                [*state.get("planner_escalation_history", []), escalation_history_entry]
+                if escalation_used
+                else state.get("planner_escalation_history", [])
+            ),
             "planner_output_raw": planner_output_raw,
             "planner_summary": plan["summary"],
             "normalized_actions": plan["actions"],
@@ -487,6 +516,7 @@ def _run_planner_with_role(state: SingleAgentState, role: AgentRole) -> SingleAg
     print(f"planner_error_stage: {planner_error_stage}")
     print(f"planner_retry_count: {planner_retry_count}")
     print(f"planner_fallback_used: {planner_fallback_used}")
+    print(f"planner_escalation_used: {escalation_used}")
     print(format_actions(plan["actions"]))
     print()
     return {
@@ -504,6 +534,15 @@ def _run_planner_with_role(state: SingleAgentState, role: AgentRole) -> SingleAg
         "planner_fallback_used": planner_fallback_used,
         "planner_fallback_reason": planner_fallback_reason,
         "planner_fallback_type": planner_fallback_type,
+        "planner_escalation_requested": False if escalation_used else state.get("planner_escalation_requested", False),
+        "planner_escalation_source": escalation_source if escalation_used else "",
+        "planner_escalation_reason": escalation_reason if escalation_used else "",
+        "planner_escalation_used": escalation_used,
+        "planner_escalation_history": (
+            [*state.get("planner_escalation_history", []), escalation_history_entry]
+            if escalation_used
+            else state.get("planner_escalation_history", [])
+        ),
         "planner_output_raw": planner_output_raw,
         "planner_summary": planner_summary,
         "normalized_actions": plan["actions"],

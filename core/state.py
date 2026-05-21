@@ -46,6 +46,11 @@ class SingleAgentState(TypedDict):
     planner_fallback_used: bool
     planner_fallback_reason: str
     planner_fallback_type: str
+    planner_escalation_requested: bool
+    planner_escalation_source: str
+    planner_escalation_reason: str
+    planner_escalation_used: bool
+    planner_escalation_history: list[dict[str, Any]]
     planner_output_raw: str
     planner_summary: str
     planner_provider: str
