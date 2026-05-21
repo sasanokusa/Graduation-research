@@ -118,28 +118,94 @@ env \
 
 ## Experiment 2 Draft
 
-Experiment 2 は multi-agent の役割別モデル割り当てを調べるドラフトである。
+Experiment 2 は、Experiment 1 の 4 条件と role-split 条件を、同一条件で `repeat 3` に揃えて反復する本比較である。
 
-役割:
+扱い:
 
-- planner: `gpt-5.4`
-- reviewer: Claude
-- judge: Claude
-- triage: Gemini
-- observer/sensor: deterministic `sensor_node`。現状のコードでは Gemini は sensor ではなく triage に割り当てる。
+- 既存の Experiment 1 の `repeat 1` 結果は pilot / 予備観測として扱う。
+- Experiment 2 の本比較は、同一 git 状態・同一安全ポリシー・同一 prompt/scenario 条件で 5 条件すべてを新規に走らせる。
+- controlled experiment なので、全 command に `RESTORE_FROM_BASE_MODE=forbid` を明示する。
+- 実験条件は `.env` に書き込まず、`env ... ./observe_runs.sh ...` の一時環境変数で指定する。
+- planner escalation は Experiment 2 の 5 条件には混ぜない。`gpt-4.1-mini -> gpt-5.5 on_retry` は Experiment 3 の cost 最適化実験として別に扱う。
+- repeat 3 の開始前に `git status --short`, `docker compose version`, `docker info >/dev/null` を確認し、実験中にコード変更を挟まない。コード変更が必要になった場合は、その時点までの結果を pilot として切り分ける。
 
-draft command:
+比較する 5 条件:
+
+| ID | 条件 | planner | reviewer | judge | triage | runner |
+|---|---|---|---|---|---|---|
+| 2-A | one-shot | `gpt-5.4` | - | - | - | `agent.py` |
+| 2-B | self-critique | `gpt-5.4` | - | - | - | `self_critique_agent.py` |
+| 2-C | reviewer-only | `gpt-5.4` | `gpt-5.4` | - | default Gemini | `multi_agent.py` |
+| 2-D | reviewer+judge | `gpt-5.4` | `gpt-5.4` | `gpt-5.4` | default Gemini | `multi_agent.py` |
+| 2-E | role-split | `gpt-5.4` | Claude | `gpt-5.4-mini` | Gemini | `multi_agent.py` |
+
+2-A one-shot:
+
+```bash
+env \
+  SINGLE_AGENT_PROVIDER=openai \
+  SINGLE_AGENT_MODEL=gpt-5.4 \
+  RESTORE_FROM_BASE_MODE=forbid \
+  ./observe_runs.sh m n o r u v w x \
+  --agent-entrypoint agent.py \
+  --worker llm \
+  --prompt-mode blind \
+  --scenario-mode forced \
+  --repeat 3 \
+  --python ./.venv/bin/python \
+  --label iter_controlled_oneshot_gpt54_r3
+```
+
+2-B self-critique:
+
+```bash
+env \
+  SINGLE_AGENT_PROVIDER=openai \
+  SINGLE_AGENT_MODEL=gpt-5.4 \
+  RESTORE_FROM_BASE_MODE=forbid \
+  ./observe_runs.sh m n o r u v w x \
+  --agent-entrypoint self_critique_agent.py \
+  --worker llm \
+  --prompt-mode blind \
+  --scenario-mode forced \
+  --repeat 3 \
+  --python ./.venv/bin/python \
+  --label iter_controlled_selfcritique_gpt54_r3
+```
+
+2-C reviewer-only:
 
 ```bash
 env \
   PLANNER_PROVIDER=openai \
   PLANNER_MODEL=gpt-5.4 \
-  REVIEWER_PROVIDER=anthropic \
-  REVIEWER_MODEL=claude-sonnet-4-6 \
-  JUDGE_PROVIDER=anthropic \
-  JUDGE_MODEL=claude-sonnet-4-6 \
-  TRIAGE_PROVIDER=google \
-  TRIAGE_MODEL=gemini-3-flash-preview \
+  REVIEWER_PROVIDER=openai \
+  REVIEWER_MODEL=gpt-5.4 \
+  RESTORE_FROM_BASE_MODE=forbid \
+  MULTI_AGENT_JUDGE_MODE=disabled \
+  MULTI_AGENT_MAX_TURNS=5 \
+  MULTI_AGENT_MAX_ADDITIONAL_OBSERVATIONS=3 \
+  ./observe_runs.sh m n o r u v w x \
+  --agent-entrypoint multi_agent.py \
+  --worker llm \
+  --prompt-mode blind \
+  --scenario-mode forced \
+  --repeat 3 \
+  --python ./.venv/bin/python \
+  --label iter_controlled_reviewer_only_gpt54_r3
+```
+
+2-D reviewer+judge:
+
+```bash
+env \
+  PLANNER_PROVIDER=openai \
+  PLANNER_MODEL=gpt-5.4 \
+  REVIEWER_PROVIDER=openai \
+  REVIEWER_MODEL=gpt-5.4 \
+  JUDGE_PROVIDER=openai \
+  JUDGE_MODEL=gpt-5.4 \
+  RESTORE_FROM_BASE_MODE=forbid \
   MULTI_AGENT_JUDGE_MODE=enabled \
   MULTI_AGENT_MAX_TURNS=5 \
   MULTI_AGENT_MAX_ADDITIONAL_OBSERVATIONS=3 \
@@ -148,12 +214,106 @@ env \
   --worker llm \
   --prompt-mode blind \
   --scenario-mode forced \
-  --repeat 1 \
+  --repeat 3 \
   --python ./.venv/bin/python \
-  --label experiment2_role_split_multi_gpt54_planner_claude_review_judge_gemini_triage_once
+  --label iter_controlled_multi_gpt54_r3
 ```
 
-Experiment 2 はドラフトであり、実行前にユーザーのレビューを受ける。
+2-E role-split:
+
+```bash
+env \
+  PLANNER_PROVIDER=openai \
+  PLANNER_MODEL=gpt-5.4 \
+  REVIEWER_PROVIDER=anthropic \
+  REVIEWER_MODEL=claude-sonnet-4-6 \
+  JUDGE_PROVIDER=openai \
+  JUDGE_MODEL=gpt-5.4-mini \
+  TRIAGE_PROVIDER=google \
+  TRIAGE_MODEL=gemini-3-flash-preview \
+  RESTORE_FROM_BASE_MODE=forbid \
+  MULTI_AGENT_JUDGE_MODE=enabled \
+  MULTI_AGENT_MAX_TURNS=5 \
+  MULTI_AGENT_MAX_ADDITIONAL_OBSERVATIONS=3 \
+  ./observe_runs.sh m n o r u v w x \
+  --agent-entrypoint multi_agent.py \
+  --worker llm \
+  --prompt-mode blind \
+  --scenario-mode forced \
+  --repeat 3 \
+  --python ./.venv/bin/python \
+  --label iter_role_split_claude_reviewer_gpt54mini_judge_r3
+```
+
+Experiment 2 の集計:
+
+```bash
+./.venv/bin/python aggregate_observations.py \
+  observations/<run>/summary.csv \
+  --group-by scenario \
+  --show-overall \
+  --show-failure-breakdown
+
+./.venv/bin/python aggregate_hypothesis_metrics.py \
+  observations/<run>/summary.csv \
+  --output observations/<run>/hypothesis_metrics.csv
+```
+
+比較表では、raw / adjusted success rate, `judge_stop`, `judge_retry`, `unsafe_action_blocked`, `safe_empty_plan`, `observability_bottleneck`, 仮説変更回数, 誤仮説固着長, 批判後の仮説変化率, role 別 token 消費, cost per successful recovery を揃えて見る。
+
+## Experiment 3 Draft
+
+Experiment 3 は、Experiment 2 で見えた cost per successful recovery の問題を受けて、Planner Escalation によりコスト削減と成功率維持を両立できるかを調べる実験である。
+
+扱い:
+
+- Experiment 2 の結果から最有力構成を 1 つ選び、その構成を固定して比較する。
+- 比較対象は planner policy だけにする。
+- `RESTORE_FROM_BASE_MODE=forbid` を維持する。
+- `planner_escalation_used`, `planner_escalation_history`, escalation 回数, role 別 token usage, cost per successful recovery を成功率とは別に記録する。
+
+比較案:
+
+| ID | 構成 | planner policy | 目的 |
+|---|---|---|---|
+| 3-A | Experiment 2 の最有力構成 | standard planner | 成功率・コスト baseline |
+| 3-B | 同じ構成 | cheap planner + `on_retry -> gpt-5.5` | コスト削減 policy |
+| 3-C 任意 | 同じ構成 | always `gpt-5.5` planner | 上限性能・高コスト baseline |
+
+最初から `m n o r u v w x × repeat 3` で実行してもよいが、コストを抑えるなら `n o r x × repeat 3` の smoke から始める。
+
+3-B command 例:
+
+```bash
+env \
+  PLANNER_PROVIDER=openai \
+  PLANNER_MODEL=gpt-4.1-mini \
+  REVIEWER_PROVIDER=anthropic \
+  REVIEWER_MODEL=claude-sonnet-4-6 \
+  JUDGE_PROVIDER=openai \
+  JUDGE_MODEL=gpt-5.4-mini \
+  TRIAGE_PROVIDER=google \
+  TRIAGE_MODEL=gemini-3-flash-preview \
+  RESTORE_FROM_BASE_MODE=forbid \
+  PLANNER_ESCALATION_MODE=on_retry \
+  PLANNER_ESCALATION_PROVIDER=openai \
+  PLANNER_ESCALATION_MODEL=gpt-5.5 \
+  PLANNER_ESCALATION_TRIGGERS=reviewer_request,judge_request \
+  PLANNER_ESCALATION_MAX_PER_RUN=1 \
+  PLANNER_ESCALATION_TIMEOUT_SECONDS=60 \
+  PLANNER_ESCALATION_MAX_ATTEMPTS=1 \
+  MULTI_AGENT_JUDGE_MODE=enabled \
+  MULTI_AGENT_MAX_TURNS=5 \
+  MULTI_AGENT_MAX_ADDITIONAL_OBSERVATIONS=3 \
+  ./observe_runs.sh n o r x \
+  --agent-entrypoint multi_agent.py \
+  --worker llm \
+  --prompt-mode blind \
+  --scenario-mode forced \
+  --repeat 3 \
+  --python ./.venv/bin/python \
+  --label exp3_planner_escalation_on_retry_gpt41mini_to_gpt55_norx_r3
+```
 
 ## Planner Escalation Mode
 
