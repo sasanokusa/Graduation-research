@@ -13,6 +13,7 @@
   - [`analysis_report.md`](reports/analysis_report.md)
   - [`phase1_compare_cost_report_20260414.md`](reports/phase1_compare_cost_report_20260414.md)
   - [`local_experiment_cost_report_20260419.md`](reports/local_experiment_cost_report_20260419.md)
+  - [`budget_estimate_2026.md`](reports/budget_estimate_2026.md) — 卒研予算概算と支払い方法（申請用, 2026-05-29）
 - [`hypothesis_transition_evaluation.md`](hypothesis_transition_evaluation.md) — 仮説遷移評価 (Phase 4.5)
 - [`production_poc/`](production_poc/) — Ubuntu 実ホスト向け Production PoC ドキュメント群
 - [`scenarios/`](scenarios/) — 個別シナリオ資料

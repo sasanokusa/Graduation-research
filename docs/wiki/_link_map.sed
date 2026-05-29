@@ -11,6 +11,8 @@ s|\.\./reports/controlled_gpt54_fairness_experiment_20260520\.md|report-controll
 s|docs/reports/controlled_gpt54_fairness_experiment_20260520\.md|report-controlled-gpt54-fairness.html|g
 s|\.\./reports/planner_escalation_cost_comparison_20260520\.md|report-planner-escalation-cost.html|g
 s|docs/reports/planner_escalation_cost_comparison_20260520\.md|report-planner-escalation-cost.html|g
+s|\.\./reports/budget_estimate_2026\.md|report-budget-2026.html|g
+s|docs/reports/budget_estimate_2026\.md|report-budget-2026.html|g
 s|implementation_roadmap_20260316\.md|roadmap-initial.html|g
 s|implementation_roadmap_revised_20260415\.md|roadmap-revised.html|g
 s|hypothesis_transition_evaluation\.md|evaluation-hypothesis-transition.html|g

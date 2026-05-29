@@ -102,6 +102,11 @@ build "docs/reports/planner_escalation_cost_comparison_20260520.md" "report-plan
   '<a href="index.html">Wiki</a> / レポート / Planner Escalation コスト比較' \
   "../reports/planner_escalation_cost_comparison_20260520.md"
 
+build "docs/reports/budget_estimate_2026.md" "report-budget-2026.html" \
+  "卒研予算概算 (2026-05-29)" \
+  '<a href="index.html">Wiki</a> / レポート / 卒研予算概算' \
+  "../reports/budget_estimate_2026.md"
+
 build "docs/hypothesis_transition_evaluation.md" "evaluation-hypothesis-transition.html" \
   "仮説遷移評価 (Phase 4.5)" \
   '<a href="index.html">Wiki</a> / 評価 / 仮説遷移' \
