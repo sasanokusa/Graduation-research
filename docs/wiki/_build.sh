@@ -102,6 +102,16 @@ build "docs/reports/planner_escalation_cost_comparison_20260520.md" "report-plan
   '<a href="index.html">Wiki</a> / レポート / Planner Escalation コスト比較' \
   "../reports/planner_escalation_cost_comparison_20260520.md"
 
+build "docs/reports/experiment2_baseline_comparison_20260521.md" "report-experiment2-baseline.html" \
+  "Experiment 2 ベースライン比較" \
+  '<a href="index.html">Wiki</a> / レポート / Experiment 2 ベースライン比較' \
+  "../reports/experiment2_baseline_comparison_20260521.md"
+
+build "docs/reports/experiment2_3_escalation_comparison_20260527.md" "report-experiment2-3-escalation.html" \
+  "Experiment 2 / 3 エスカレーション比較" \
+  '<a href="index.html">Wiki</a> / レポート / Experiment 2 / 3 エスカレーション比較' \
+  "../reports/experiment2_3_escalation_comparison_20260527.md"
+
 build "docs/hypothesis_transition_evaluation.md" "evaluation-hypothesis-transition.html" \
   "仮説遷移評価 (Phase 4.5)" \
   '<a href="index.html">Wiki</a> / 評価 / 仮説遷移' \
@@ -121,6 +131,11 @@ build "docs/production_poc/validation_scenarios.md" "poc-validation-scenarios.ht
   "Production PoC 実機検証シナリオ" \
   '<a href="index.html">Wiki</a> / Production PoC / 実機検証' \
   "../production_poc/validation_scenarios.md"
+
+build "docs/reports/agent_prompt_and_scenario_surface_20260521.md" "poc-agent-prompt-surface.html" \
+  "エージェント Prompt と Scenario 制約" \
+  '<a href="index.html">Wiki</a> / Production PoC / Agent Prompt と Scenario 制約' \
+  "../reports/agent_prompt_and_scenario_surface_20260521.md"
 
 build "docs/scenarios/ictsc_5023.md" "scenario-ictsc5023.html" \
   "ICTSC 5023" \

@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Experiment 2
+ベースライン比較 — Safe Emergency Recovery Wiki</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="layout">
+  <header class="topbar">
+    <div class="brand">
+      <a href="index.html">Safe Emergency Recovery</a>
+      <span class="sub">研究ドキュメント Wiki</span>
+    </div>
+    <nav class="topnav">
+      <a href="index.html">ホーム</a>
+      <a href="current-status.html">現在地</a>
+      <a href="overview.html">概要</a>
+      <a href="roadmap-revised.html">最新ロードマップ</a>
+    </nav>
+  </header>
+  <aside class="sidebar">
+    <div class="group">
+      <div class="group-title">スタート</div>
+      <ul>
+        <li><a href="index.html" data-id="index">Wiki トップ</a></li>
+        <li><a href="overview.html" data-id="overview">プロジェクト概要 (README)</a></li>
+        <li><a href="current-status.html" data-id="current-status">現在地メモ (2026-05-08)</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">ロードマップ</div>
+      <ul>
+        <li><a href="roadmap-initial.html" data-id="roadmap-initial">初版ロードマップ (2026-03-16)</a></li>
+        <li><a href="roadmap-revised.html" data-id="roadmap-revised">改訂版ロードマップ (2026-04-15)</a></li>
+        <li><a href="roadmap-next-steps.html" data-id="roadmap-next-steps">次のステップ計画 (2026-05-21)</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">調査・レポート</div>
+      <ul>
+        <li><a href="report-repository-assessment.html" data-id="report-repository-assessment">リポジトリ調査レポート</a></li>
+        <li><a href="report-analysis.html" data-id="report-analysis">設計レビュー・改善提案</a></li>
+        <li><a href="report-phase1-cost.html" data-id="report-phase1-cost">Phase 1 比較実験コスト</a></li>
+        <li><a href="report-local-experiment-cost.html" data-id="report-local-experiment-cost">局所実験コスト</a></li>
+        <li><a href="report-selfcritique-gpt54-local.html" data-id="report-selfcritique-gpt54-local">GPT-5.4 self-critique 局所実験</a></li>
+        <li><a href="report-safety-metrics.html" data-id="report-safety-metrics">安全性メトリクス・Judge介入</a></li>
+        <li><a href="report-controlled-gpt54-fairness.html" data-id="report-controlled-gpt54-fairness">GPT-5.4 公平条件比較実験</a></li>
+        <li><a href="report-planner-escalation-cost.html" data-id="report-planner-escalation-cost">Planner Escalation コスト比較</a></li>
+        <li><a href="report-experiment2-baseline.html" data-id="report-experiment2-baseline">Experiment 2 ベースライン比較</a></li>
+        <li><a href="report-experiment2-3-escalation.html" data-id="report-experiment2-3-escalation">Experiment 2/3 Escalation 比較</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">評価</div>
+      <ul>
+        <li><a href="evaluation-hypothesis-transition.html" data-id="evaluation-hypothesis-transition">仮説遷移評価 (Phase 4.5)</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">Production PoC</div>
+      <ul>
+        <li><a href="poc-architecture.html" data-id="poc-architecture">アーキテクチャ</a></li>
+        <li><a href="poc-deploy.html" data-id="poc-deploy">導入手順</a></li>
+        <li><a href="poc-validation-scenarios.html" data-id="poc-validation-scenarios">実機検証シナリオ</a></li>
+        <li><a href="poc-agent-prompt-surface.html" data-id="poc-agent-prompt-surface">Agent Prompt と Scenario 制約</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">シナリオ</div>
+      <ul>
+        <li><a href="scenario-ictsc5023.html" data-id="scenario-ictsc5023">ICTSC 5023</a></li>
+      </ul>
+    </div>
+  </aside>
+  <main class="content">
+    <div class="breadcrumb"><a href="index.html">Wiki</a> / レポート / Experiment 2 ベースライン比較</div>
+    <h1 id="experiment-2-ベースライン比較レポート-2026-05-21">Experiment
+    2 ベースライン比較レポート (2026-05-21)</h1>
+    <h2 id="要約">要約</h2>
+    <p>Experiment 2 では、障害注入環境に対する LLM
+    エージェントの復旧性能を、同一シナリオ集合
+    <code>m n o r u v w x</code>、同一 <code>repeat=3</code>、同一 blind
+    prompt、同一 forced scenario mode、同一 restore
+    禁止条件で比較した。</p>
+    <p>5 条件のうち、最も良い raw success / adjusted success
+    を示したのは role-split 条件である。</p>
+    <table>
+    <thead>
+    <tr>
+    <th>条件</th>
+    <th style="text-align: right;">raw success</th>
+    <th style="text-align: right;">adjusted success</th>
+    <th>主な特徴</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>2-A one-shot</td>
+    <td style="text-align: right;">6/24 = 25.00%</td>
+    <td style="text-align: right;">12/24 = 50.00%</td>
+    <td>低コストだが追加推論なし。<code>n</code> / <code>r</code>
+    は環境起動待ち補正で成功相当</td>
+    </tr>
+    <tr>
+    <td>2-B self-critique</td>
+    <td style="text-align: right;">12/24 = 50.00%</td>
+    <td style="text-align: right;">12/24 = 50.00%</td>
+    <td>単独 baseline として安定。<code>n</code> / <code>v</code> /
+    <code>w</code> に強い</td>
+    </tr>
+    <tr>
+    <td>2-C reviewer-only</td>
+    <td style="text-align: right;">9/24 = 37.50%</td>
+    <td style="text-align: right;">9/24 = 37.50%</td>
+    <td>reviewer 追加だけでは今回は伸びず、空プランが増えた</td>
+    </tr>
+    <tr>
+    <td>2-D reviewer + judge</td>
+    <td style="text-align: right;">11/24 = 45.83%</td>
+    <td style="text-align: right;">11/24 = 45.83%</td>
+    <td>judge が安全側判断を増やすが、成功率は self-critique 未満</td>
+    </tr>
+    <tr>
+    <td>2-E role-split</td>
+    <td style="text-align: right;">15/24 = 62.50%</td>
+    <td style="text-align: right;">15/24 = 62.50%</td>
+    <td>最高性能。<code>r</code> と <code>u</code> が大きく改善</td>
+    </tr>
+    </tbody>
+    </table>
+    <p>この結果は、研究上かなり良い baseline として扱える。one-shot /
+    self-critique / reviewer-only / reviewer+judge / role-split の 5
+    条件が同じ条件で揃い、特に role-split
+    が単なるコスト増ではなく成功率を押し上げることを示したためである。</p>
+    <p>一方で、<code>m</code> と <code>x</code>
+    は全またはほぼ全条件で失敗が残った。これは Experiment 3 で planner
+    escalation
+    や観測設計を試す価値がある、きれいな未解決領域でもある。</p>
+    <h2 id="実験目的">実験目的</h2>
+    <p>本実験の目的は、単一エージェントから multi-agent / role-split
+    構成へ制御構造を増やしたとき、以下がどのように変化するかを比較することである。</p>
+    <ul>
+    <li>復旧成功率</li>
+    <li>環境要因を補正した adjusted success</li>
+    <li>空プラン・危険 action block・judge retry / stop</li>
+    <li>追加観測の利用と observability bottleneck</li>
+    <li>token 使用量、API cost、cost per successful recovery</li>
+    <li>仮説更新・批判後の変化・誤仮説固着</li>
+    </ul>
+    <p>卒業研究の観点では、単に「LLM
+    が直せるか」を見るだけでは不十分である。重要なのは、誤仮説に固着したときに観測やレビューで修正できるか、安全制約が危険な修正を止められるか、そしてその制御構造がコストに見合うかである。</p>
+    <h2 id="実験条件">実験条件</h2>
+    <p>共通条件:</p>
+    <ul>
+    <li>scenarios: <code>m n o r u v w x</code></li>
+    <li>repeat: <code>3</code></li>
+    <li>worker: <code>llm</code></li>
+    <li>prompt mode: <code>blind</code></li>
+    <li>scenario mode: <code>forced</code></li>
+    <li>restore policy: <code>RESTORE_FROM_BASE_MODE=forbid</code></li>
+    <li>controlled experiment のため <code>.env</code>
+    は編集せず、すべて一時環境変数で指定した</li>
+    </ul>
+    <p>実行前 preflight:</p>
+    <div class="sourceCode" id="cb1"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> status <span class="at">--short</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> compose version</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> info <span class="op">&gt;</span>/dev/null</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="ex">./check.sh</span></span></code></pre></div>
+    <p><code>./check.sh</code> は <code>115 passed, 6 deselected</code>
+    で成功した。実験完了後の <code>git status --short</code>
+    は空であり、実験中にコード変更は挟んでいない。</p>
+    <h2 id="実行ディレクトリ">実行ディレクトリ</h2>
+    <table>
+    <thead>
+    <tr>
+    <th>ID</th>
+    <th>条件</th>
+    <th>summary.csv</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>2-A</td>
+    <td>one-shot</td>
+    <td><code>observations/20260521T072741Z_iter_controlled_oneshot_gpt54_r3/summary.csv</code></td>
+    </tr>
+    <tr>
+    <td>2-B</td>
+    <td>self-critique</td>
+    <td><code>observations/20260521T081734Z_iter_controlled_selfcritique_gpt54_r3/summary.csv</code></td>
+    </tr>
+    <tr>
+    <td>2-C</td>
+    <td>reviewer-only</td>
+    <td><code>observations/20260521T090534Z_iter_controlled_reviewer_only_gpt54_r3/summary.csv</code></td>
+    </tr>
+    <tr>
+    <td>2-D</td>
+    <td>reviewer + judge</td>
+    <td><code>observations/20260521T094857Z_iter_controlled_multi_gpt54_r3/summary.csv</code></td>
+    </tr>
+    <tr>
+    <td>2-E</td>
+    <td>role-split</td>
+    <td><code>observations/20260521T103948Z_iter_role_split_claude_reviewer_gpt54mini_judge_r3/summary.csv</code></td>
+    </tr>
+    </tbody>
+    </table>
+    <h2 id="実行コマンド">実行コマンド</h2>
+    <p>代表として role-split 条件の command を示す。他の 4 条件も
+    AGENTS.md の Experiment 2 に記載された command
+    をそのまま使用した。</p>
+    <div class="sourceCode" id="cb2"><pre
+    class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">env</span> <span class="dt">\</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  PLANNER_PROVIDER=openai <span class="dt">\</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>  PLANNER_MODEL=gpt-5.4 <span class="dt">\</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>  REVIEWER_PROVIDER=anthropic <span class="dt">\</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>  REVIEWER_MODEL=claude-sonnet-4-6 <span class="dt">\</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>  JUDGE_PROVIDER=openai <span class="dt">\</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>  JUDGE_MODEL=gpt-5.4-mini <span class="dt">\</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>  TRIAGE_PROVIDER=google <span class="dt">\</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>  TRIAGE_MODEL=gemini-3-flash-preview <span class="dt">\</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>  RESTORE_FROM_BASE_MODE=forbid <span class="dt">\</span></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>  MULTI_AGENT_JUDGE_MODE=enabled <span class="dt">\</span></span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>  MULTI_AGENT_MAX_TURNS=5 <span class="dt">\</span></span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>  MULTI_AGENT_MAX_ADDITIONAL_OBSERVATIONS=3 <span class="dt">\</span></span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>  ./observe_runs.sh m n o r u v w x <span class="dt">\</span></span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>  <span class="at">--agent-entrypoint</span> multi_agent.py <span class="dt">\</span></span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>  <span class="at">--worker</span> llm <span class="dt">\</span></span>
+<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a>  <span class="at">--prompt-mode</span> blind <span class="dt">\</span></span>
+<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a>  <span class="at">--scenario-mode</span> forced <span class="dt">\</span></span>
+<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a>  <span class="at">--repeat</span> 3 <span class="dt">\</span></span>
+<span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a>  <span class="at">--python</span> ./.venv/bin/python <span class="dt">\</span></span>
+<span id="cb2-21"><a href="#cb2-21" aria-hidden="true" tabindex="-1"></a>  <span class="at">--label</span> iter_role_split_claude_reviewer_gpt54mini_judge_r3</span></code></pre></div>
+    <h2 id="シナリオ別結果">シナリオ別結果</h2>
+    <table>
+    <thead>
+    <tr>
+    <th>scenario</th>
+    <th style="text-align: right;">2-A one-shot</th>
+    <th style="text-align: right;">2-B self-critique</th>
+    <th style="text-align: right;">2-C reviewer-only</th>
+    <th style="text-align: right;">2-D reviewer+judge</th>
+    <th style="text-align: right;">2-E role-split</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>m</td>
+    <td style="text-align: right;">0/3</td>
+    <td style="text-align: right;">1/3</td>
+    <td style="text-align: right;">0/3</td>
+    <td style="text-align: right;">0/3</td>
+    <td style="text-align: right;">0/3</td>
+    </tr>
+    <tr>
+    <td>n</td>
+    <td style="text-align: right;">0/3</td>
+    <td style="text-align: right;">3/3</td>
+    <td style="text-align: right;">3/3</td>
+    <td style="text-align: right;">3/3</td>
+    <td style="text-align: right;">3/3</td>
+    </tr>
+    <tr>
+    <td>o</td>
+    <td style="text-align: right;">0/3</td>
+    <td style="text-align: right;">2/3</td>
+    <td style="text-align: right;">0/3</td>
+    <td style="text-align: right;">1/3</td>
+    <td style="text-align: right;">1/3</td>
+    </tr>
+    <tr>
+    <td>r</td>
+    <td style="text-align: right;">0/3</td>
+    <td style="text-align: right;">0/3</td>
+    <td style="text-align: right;">0/3</td>
+    <td style="text-align: right;">0/3</td>
+    <td style="text-align: right;">2/3</td>
+    </tr>
+    <tr>
+    <td>u</td>
+    <td style="text-align: right;">0/3</td>
+    <td style="text-align: right;">0/3</td>
+    <td style="text-align: right;">0/3</td>
+    <td style="text-align: right;">1/3</td>
+    <td style="text-align: right;">3/3</td>
+    </tr>
+    <tr>
+    <td>v</td>
+    <td style="text-align: right;">3/3</td>
+    <td style="text-align: right;">3/3</td>
+    <td style="text-align: right;">3/3</td>
+    <td style="text-align: right;">3/3</td>
+    <td style="text-align: right;">3/3</td>
+    </tr>
+    <tr>
+    <td>w</td>
+    <td style="text-align: right;">3/3</td>
+    <td style="text-align: right;">3/3</td>
+    <td style="text-align: right;">3/3</td>
+    <td style="text-align: right;">3/3</td>
+    <td style="text-align: right;">3/3</td>
+    </tr>
+    <tr>
+    <td>x</td>
+    <td style="text-align: right;">0/3</td>
+    <td style="text-align: right;">0/3</td>
+    <td style="text-align: right;">0/3</td>
+    <td style="text-align: right;">0/3</td>
+    <td style="text-align: right;">0/3</td>
+    </tr>
+    </tbody>
+    </table>
+    <p><code>v</code> と <code>w</code>
+    は全条件で安定して成功した。<code>n</code> は one-shot 以外では 3/3
+    で、自己反省または reviewer / judge
+    のいずれかが入ると解ける安定シナリオになっている。</p>
+    <p>最も差が出たのは <code>r</code> と <code>u</code>
+    である。role-split は <code>r=2/3</code>、<code>u=3/3</code>
+    まで改善した。これは Claude reviewer と GPT-5.4-mini judge
+    の組み合わせが、誤った初期仮説を押し戻し、追加観測後の修正 scope
+    をより強く制御した可能性を示す。</p>
+    <p><code>x</code> は全条件で 0/3 であり、現行 baseline
+    の明確な未解決領域である。Experiment 1 の GPT-5.5 smoke では
+    <code>restore_from_base</code>
+    による表面上の成功があったが、controlled 条件では restore
+    禁止のため、ここを成功させるには別の推論または観測改善が必要である。</p>
+    <h2 id="失敗分類">失敗分類</h2>
+    <p>集計スクリプトの failure breakdown は以下の傾向を示した。</p>
+    <table>
+    <thead>
+    <tr>
+    <th>条件</th>
+    <th>主な failure bucket</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>2-A one-shot</td>
+    <td><code>postcheck_failure</code>,
+    <code>env_pip_startup_failure</code>,
+    <code>planner_reasoning_failure</code></td>
+    </tr>
+    <tr>
+    <td>2-B self-critique</td>
+    <td><code>planner_reasoning_failure</code>, 一部
+    <code>postcheck_failure</code></td>
+    </tr>
+    <tr>
+    <td>2-C reviewer-only</td>
+    <td>失敗はすべて <code>planner_reasoning_failure</code></td>
+    </tr>
+    <tr>
+    <td>2-D reviewer+judge</td>
+    <td>主に <code>planner_reasoning_failure</code>、一部 unsafe
+    block</td>
+    </tr>
+    <tr>
+    <td>2-E role-split</td>
+    <td>主に <code>planner_reasoning_failure</code>、<code>r</code> に
+    <code>validation_failure</code> が 1 件</td>
+    </tr>
+    </tbody>
+    </table>
+    <p>one-shot は <code>n</code> と <code>r</code> で
+    <code>env_pip_startup_failure</code> が 3 件ずつ発生し、adjusted
+    success では 50% まで補正された。これは修正 action
+    自体は妥当でも、app recreate 後の依存取得・起動待ちで postcheck
+    が失敗する型である。</p>
+    <p>multi-agent 系の失敗は、環境失敗より planner reasoning failure
+    に寄っている。つまり、今回の比較では transport / Docker
+    の不安定性よりも、観測された evidence
+    をどう解釈して安全な修正に落とすかが主要なボトルネックである。</p>
+    <h2 id="安全性と-judge-の挙動">安全性と judge の挙動</h2>
+    <table>
+    <thead>
+    <tr>
+    <th>条件</th>
+    <th style="text-align: right;">unsafe_action_blocked</th>
+    <th style="text-align: right;">safe_empty_plan</th>
+    <th style="text-align: right;">judge_stop</th>
+    <th style="text-align: right;">judge_retry</th>
+    <th style="text-align: right;">observability_bottleneck</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>2-A one-shot</td>
+    <td style="text-align: right;">0</td>
+    <td style="text-align: right;">8</td>
+    <td style="text-align: right;">0</td>
+    <td style="text-align: right;">0</td>
+    <td style="text-align: right;">0</td>
+    </tr>
+    <tr>
+    <td>2-B self-critique</td>
+    <td style="text-align: right;">0</td>
+    <td style="text-align: right;">11</td>
+    <td style="text-align: right;">0</td>
+    <td style="text-align: right;">0</td>
+    <td style="text-align: right;">2</td>
+    </tr>
+    <tr>
+    <td>2-C reviewer-only</td>
+    <td style="text-align: right;">0</td>
+    <td style="text-align: right;">15</td>
+    <td style="text-align: right;">0</td>
+    <td style="text-align: right;">0</td>
+    <td style="text-align: right;">4</td>
+    </tr>
+    <tr>
+    <td>2-D reviewer+judge</td>
+    <td style="text-align: right;">2</td>
+    <td style="text-align: right;">13</td>
+    <td style="text-align: right;">13</td>
+    <td style="text-align: right;">22</td>
+    <td style="text-align: right;">10</td>
+    </tr>
+    <tr>
+    <td>2-E role-split</td>
+    <td style="text-align: right;">2</td>
+    <td style="text-align: right;">8</td>
+    <td style="text-align: right;">2</td>
+    <td style="text-align: right;">49</td>
+    <td style="text-align: right;">11</td>
+    </tr>
+    </tbody>
+    </table>
+    <p>role-split は judge retry が 49 と非常に多く、turn 数も平均 3.04
+    と最大だった。これは単純な早期停止型ではなく、review / judge
+    によって「まだ根拠が足りない」「修正 scope
+    を絞るべき」と判定される回数が増えたことを示す。</p>
+    <p>この挙動はコスト増につながるが、同時に <code>r</code> と
+    <code>u</code> の成功率改善にもつながっている。研究上は、role-split
+    は「高コストだが、難しいシナリオで誤修正を避けながら粘る
+    baseline」と位置づけられる。</p>
+    <p>一方で observability bottleneck も role-split で 11
+    と最大である。高性能な reviewer / judge を入れても、必要な exact
+    line、full file、十分な snippet
+    が見えていなければ、最終的な修正へ進めない。この点は Experiment 3
+    だけでなく、追加観測 API や worker visible context
+    の設計課題でもある。</p>
+    <h2 id="仮説遷移">仮説遷移</h2>
+    <p>result JSON 内の <code>hypothesis_metrics</code>
+    を集計すると、制御構造を増やすほど追加観測と critique が増えた。</p>
+    <table>
+    <thead>
+    <tr>
+    <th>条件</th>
+    <th style="text-align: right;">avg turns</th>
+    <th style="text-align: right;">avg critiques</th>
+    <th style="text-align: right;">avg hypothesis set updates</th>
+    <th style="text-align: right;">avg reobservations</th>
+    <th style="text-align: right;">avg reobservation effects</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>2-A one-shot</td>
+    <td style="text-align: right;">1.00</td>
+    <td style="text-align: right;">0.00</td>
+    <td style="text-align: right;">0.00</td>
+    <td style="text-align: right;">0.00</td>
+    <td style="text-align: right;">0.00</td>
+    </tr>
+    <tr>
+    <td>2-B self-critique</td>
+    <td style="text-align: right;">1.96</td>
+    <td style="text-align: right;">1.46</td>
+    <td style="text-align: right;">0.96</td>
+    <td style="text-align: right;">0.96</td>
+    <td style="text-align: right;">0.96</td>
+    </tr>
+    <tr>
+    <td>2-C reviewer-only</td>
+    <td style="text-align: right;">1.83</td>
+    <td style="text-align: right;">1.46</td>
+    <td style="text-align: right;">0.79</td>
+    <td style="text-align: right;">0.83</td>
+    <td style="text-align: right;">0.79</td>
+    </tr>
+    <tr>
+    <td>2-D reviewer+judge</td>
+    <td style="text-align: right;">1.92</td>
+    <td style="text-align: right;">1.46</td>
+    <td style="text-align: right;">0.75</td>
+    <td style="text-align: right;">0.92</td>
+    <td style="text-align: right;">0.75</td>
+    </tr>
+    <tr>
+    <td>2-E role-split</td>
+    <td style="text-align: right;">3.04</td>
+    <td style="text-align: right;">2.12</td>
+    <td style="text-align: right;">1.38</td>
+    <td style="text-align: right;">1.54</td>
+    <td style="text-align: right;">1.04</td>
+    </tr>
+    </tbody>
+    </table>
+    <p>role-split は平均 turn 数と critique
+    数が最も多く、追加観測も最も多い。これは、単にモデルを強くしただけでなく、役割ごとの判断が
+    run を長く保ち、誤仮説から回復する機会を増やしていることを示す。</p>
+    <p>ただし top-1 hypothesis change は role-split でも平均 0.17
+    に留まった。仮説集合は更新されているが、最上位仮説を大きく切り替えるほどの変化は少ない。これは「初期仮説を維持したまま
+    scope を補正する」動きが多いことを示す可能性がある。</p>
+    <h2 id="コスト">コスト</h2>
+    <p>直前の概算では、Experiment 2 全体を約
+    <code>$9.78</code>、安全側には <code>$12-15</code>
+    と見積もった。実測 token から計算した概算 API cost は合計約
+    <code>$6.78</code> で、事前見積もりより低かった。</p>
+    <p>価格前提:</p>
+    <ul>
+    <li>OpenAI <code>gpt-5.4</code>: input <code>$2.50</code> / 1M
+    tokens, output <code>$15.00</code> / 1M tokens</li>
+    <li>OpenAI <code>gpt-5.4-mini</code>: input <code>$0.75</code> / 1M
+    tokens, output <code>$4.50</code> / 1M tokens</li>
+    <li>Anthropic <code>claude-sonnet-4-6</code>: input
+    <code>$3.00</code> / 1M tokens, output <code>$15.00</code> / 1M
+    tokens</li>
+    <li>Google <code>gemini-3-flash-preview</code>: input
+    <code>$0.50</code> / 1M tokens, output <code>$3.00</code> / 1M
+    tokens</li>
+    </ul>
+    <table>
+    <thead>
+    <tr>
+    <th>条件</th>
+    <th style="text-align: right;">実測概算 cost</th>
+    <th style="text-align: right;">事前概算</th>
+    <th style="text-align: right;">差分</th>
+    <th style="text-align: right;">raw success</th>
+    <th style="text-align: right;">cost / raw success</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>2-A one-shot</td>
+    <td style="text-align: right;"><code>$0.2341</code></td>
+    <td style="text-align: right;"><code>$0.24</code></td>
+    <td style="text-align: right;">-2.5%</td>
+    <td style="text-align: right;">6</td>
+    <td style="text-align: right;"><code>$0.0390</code></td>
+    </tr>
+    <tr>
+    <td>2-B self-critique</td>
+    <td style="text-align: right;"><code>$0.5446</code></td>
+    <td style="text-align: right;"><code>$0.68</code></td>
+    <td style="text-align: right;">-19.9%</td>
+    <td style="text-align: right;">12</td>
+    <td style="text-align: right;"><code>$0.0454</code></td>
+    </tr>
+    <tr>
+    <td>2-C reviewer-only</td>
+    <td style="text-align: right;"><code>$1.1092</code></td>
+    <td style="text-align: right;"><code>$1.62</code></td>
+    <td style="text-align: right;">-31.5%</td>
+    <td style="text-align: right;">9</td>
+    <td style="text-align: right;"><code>$0.1232</code></td>
+    </tr>
+    <tr>
+    <td>2-D reviewer+judge</td>
+    <td style="text-align: right;"><code>$1.8526</code></td>
+    <td style="text-align: right;"><code>$3.94</code></td>
+    <td style="text-align: right;">-53.0%</td>
+    <td style="text-align: right;">11</td>
+    <td style="text-align: right;"><code>$0.1684</code></td>
+    </tr>
+    <tr>
+    <td>2-E role-split</td>
+    <td style="text-align: right;"><code>$3.0357</code></td>
+    <td style="text-align: right;"><code>$3.30</code></td>
+    <td style="text-align: right;">-8.0%</td>
+    <td style="text-align: right;">15</td>
+    <td style="text-align: right;"><code>$0.2024</code></td>
+    </tr>
+    </tbody>
+    </table>
+    <p>provider 別の実測概算:</p>
+    <table>
+    <thead>
+    <tr>
+    <th>provider / model</th>
+    <th style="text-align: right;">cost</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>OpenAI total</td>
+    <td style="text-align: right;"><code>$5.0315</code></td>
+    </tr>
+    <tr>
+    <td>Anthropic total</td>
+    <td style="text-align: right;"><code>$1.7447</code></td>
+    </tr>
+    <tr>
+    <td>Google total</td>
+    <td style="text-align: right;"><code>$0.0000</code></td>
+    </tr>
+    <tr>
+    <td>Total</td>
+    <td style="text-align: right;"><code>$6.7762</code></td>
+    </tr>
+    </tbody>
+    </table>
+    <p>role-split 内訳:</p>
+    <table>
+    <thead>
+    <tr>
+    <th>component</th>
+    <th>provider / model</th>
+    <th style="text-align: right;">input tokens</th>
+    <th style="text-align: right;">output tokens</th>
+    <th style="text-align: right;">cost</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>planner</td>
+    <td>OpenAI <code>gpt-5.4</code></td>
+    <td style="text-align: right;">323,811</td>
+    <td style="text-align: right;">9,645</td>
+    <td style="text-align: right;"><code>$0.9542</code></td>
+    </tr>
+    <tr>
+    <td>reviewer</td>
+    <td>Anthropic <code>claude-sonnet-4-6</code></td>
+    <td style="text-align: right;">415,488</td>
+    <td style="text-align: right;">33,216</td>
+    <td style="text-align: right;"><code>$1.7447</code></td>
+    </tr>
+    <tr>
+    <td>judge</td>
+    <td>OpenAI <code>gpt-5.4-mini</code></td>
+    <td style="text-align: right;">398,560</td>
+    <td style="text-align: right;">8,418</td>
+    <td style="text-align: right;"><code>$0.3368</code></td>
+    </tr>
+    </tbody>
+    </table>
+    <p>今回、事前概算より実測が下振れした主因は、pilot run の
+    reviewer+judge がやや重かった一方、本実験では実際の output tokens と
+    retry 分布がそこまで膨らまなかったためである。特に 2-D は事前概算
+    <code>$3.94</code> に対して実測 <code>$1.85</code>
+    と大きく下振れした。</p>
+    <p>一方で、最も高価なのは明確に role-split である。Anthropic
+    reviewer が role-split cost の約 57.5%
+    を占めた。性能は最良だが、cost per raw success は one-shot /
+    self-critique より高い。したがって、研究上は「最高成功率
+    baseline」と「費用対効果 baseline」を分けて議論する必要がある。</p>
+    <h2 id="ボトルネック">ボトルネック</h2>
+    <p>今回の主要ボトルネックは 4 つある。</p>
+    <ol type="1">
+    <li><p><code>x</code> の failover contract mismatch</p>
+    <p><code>x</code> は全条件で 0/3 だった。restore
+    禁止条件で成功できていないため、hidden baseline に頼らない exact
+    repair を導く観測・推論が不足している。Experiment 3 で planner
+    escalation を試す最重要候補である。</p></li>
+    <li><p><code>m</code> の誤仮説固着</p>
+    <p><code>m</code> は self-critique の 1/3 を除き失敗した。多くの run
+    で database credential / app env misconfiguration に寄り、真の修正
+    scope へ到達できていない。role-split でも改善しなかったため、単に
+    reviewer を強くするだけでは足りない可能性がある。</p></li>
+    <li><p>observability bottleneck</p>
+    <p>reviewer+judge で 10、role-split で 11
+    と高い。これは「考える能力」よりも「必要な根拠が見えていない」ことが
+    stop / retry を誘発している部分である。追加観測の上限 3 回、snippet
+    の切り出し、full file 取得の条件が効いている可能性がある。</p></li>
+    <li><p>reviewer / judge retry cost</p>
+    <p>role-split は judge retry が 49 で、平均 turn 数も 3.04
+    だった。成功率改善の代償として、レビューと判定が長く走る。このため、常時
+    role-split を使うより、失敗しやすいシナリオや retry 時だけ強い
+    planner / reviewer を使う方が cost per successful recovery
+    を改善できる可能性が高い。</p></li>
+    </ol>
+    <h2 id="研究上の意義">研究上の意義</h2>
+    <p>今回の結果は、卒業研究の主張にとってかなり良い材料である。</p>
+    <p>第一に、単純な one-shot baseline は 25%
+    に留まったが、self-critique は 50%、role-split は 62.5%
+    まで改善した。これは、障害復旧タスクでは「1
+    回の推論能力」だけでなく、追加観測、批判、判定、役割分担が性能に影響することを示している。</p>
+    <p>第二に、role-split は <code>r</code> と <code>u</code>
+    のような中難度シナリオで明確に効いた。これは、レビューや judge
+    の価値が全シナリオで均一に現れるのではなく、誤仮説に陥りやすい領域で特に出ることを示唆する。</p>
+    <p>第三に、安全制約の存在が結果の解釈を健全にしている。<code>restore_from_base</code>
+    を禁止したため、hidden baseline answer
+    による短絡成功は混ざっていない。<code>unsafe_action_blocked</code>
+    や <code>safe_empty_plan</code>
+    が記録されているため、成功率だけでなく「危険な成功を避けたか」も議論できる。</p>
+    <p>第四に、コスト比較が研究テーマとして成立している。最高成功率の
+    role-split は最も高価であり、費用対効果では self-critique
+    が強い。したがって、次の段階では「常に高い構成を使う」のではなく、「必要なときだけ
+    escalation する」方針を評価する意義がある。</p>
+    <h2 id="experiment-3-への期待">Experiment 3 への期待</h2>
+    <p>Experiment 3 では、Experiment 2 で最有力だった role-split
+    構成を基準に、planner policy だけを変えるのが自然である。</p>
+    <p>期待する比較:</p>
+    <table>
+    <thead>
+    <tr>
+    <th>条件</th>
+    <th>構成</th>
+    <th>planner policy</th>
+    <th>期待</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>3-A</td>
+    <td>role-split</td>
+    <td>standard <code>gpt-5.4</code> planner</td>
+    <td>Experiment 2 role-split の再現 baseline</td>
+    </tr>
+    <tr>
+    <td>3-B</td>
+    <td>role-split</td>
+    <td>cheap planner + <code>on_retry -&gt; gpt-5.5</code></td>
+    <td>成功率維持または微増、cost 削減</td>
+    </tr>
+    <tr>
+    <td>3-C</td>
+    <td>role-split</td>
+    <td>always <code>gpt-5.5</code> planner</td>
+    <td>上限性能確認。ただし高コスト</td>
+    </tr>
+    </tbody>
+    </table>
+    <p>最初は <code>n o r x × repeat 3</code> の smoke
+    がよい。理由は、<code>n</code> は安定成功、<code>o</code>
+    は中間、<code>r</code> は role-split で改善、<code>x</code>
+    は全条件失敗という性質が分かれており、少ないコストで policy
+    差が見えやすいためである。</p>
+    <p>Experiment 3 で期待する結果:</p>
+    <ul>
+    <li><code>r</code> と <code>u</code>
+    の成功率を維持しつつ、role-split の planner cost を下げる</li>
+    <li><code>x</code> で少なくとも 1/3 の restore なし成功を得る</li>
+    <li>escalation 使用回数を 1 run あたり最大 1 に抑え、cost per
+    successful recovery を role-split baseline より下げる</li>
+    <li><code>planner_escalation_used</code> と
+    <code>planner_escalation_history</code> を使い、成功率と escalation
+    依存を分離して報告する</li>
+    </ul>
+    <p>特に重要なのは、Experiment 3
+    が「より強いモデルを使えば成功するか」ではなく、「安い構成から始め、reviewer
+    / judge が必要と判断したときだけ高い planner
+    を使うと、同じ安全制約のまま費用対効果が改善するか」を検証する点である。</p>
+    <h2 id="結論">結論</h2>
+    <p>Experiment 2
+    は、ベースライン比較として十分に良い結果になった。</p>
+    <p>role-split は raw / adjusted success ともに 62.5%
+    で最良であり、one-shot から明確に改善した。一方、self-critique
+    は低コストで 50% を達成しており、費用対効果 baseline
+    として強い。reviewer-only と reviewer+judge
+    は今回の条件では単純な上積みにならず、むしろ空プランや retry
+    による停止が目立った。</p>
+    <p>次の焦点は、role-split の強さを保ちながら、どの run
+    で高コスト推論を使うべきかを制御することである。Experiment 3 の
+    planner escalation
+    は、この研究を「成功率比較」から「安全性・観測・コストを含む運用可能なエージェント設計」へ進めるための自然な次ステップである。</p>
+    <div class="footer">
+      <span>Safe Emergency Recovery Experiment — Research Wiki</span>
+      <span>ソース: <a href="../reports/experiment2_baseline_comparison_20260521.md">../reports/experiment2_baseline_comparison_20260521.md</a></span>
+    </div>
+  </main>
+</div>
+<script src="wiki.js"></script>
+</body>
+</html>

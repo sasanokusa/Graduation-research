@@ -21,6 +21,23 @@ from core.state import SingleAgentState
 OBSERVATION_STABILIZATION_SECONDS = 2
 OBSERVATION_STABILIZATION_ATTEMPTS = 2
 
+TOPOLOGY_ENV_KEYS = [
+    "CACHE_HOST",
+    "CACHE_EXPECTED_HOST",
+    "CACHE_HOST_GROUP",
+    "CACHE_EXPECTED_GROUP",
+    "QUEUE_HOST",
+    "QUEUE_EXPECTED_HOST",
+    "QUEUE_HOST_GROUP",
+    "QUEUE_EXPECTED_GROUP",
+    "METRICS_HOST",
+    "METRICS_EXPECTED_HOST",
+    "METRICS_HOST_GROUP",
+    "METRICS_EXPECTED_GROUP",
+    "APP_HOST_GROUP",
+    "DEGRADED_MODE",
+]
+
 
 def _section(title: str) -> None:
     divider = "=" * 50
@@ -115,6 +132,19 @@ def _extract_relevant_snippet(path_value: str, needles: str | list[str], context
     if len(lines) <= 8:
         return "\n".join(lines)
     return "\n".join(lines[:8])
+
+
+def _extract_app_env_topology_contract_snippet() -> str:
+    file_text = resolve_repo_path("app/app.env").read_text()
+    wanted_keys = set(TOPOLOGY_ENV_KEYS)
+    lines: list[str] = []
+    for line in file_text.splitlines():
+        if "=" not in line:
+            continue
+        key, _value = line.split("=", 1)
+        if key in wanted_keys:
+            lines.append(line)
+    return "\n".join(lines)
 
 
 def _extract_braced_block(lines: list[str], start_index: int) -> str:
@@ -315,28 +345,12 @@ def _collect_static_observations(service_logs: dict[str, str], file_snippets: di
         for line in file_snippets["app/app.env"].splitlines():
             if line.startswith("APP_PORT="):
                 observations["app_env_port"] = line.split("=", 1)[1].strip()
-    topology_env_keys = [
-        "CACHE_HOST",
-        "CACHE_EXPECTED_HOST",
-        "CACHE_HOST_GROUP",
-        "CACHE_EXPECTED_GROUP",
-        "QUEUE_HOST",
-        "QUEUE_EXPECTED_HOST",
-        "QUEUE_HOST_GROUP",
-        "QUEUE_EXPECTED_GROUP",
-        "METRICS_HOST",
-        "METRICS_EXPECTED_HOST",
-        "METRICS_HOST_GROUP",
-        "METRICS_EXPECTED_GROUP",
-        "APP_HOST_GROUP",
-        "DEGRADED_MODE",
-    ]
     topology_env: dict[str, str] = {}
     for line in file_snippets.get("app/app.env", "").splitlines():
         if "=" not in line:
             continue
         key, value = line.split("=", 1)
-        if key in topology_env_keys:
+        if key in TOPOLOGY_ENV_KEYS:
             topology_env[key] = value.strip()
     if topology_env:
         observations["dc_topology_env"] = topology_env
@@ -597,6 +611,15 @@ def _base_file_snippets(
             context=1,
         )
     )
+    topology_contract = evaluate_dc_topology_contract_ok(topology)
+    if topology.get("status") == 200 and not topology_contract["ok"]:
+        app_env_snippet = _extract_app_env_topology_contract_snippet()
+    else:
+        app_env_snippet = _extract_relevant_snippet(
+            "app/app.env",
+            _app_env_needles(service_logs, healthz, api_items, topology),
+            context=0,
+        )
     return {
         "nginx/nginx.conf": _extract_nginx_reference_snippet(),
         "app/main.py": app_main_snippet,
@@ -605,11 +628,7 @@ def _base_file_snippets(
             "uvicorn[standard]==",
             context=0,
         ),
-        "app/app.env": _extract_relevant_snippet(
-            "app/app.env",
-            _app_env_needles(service_logs, healthz, api_items, topology),
-            context=0,
-        ),
+        "app/app.env": app_env_snippet,
     }
 
 
@@ -687,6 +706,7 @@ def _narrower_snippet(
     service_logs: dict[str, str],
     healthz: dict[str, Any],
     api_items: dict[str, Any],
+    topology: dict[str, Any] | None = None,
 ) -> str:
     needle_map = {
         "nginx/nginx.conf": ["upstream backend", "server app:8001", "server backend:8000", "server app:8000", "proxy_pass http://backend", "location /"],
@@ -706,6 +726,10 @@ def _narrower_snippet(
     }
     if path_value == "app/main.py" and _should_mask_app_main_query_snippet(service_logs, healthz, api_items):
         return _masked_app_main_snippet()
+    if path_value == "app/app.env":
+        topology_contract = evaluate_dc_topology_contract_ok(topology or {})
+        if (topology or {}).get("status") == 200 and not topology_contract["ok"]:
+            return _extract_app_env_topology_contract_snippet()
     return _extract_relevant_snippet(path_value, needle_map[path_value], context=3 if path_value == "app/main.py" else 1)
 
 
@@ -815,24 +839,27 @@ def additional_observation_node(state: SingleAgentState) -> SingleAgentState:
     if "extract narrower relevant snippet from app/main.py" in requested:
         healthz = observation.get("health_checks", {}).get("healthz", {})
         api_items = observation.get("health_checks", {}).get("api_items", {})
+        topology = observation.get("health_checks", {}).get("topology", {})
         service_logs = observation.get("service_logs", {})
-        snippet = _narrower_snippet("app/main.py", service_logs, healthz, api_items)
+        snippet = _narrower_snippet("app/main.py", service_logs, healthz, api_items, topology)
         observation["file_snippets"]["app/main.py"] = snippet
         collected["app/main.py"] = snippet
 
     if "extract narrower relevant snippet from app/app.env" in requested:
         healthz = observation.get("health_checks", {}).get("healthz", {})
         api_items = observation.get("health_checks", {}).get("api_items", {})
+        topology = observation.get("health_checks", {}).get("topology", {})
         service_logs = observation.get("service_logs", {})
-        snippet = _narrower_snippet("app/app.env", service_logs, healthz, api_items)
+        snippet = _narrower_snippet("app/app.env", service_logs, healthz, api_items, topology)
         observation["file_snippets"]["app/app.env"] = snippet
         collected["app/app.env"] = snippet
 
     if "extract narrower relevant snippet from nginx/nginx.conf" in requested:
         healthz = observation.get("health_checks", {}).get("healthz", {})
         api_items = observation.get("health_checks", {}).get("api_items", {})
+        topology = observation.get("health_checks", {}).get("topology", {})
         service_logs = observation.get("service_logs", {})
-        snippet = _narrower_snippet("nginx/nginx.conf", service_logs, healthz, api_items)
+        snippet = _narrower_snippet("nginx/nginx.conf", service_logs, healthz, api_items, topology)
         observation["file_snippets"]["nginx/nginx.conf"] = snippet
         collected["nginx/nginx.conf"] = snippet
 

@@ -48,6 +48,8 @@
         <li><a href="report-safety-metrics.html" data-id="report-safety-metrics">安全性メトリクス・Judge介入</a></li>
         <li><a href="report-controlled-gpt54-fairness.html" data-id="report-controlled-gpt54-fairness">GPT-5.4 公平条件比較実験</a></li>
         <li><a href="report-planner-escalation-cost.html" data-id="report-planner-escalation-cost">Planner Escalation コスト比較</a></li>
+        <li><a href="report-experiment2-baseline.html" data-id="report-experiment2-baseline">Experiment 2 ベースライン比較</a></li>
+        <li><a href="report-experiment2-3-escalation.html" data-id="report-experiment2-3-escalation">Experiment 2/3 Escalation 比較</a></li>
       </ul>
     </div>
     <div class="group">
@@ -62,6 +64,7 @@
         <li><a href="poc-architecture.html" data-id="poc-architecture">アーキテクチャ</a></li>
         <li><a href="poc-deploy.html" data-id="poc-deploy">導入手順</a></li>
         <li><a href="poc-validation-scenarios.html" data-id="poc-validation-scenarios">実機検証シナリオ</a></li>
+        <li><a href="poc-agent-prompt-surface.html" data-id="poc-agent-prompt-surface">Agent Prompt と Scenario 制約</a></li>
       </ul>
     </div>
     <div class="group">
@@ -158,6 +161,16 @@
         <h3><a href="report-planner-escalation-cost.html">Planner Escalation コスト比較</a></h3>
         <p>常時GPT-5.5 plannerと、GPT-5.4から開始してreviewer/judge判断でGPT-5.5へ上げる条件をシナリオxで比較したレポート。</p>
       </div>
+      <div class="card">
+        <span class="tag">2026-05-21</span>
+        <h3><a href="report-experiment2-baseline.html">Experiment 2 ベースライン比較</a></h3>
+        <p>5条件×8シナリオ×repeat 3の本比較。role-splitの成功率、実測APIコスト、ボトルネック、Experiment 3への期待を整理したレポート。</p>
+      </div>
+      <div class="card">
+        <span class="tag">2026-05-27</span>
+        <h3><a href="report-experiment2-3-escalation.html">Experiment 2/3 Escalation 比較</a></h3>
+        <p>Experiment 2 baseline、x の観測改善、Experiment 3-A/3-B の Planner Escalation smoke をまとめたレポート。</p>
+      </div>
     </div>
 
     <h2>評価</h2>
@@ -185,6 +198,11 @@
         <span class="tag">Validation</span>
         <h3><a href="poc-validation-scenarios.html">実機検証シナリオ</a></h3>
         <p>本番影響が小さい時間帯に <code>propose-only</code> から始める検証シナリオ集。</p>
+      </div>
+      <div class="card">
+        <span class="tag">2026-05-21</span>
+        <h3><a href="poc-agent-prompt-surface.html">Agent Prompt と Scenario 制約</a></h3>
+        <p>各エージェントに渡す prompt 原文と日本語訳、benchmark scenario、agent-visible scope、Production PoC analyzer 制約を整理した棚卸し。</p>
       </div>
     </div>
 
