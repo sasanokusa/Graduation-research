@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>卒研予算概算 (2026-05-29) — Safe Emergency Recovery Wiki</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="layout">
+  <header class="topbar">
+    <div class="brand">
+      <a href="index.html">Safe Emergency Recovery</a>
+      <span class="sub">研究ドキュメント Wiki</span>
+    </div>
+    <nav class="topnav">
+      <a href="index.html">ホーム</a>
+      <a href="current-status.html">現在地</a>
+      <a href="overview.html">概要</a>
+      <a href="roadmap-revised.html">最新ロードマップ</a>
+    </nav>
+  </header>
+  <aside class="sidebar">
+    <div class="group">
+      <div class="group-title">スタート</div>
+      <ul>
+        <li><a href="index.html" data-id="index">Wiki トップ</a></li>
+        <li><a href="overview.html" data-id="overview">プロジェクト概要 (README)</a></li>
+        <li><a href="current-status.html" data-id="current-status">現在地メモ (2026-05-08)</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">ロードマップ</div>
+      <ul>
+        <li><a href="roadmap-initial.html" data-id="roadmap-initial">初版ロードマップ (2026-03-16)</a></li>
+        <li><a href="roadmap-revised.html" data-id="roadmap-revised">改訂版ロードマップ (2026-04-15)</a></li>
+        <li><a href="roadmap-next-steps.html" data-id="roadmap-next-steps">次のステップ計画 (2026-05-21)</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">調査・レポート</div>
+      <ul>
+        <li><a href="report-repository-assessment.html" data-id="report-repository-assessment">リポジトリ調査レポート</a></li>
+        <li><a href="report-analysis.html" data-id="report-analysis">設計レビュー・改善提案</a></li>
+        <li><a href="report-phase1-cost.html" data-id="report-phase1-cost">Phase 1 比較実験コスト</a></li>
+        <li><a href="report-local-experiment-cost.html" data-id="report-local-experiment-cost">局所実験コスト</a></li>
+        <li><a href="report-selfcritique-gpt54-local.html" data-id="report-selfcritique-gpt54-local">GPT-5.4 self-critique 局所実験</a></li>
+        <li><a href="report-safety-metrics.html" data-id="report-safety-metrics">安全性メトリクス・Judge介入</a></li>
+        <li><a href="report-controlled-gpt54-fairness.html" data-id="report-controlled-gpt54-fairness">GPT-5.4 公平条件比較実験</a></li>
+        <li><a href="report-planner-escalation-cost.html" data-id="report-planner-escalation-cost">Planner Escalation コスト比較</a></li>
+        <li><a href="report-experiment2-baseline.html" data-id="report-experiment2-baseline">Experiment 2 ベースライン比較</a></li>
+        <li><a href="report-experiment2-3-escalation.html" data-id="report-experiment2-3-escalation">Experiment 2/3 Escalation 比較</a></li>
+        <li><a href="report-budget-2026.html" data-id="report-budget-2026">卒研予算概算 (2026-05-29)</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">評価</div>
+      <ul>
+        <li><a href="evaluation-hypothesis-transition.html" data-id="evaluation-hypothesis-transition">仮説遷移評価 (Phase 4.5)</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">Production PoC</div>
+      <ul>
+        <li><a href="poc-architecture.html" data-id="poc-architecture">アーキテクチャ</a></li>
+        <li><a href="poc-deploy.html" data-id="poc-deploy">導入手順</a></li>
+        <li><a href="poc-validation-scenarios.html" data-id="poc-validation-scenarios">実機検証シナリオ</a></li>
+        <li><a href="poc-agent-prompt-surface.html" data-id="poc-agent-prompt-surface">Agent Prompt と Scenario 制約</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">シナリオ</div>
+      <ul>
+        <li><a href="scenario-ictsc5023.html" data-id="scenario-ictsc5023">ICTSC 5023</a></li>
+      </ul>
+    </div>
+  </aside>
+  <main class="content">
+    <div class="breadcrumb"><a href="index.html">Wiki</a> / レポート / 卒研予算概算</div>
+    <h1 id="卒業研究-予算概算レポート-2026-05-29">卒業研究
+    予算概算レポート (2026-05-29)</h1>
+    <p>作成日: 2026-05-29 目的:
+    卒業研究の予算獲得（稟議・申請）に用いる、残期間（2026-05 〜 2027-02
+    提出）の総コスト概算と、日本の公立学校機関で通しやすい支払い方法の整理。
+    基礎資料: <a href="report-phase1-cost.html">Phase 1
+    比較実験コスト</a>, <a
+    href="report-local-experiment-cost.html">局所実験コスト</a>, <a
+    href="report-selfcritique-gpt54-local.html">GPT-5.4 self-critique
+    局所実験</a>, <a href="report-planner-escalation-cost.html">Planner
+    Escalation コスト比較</a>, <a
+    href="roadmap-next-steps.html">次のステップ計画</a></p>
+    <h2 id="0-要約-tldr">0. 要約 (TL;DR)</h2>
+    <ul>
+    <li>本研究で発生する変動費は実質 <strong>LLM API
+    従量課金のみ</strong>。実験はローカルの Docker / <code>.venv</code>
+    で完結しており、クラウド
+    GPU・VM・ストレージ・有償ソフトのコストは発生していない。</li>
+    <li>実測コストアンカー（過去レポート）から積み上げた結果、<strong>余裕を持った上限で約
+    $150（約 ¥25,000）</strong>。現実的には ¥10,000
+    前後で収まる見込み。</li>
+    <li><strong>推奨申請額: ¥30,000〜50,000</strong>（上限申請 +
+    余り返却の運用が安全。途中で枯渇すると実験が止まるため）。</li>
+    <li><strong>推奨支払い方法:
+    国内クラウド代理店経由の「日本円・請求書払い（適格請求書あり）」</strong>。プリペイドカード経由は「ギリギリ通るかもしれない」ライン（換金性の懸念あり）。海外クレジットカード直決済・現金・汎用ギフトコードは公費では通りにくい。</li>
+    </ul>
+    <h2 id="1-前提条件と算定方針">1. 前提条件と算定方針</h2>
+    <ul>
+    <li>対象期間: 2026-05-29 〜 2027-02 提出。</li>
+    <li>対象コスト: LLM API 利用料（役務）のみ。compute
+    はローカル実行のためゼロ計上。</li>
+    <li>為替: 1 USD = <strong>¥160</strong> で保守換算（2026-05-29 実勢
+    約 ¥159.4、わずかに円安側に丸めて余裕を確保）。</li>
+    <li>単価: 各社 API の標準オンデマンド定価を使用。<strong>OpenAI
+    の無料デイリートークン枠は計上しない</strong>（=実支払いはこれより安くなる方向。安全側の見積もり）。</li>
+    <li>税・手数料: 代理店経由では消費税 10% と為替手数料が乗るため、JPY
+    換算後に切り上げて吸収する。</li>
+    <li>iteration 方針: 既定 <code>repeat 3</code>、本研究では 95% CI
+    を厚くするため <code>repeat 5</code>
+    まで上げうるので、上限見積もりは <strong>repeat
+    5・全シナリオ</strong> で計算する。</li>
+    </ul>
+    <h2 id="2-実測コストアンカー">2. 実測コストアンカー</h2>
+    <p>過去の実 API 実験レポートから、定価換算（OpenAI
+    無料枠は無視）の実測値:</p>
+    <table>
+    <thead>
+    <tr>
+    <th>実測ソース</th>
+    <th>構成</th>
+    <th style="text-align: right;">1セット (8シナリオ×repeat1)</th>
+    <th style="text-align: right;">1 run 平均</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td><a href="report-local-experiment-cost.html">局所実験
+    20260419</a></td>
+    <td>multi-agent (Gemini planner)</td>
+    <td style="text-align: right;">$0.45</td>
+    <td style="text-align: right;">$0.057</td>
+    </tr>
+    <tr>
+    <td><a href="report-selfcritique-gpt54-local.html">self-critique
+    gpt-5.4 20260509</a></td>
+    <td>single-agent gpt-5.4</td>
+    <td style="text-align: right;">$0.21</td>
+    <td style="text-align: right;">$0.026</td>
+    </tr>
+    <tr>
+    <td><a href="report-planner-escalation-cost.html">Planner Escalation
+    20260520</a></td>
+    <td>gpt-5.5 planner 単発 run</td>
+    <td style="text-align: right;">–</td>
+    <td style="text-align: right;">$0.05–0.08</td>
+    </tr>
+    </tbody>
+    </table>
+    <p>参考単価 (1M tokens, 定価):</p>
+    <table>
+    <thead>
+    <tr>
+    <th>Model</th>
+    <th style="text-align: right;">入力</th>
+    <th style="text-align: right;">出力</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td><code>gpt-5.5</code></td>
+    <td style="text-align: right;">$5.00</td>
+    <td style="text-align: right;">$30.00</td>
+    </tr>
+    <tr>
+    <td><code>gpt-5.4</code></td>
+    <td style="text-align: right;">$2.50</td>
+    <td style="text-align: right;">$15.00</td>
+    </tr>
+    <tr>
+    <td><code>gpt-5.4-mini</code></td>
+    <td style="text-align: right;">$0.75</td>
+    <td style="text-align: right;">$4.50</td>
+    </tr>
+    <tr>
+    <td><code>gpt-4.1-mini</code></td>
+    <td style="text-align: right;">$0.40</td>
+    <td style="text-align: right;">$1.60</td>
+    </tr>
+    <tr>
+    <td><code>claude-sonnet-4-6</code></td>
+    <td style="text-align: right;">$3.00</td>
+    <td style="text-align: right;">$15.00</td>
+    </tr>
+    <tr>
+    <td><code>gemini-3-flash-preview</code></td>
+    <td style="text-align: right;">$0.50</td>
+    <td style="text-align: right;">$3.00</td>
+    </tr>
+    </tbody>
+    </table>
+    <h2 id="3-条件別の単価見積もり">3. 条件別の単価見積もり</h2>
+    <p>Experiment 2 は planner を <code>gpt-5.4</code>（旧レポートの安い
+    Gemini planner より高単価）にするため、実測アンカーから引き直す。1
+    run のトークン量は Planner Escalation レポートの実測（scenario n, 2
+    turn: planner in 7.7k/out 1.1k, reviewer・judge 各 in 4k/out
+    0.4k）を基準に、簡単シナリオ（v/w/x = 1
+    turn）と難シナリオ（m/n/o/r/u = 3–5 turn）を混ぜた blended
+    値で算出。</p>
+    <table>
+    <thead>
+    <tr>
+    <th>条件</th>
+    <th>構成</th>
+    <th style="text-align: right;">1 run 平均（blended）</th>
+    <th style="text-align: right;">8シナリオ×repeat1</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>2-A one-shot</td>
+    <td>gpt-5.4 単体</td>
+    <td style="text-align: right;">$0.026</td>
+    <td style="text-align: right;">$0.21</td>
+    </tr>
+    <tr>
+    <td>2-B self-critique</td>
+    <td>gpt-5.4 単体</td>
+    <td style="text-align: right;">$0.026</td>
+    <td style="text-align: right;">$0.21</td>
+    </tr>
+    <tr>
+    <td>2-C reviewer-only</td>
+    <td>planner+reviewer 共に gpt-5.4</td>
+    <td style="text-align: right;">$0.075</td>
+    <td style="text-align: right;">$0.60</td>
+    </tr>
+    <tr>
+    <td>2-D reviewer+judge</td>
+    <td>planner/reviewer/judge 共に gpt-5.4</td>
+    <td style="text-align: right;">$0.094</td>
+    <td style="text-align: right;">$0.75</td>
+    </tr>
+    <tr>
+    <td>2-E role-split</td>
+    <td>planner gpt-5.4 / reviewer Claude / judge gpt-5.4-mini / triage
+    Gemini</td>
+    <td style="text-align: right;">$0.081</td>
+    <td style="text-align: right;">$0.65</td>
+    </tr>
+    <tr>
+    <td><strong>5 条件合計</strong></td>
+    <td></td>
+    <td style="text-align: right;"></td>
+    <td style="text-align: right;"><strong>$2.42 / repeat1
+    サイクル</strong></td>
+    </tr>
+    </tbody>
+    </table>
+    <ul>
+    <li>Experiment 2（5 条件 × 8 シナリオ）: repeat3 ≈ <strong><span
+    class="math inline">7 * *、<em>r</em><em>e</em><em>p</em><em>e</em><em>a</em><em>t</em>5 ≈ **</span>12</strong>（iteration
+    policy の「repeat3 で $6–18」と整合）。</li>
+    <li>Experiment 3（Planner Escalation, <code>gpt-5.5</code>
+    多用で高単価）: 3 条件 × 8 シナリオ、blended 約 <span
+    class="math inline">0.10/<em>r</em><em>u</em><em>n</em>。<em>r</em><em>e</em><em>p</em><em>e</em><em>a</em><em>t</em>3 ≈ **</span>7**、repeat5
+    ≈ <strong>$12</strong>。</li>
+    </ul>
+    <h2 id="4-残実験の物量と総額余裕込み">4.
+    残実験の物量と総額（余裕込み）</h2>
+    <p>再走行（parser 修正・コード変更・Docker 失敗による pilot
+    切り分け）は過去レポートで頻発しているため、フル再実験 1
+    回分のバッファを明示的に積む。</p>
+    <table>
+    <thead>
+    <tr>
+    <th>項目</th>
+    <th>内訳</th>
+    <th style="text-align: right;">概算 (USD)</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>Experiment 2 本比較</td>
+    <td>5 条件 × 8 シナリオ × <strong>repeat 5</strong></td>
+    <td style="text-align: right;">$15</td>
+    </tr>
+    <tr>
+    <td>Experiment 3 Planner Escalation</td>
+    <td>3 条件 × 8 シナリオ × repeat 5（<code>gpt-5.5</code>）</td>
+    <td style="text-align: right;">$15</td>
+    </tr>
+    <tr>
+    <td>pilot / preflight smoke</td>
+    <td>各バッチ前の予備走行</td>
+    <td style="text-align: right;">$10</td>
+    </tr>
+    <tr>
+    <td>フル再実験バッファ</td>
+    <td>コード変更・parser 修正・Docker 失敗での 1 回フル回し直し</td>
+    <td style="text-align: right;">$30</td>
+    </tr>
+    <tr>
+    <td>Y1/Z1 シナリオ追加</td>
+    <td>追加 2 シナリオ × 複数条件 × repeat</td>
+    <td style="text-align: right;">$15</td>
+    </tr>
+    <tr>
+    <td>ケーススタディ / turn-by-turn</td>
+    <td>代表 1–2 シナリオの詳細走行</td>
+    <td style="text-align: right;">$5</td>
+    </tr>
+    <tr>
+    <td>卒論本文化フェーズの再現走行</td>
+    <td>図表確定・査読対応</td>
+    <td style="text-align: right;">$10</td>
+    </tr>
+    <tr>
+    <td>開発・デバッグ用 API 呼び出し</td>
+    <td>実装修正に伴う動作確認</td>
+    <td style="text-align: right;">$15</td>
+    </tr>
+    <tr>
+    <td>小計</td>
+    <td></td>
+    <td style="text-align: right;"><strong>$115</strong></td>
+    </tr>
+    <tr>
+    <td>予備費 30%</td>
+    <td>価格改定・為替・無料枠廃止リスク</td>
+    <td style="text-align: right;">$35</td>
+    </tr>
+    <tr>
+    <td><strong>合計</strong></td>
+    <td></td>
+    <td style="text-align: right;"><strong>約 $150</strong></td>
+    </tr>
+    </tbody>
+    </table>
+    <h2 id="5-段階別総額-usd--jpy">5. 段階別総額 (USD / JPY)</h2>
+    <p>1 USD = ¥160、税・手数料込みで切り上げ。</p>
+    <table>
+    <thead>
+    <tr>
+    <th>シナリオ</th>
+    <th style="text-align: right;">USD</th>
+    <th style="text-align: right;">JPY</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>最小（計画どおり repeat 3 のみ）</td>
+    <td style="text-align: right;">$25–30</td>
+    <td style="text-align: right;">約 ¥5,000</td>
+    </tr>
+    <tr>
+    <td>現実的（通常の再走行込み）</td>
+    <td style="text-align: right;">$60–80</td>
+    <td style="text-align: right;">約 ¥10,000–13,000</td>
+    </tr>
+    <tr>
+    <td><strong>余裕を持った上限</strong></td>
+    <td style="text-align: right;"><strong>$150</strong></td>
+    <td style="text-align: right;"><strong>約 ¥25,000</strong></td>
+    </tr>
+    </tbody>
+    </table>
+    <h2 id="6-推奨申請額">6. 推奨申請額</h2>
+    <ul>
+    <li><strong>推奨: ¥30,000〜50,000
+    を上限として申請し、余りは返却</strong>。</li>
+    <li>理由: 実額は
+    ¥1万前後に収まる見込みだが、研究費は「実験の途中で枯渇して中断する」方が致命的。為替の円安振れ・OpenAI
+    無料枠廃止・モデル価格改定にも耐えられる余裕を確保する。</li>
+    <li>¥5万でも卒研の API 費としては十分に小さく、稟議上も「LLM API
+    従量課金（役務）」の一本で説明しやすい。</li>
+    </ul>
+    <h2 id="7-支払い方法公立機関で通る順">7.
+    支払い方法（公立機関で通る順）</h2>
+    <p>公立学校機関の物品・役務調達では、<strong>現金化が容易なもの・海外クレジットカード直決済は弾かれやすい</strong>。以下、通りやすい順。最終的には所属機関の会計規程に依存するため、<strong>会計・事務窓口および指導教員への事前確認を必須</strong>とする。</p>
+    <h3
+    id="-第1候補-国内クラウド代理店経由の日本円請求書払い適格請求書あり">◎
+    第1候補:
+    国内クラウド代理店経由の「日本円・請求書払い（適格請求書あり）」</h3>
+    <p>最も確実に通るルートで、プリペイドのグレーゾーンを完全に回避できる。3
+    社のモデルは代理店経由のクラウド基盤から同じファミリーへアクセスできる。</p>
+    <table>
+    <thead>
+    <tr>
+    <th>モデルファミリー</th>
+    <th>経由する基盤</th>
+    <th>国内代理店の例</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>Claude (reviewer)</td>
+    <td>Amazon Bedrock</td>
+    <td>クラスメソッド / SB C&amp;S / NTT 系など</td>
+    </tr>
+    <tr>
+    <td>GPT 系 (planner / judge)</td>
+    <td>Azure OpenAI Service</td>
+    <td>Microsoft 国内 CSP パートナー、JIG-SAW Prime など</td>
+    </tr>
+    <tr>
+    <td>Gemini (planner / triage)</td>
+    <td>Google Cloud Vertex AI</td>
+    <td>クラウドエース / 吉積情報など GCP 代理店</td>
+    </tr>
+    </tbody>
+    </table>
+    <p>メリット: ①日本円建て
+    ②適格請求書（インボイス番号付き）③後払い請求書
+    ④物品・役務調達の通常フローに乗る。 補足: Azure OpenAI は OpenAI
+    直販と異なり<strong>請求書払いに対応</strong>。JIG-SAW Prime
+    のような請求代行を使うと Azure
+    利用料を円建て請求書で支払え、割引が付く例もある。 注意点（技術）:
+    実験コードは現在 OpenAI / Anthropic / Google の<strong>ネイティブ
+    SDK</strong> を直接呼んでいる（<code>.env.example</code>
+    参照）。Bedrock / Azure / Vertex
+    へはエンドポイント・認証の切替が必要。モデル
+    ID（<code>claude-sonnet-4-6</code> / <code>gpt-5.x</code> /
+    <code>gemini-3-flash-preview</code>）はほぼ対応物があるため移行コストは中程度。</p>
+    <h3 id="-第2候補-直販--適格請求書による立替精算">○ 第2候補: 直販 +
+    適格請求書による立替精算</h3>
+    <ul>
+    <li>OpenAI は <strong>2025-01
+    に適格請求書発行事業者登録を完了</strong>（登録番号
+    T4700150127989）。発行される請求書は仕入税額控除の要件を満たし、2025-01-01
+    以降の課金には消費税 10% が加算される。</li>
+    <li>ただし<strong>支払い手段はクレジットカードのみ</strong>のため、個人（または研究室）が立替払いし、適格請求書を添えて精算する形になる。換金性がなく証憑も明確なので、立替を認める機関では数千円規模なら最も手間が軽い。</li>
+    <li>Anthropic
+    直販の日本向け適格請求書対応は機関側で要確認。確実性を取るなら第1候補（代理店請求書）に寄せる。</li>
+    </ul>
+    <h3
+    id="-第3候補-プリペイドカード経由ギリギリ通るかもしれないライン">△
+    第3候補:
+    プリペイドカード経由（「ギリギリ通るかもしれない」ライン）</h3>
+    <p>Visa/Mastercard
+    プリペイド（Vプリカ・バンドルカード等）を<strong>物品として購入</strong>
+    → OpenAI/Anthropic に登録 →
+    クレジット購入。「海外クレカ決済」を「国内物品購入」に変換できるのが狙い。</p>
+    <ul>
+    <li>リスク:
+    プリペイドは<strong>換金性あり</strong>として公費購入を規程で禁じている機関が多い。通すなら
+    ①用途を「API 役務購入」と明記
+    ②使い切り額だけチャージし残高を残さない ③カードと API
+    利用明細の両方を証憑として保存。</li>
+    </ul>
+    <h3 id="-通りにくい">✕ 通りにくい</h3>
+    <ul>
+    <li>海外クレジットカード直接決済 / 現金 /
+    汎用ギフトコード（換金性・調達フロー上の問題）。</li>
+    </ul>
+    <h2 id="8-申請時の説明テンプレそのまま使える要旨">8.
+    申請時の説明テンプレ（そのまま使える要旨）</h2>
+    <blockquote>
+    <p>本研究「LLM
+    マルチエージェント協調を用いた自律型インフラ応急修復システム」では、エージェント構成の違いが復旧成功率・安全制約・コストに与える影響を比較するため、商用
+    LLM の API
+    を従量課金で利用する。実験計算機はローカル環境で完結し、追加のハードウェア・クラウド計算資源は要しない。必要経費は
+    API 利用料（役務）のみで、残期間（〜2027-02）の総額は余裕を見て
+    <strong>¥30,000〜50,000</strong>
+    を見込む。支払いは国内クラウド代理店を通じた日本円・請求書払い（適格請求書）を予定する。</p>
+    </blockquote>
+    <h2 id="9-確認事項事務指導教員へ">9.
+    確認事項（事務・指導教員へ）</h2>
+    <ul>
+    <li>「国内クラウド代理店経由のクラウド従量課金（Azure OpenAI /
+    Amazon Bedrock / Vertex
+    AI）を<strong>請求書払い</strong>できるか」を会計・事務窓口に先に確認する。</li>
+    <li>立替払いの上限額・適格請求書要件（インボイス番号必須か）を確認する。</li>
+    <li>プリペイドカード購入が公費で認められるか（多くの機関で換金性により制限）を確認する。</li>
+    <li>規程は機関ごとに異なるため、本レポートの方法論は一般的指針として扱い、最終判断は所属機関の規程に従う。</li>
+    </ul>
+    <h2 id="価格為替ソース">価格・為替ソース</h2>
+    <ul>
+    <li>OpenAI モデル価格: <a
+    href="https://developers.openai.com/api/docs/models/">https://developers.openai.com/api/docs/models/</a></li>
+    <li>Anthropic Claude 価格: <a
+    href="https://platform.claude.com/docs/en/about-claude/pricing">https://platform.claude.com/docs/en/about-claude/pricing</a></li>
+    <li>Google Gemini 価格: <a
+    href="https://ai.google.dev/gemini-api/docs/pricing">https://ai.google.dev/gemini-api/docs/pricing</a></li>
+    <li>OpenAI 適格請求書 / 日本の消費税: <a
+    href="https://help.openai.com/ja-jp/articles/10242647-the-japanese-consumption-tax-on-your-openai-invoices">OpenAI
+    Help (JCT)</a></li>
+    <li>USD/JPY 実勢 (2026-05-29, 約 ¥159.4): <a
+    href="https://www.boj.or.jp/en/statistics/market/forex/fxdaily/fxlist/index.htm">Bank
+    of Japan FX daily</a>, <a
+    href="https://tradingeconomics.com/japan/currency">Trading Economics
+    JPY</a></li>
+    <li>国内代理店の日本円・請求書払い例 (Azure): <a
+    href="https://ops.jig-saw.com/service/cloud/payment/azure">JIG-SAW
+    Prime</a>, <a
+    href="https://licensecounter.jp/azure/blog/azure-basic-knowledge/azure-openai-service.html">SB
+    C&amp;S Azure OpenAI 解説</a></li>
+    </ul>
+    <h2 id="関連ドキュメント">関連ドキュメント</h2>
+    <ul>
+    <li><a href="roadmap-next-steps.html">2026-05-21
+    次のステップ計画</a> — 残り実験 (Experiment 2 / 3, Y1/Z1)
+    の規模と条件。本概算の数量根拠。</li>
+    <li><a href="current-status.html">2026-05-08 現在地</a> —
+    進捗と残タスク。</li>
+    <li>コストレポート: <a href="report-phase1-cost.html">Phase 1</a>,
+    <a href="report-local-experiment-cost.html">局所実験</a>, <a
+    href="report-selfcritique-gpt54-local.html">self-critique
+    GPT-5.4</a>, <a href="report-planner-escalation-cost.html">Planner
+    Escalation</a></li>
+    </ul>
+    <div class="footer">
+      <span>Safe Emergency Recovery Experiment — Research Wiki</span>
+      <span>ソース: <a href="../reports/budget_estimate_2026.md">../reports/budget_estimate_2026.md</a></span>
+    </div>
+  </main>
+</div>
+<script src="wiki.js"></script>
+</body>
+</html>

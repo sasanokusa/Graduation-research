@@ -17,6 +17,8 @@ s|\.\./reports/experiment2_3_escalation_comparison_20260527\.md|report-experimen
 s|docs/reports/experiment2_3_escalation_comparison_20260527\.md|report-experiment2-3-escalation.html|g
 s|\.\./reports/agent_prompt_and_scenario_surface_20260521\.md|poc-agent-prompt-surface.html|g
 s|docs/reports/agent_prompt_and_scenario_surface_20260521\.md|poc-agent-prompt-surface.html|g
+s|\.\./reports/budget_estimate_2026\.md|report-budget-2026.html|g
+s|docs/reports/budget_estimate_2026\.md|report-budget-2026.html|g
 s|implementation_roadmap_20260316\.md|roadmap-initial.html|g
 s|implementation_roadmap_revised_20260415\.md|roadmap-revised.html|g
 s|hypothesis_transition_evaluation\.md|evaluation-hypothesis-transition.html|g
