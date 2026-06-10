@@ -3,6 +3,7 @@ import pytest
 from agents.judge import _judge_prompt
 from agents.reviewer import _reviewer_prompt
 from core.history_compaction import (
+    compact_incident_blackboard,
     compact_planner_history,
     compact_reviewer_history,
     history_tail,
@@ -111,6 +112,69 @@ def test_reviewer_prompt_respects_history_tail(monkeypatch: pytest.MonkeyPatch) 
     assert len(compact_prompt) < len(full_prompt)
     assert "long raw planner output 1" not in compact_prompt
     assert "long raw planner output 3" in compact_prompt
+
+
+def _blackboard(turns: int) -> dict:
+    return {
+        "schema_version": 1,
+        "agent_roles": [{"role": "observer_agent", "responsibility": "..."}],
+        "observations": [
+            {
+                "turn": turn,
+                "source": "sensor",
+                "front_most_failure": "api_items_500",
+                "healthz_status": 200,
+                "api_items_status": 500,
+                "current_state_evidence": [f"evidence {turn} " + "x" * 200],
+                "historical_evidence": [f"old log {turn}"],
+            }
+            for turn in range(1, turns + 1)
+        ],
+        "hypotheses": [
+            {
+                "turn": turn,
+                "detected_fault_class": "app_config_or_env_mismatch",
+                "detection_confidence": 0.8,
+                "suspected_domains": [{"domain": "app", "evidence": ["e" * 300]}],
+                "candidate_scope": {"files": ["app/app.env"]},
+                "summary": f"hypothesis summary {turn}",
+            }
+            for turn in range(1, turns + 1)
+        ],
+        "turn_events": [{"turn": turn, "stop_reason": ""} for turn in range(1, turns + 1)],
+        "active_scope": {"files": ["app/app.env"]},
+    }
+
+
+def test_blackboard_compaction_disabled_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("MULTI_AGENT_HISTORY_TAIL", raising=False)
+    blackboard = _blackboard(4)
+    assert compact_incident_blackboard(blackboard) is blackboard
+
+
+def test_blackboard_compaction_digests_old_heavy_entries(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("MULTI_AGENT_HISTORY_TAIL", "1")
+    blackboard = _blackboard(4)
+    compacted = compact_incident_blackboard(blackboard)
+    assert compacted["observations"][-1] == blackboard["observations"][-1]
+    for digest in compacted["observations"][:-1]:
+        assert digest["compacted"] is True
+        assert "current_state_evidence" not in digest
+        assert digest["front_most_failure"] == "api_items_500"
+    for digest in compacted["hypotheses"][:-1]:
+        assert "suspected_domains" not in digest
+        assert digest["summary"].startswith("hypothesis summary")
+    assert compacted["turn_events"] == blackboard["turn_events"]
+    assert compacted["active_scope"] == blackboard["active_scope"]
+    assert compacted["schema_version"] == 1
+
+
+def test_blackboard_compaction_leaves_short_lists_alone(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("MULTI_AGENT_HISTORY_TAIL", "2")
+    blackboard = _blackboard(2)
+    compacted = compact_incident_blackboard(blackboard)
+    assert compacted["observations"] == blackboard["observations"]
+    assert compacted["hypotheses"] == blackboard["hypotheses"]
 
 
 def test_judge_prompt_respects_history_tail(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -20,7 +20,7 @@ from core.policies import RESULTS_DIR, SCENARIO_DEFINITIONS_PATH
 from core.prompts import PROMPT_REGISTRY, get_prompt_spec
 from core.scenario_context import build_worker_visible_context, get_worker_context_mode_name
 from core.state import SingleAgentState
-from core.triage import build_triage_result, build_triage_result_llm
+from core.triage import build_triage_result, build_triage_result_llm, resolve_effective_triage_mode
 from core.verifier import run_postcheck, run_precheck
 
 
@@ -38,11 +38,13 @@ def load_scenario_definitions() -> dict[str, dict]:
 
 def triage_node(state: SingleAgentState) -> SingleAgentState:
     scenario_definitions = load_scenario_definitions()
-    triage_mode = state.get("triage_mode", "rule")
-    if triage_mode == "llm":
+    effective_triage_mode, triage_llm_capped = resolve_effective_triage_mode(state)
+    if effective_triage_mode == "llm":
         triage = build_triage_result_llm(state["observation"])
     else:
         triage = build_triage_result(state["observation"])
+    if triage_llm_capped:
+        triage["triage_llm_capped"] = True
     evaluator_mapping = resolve_internal_scenario(
         requested_scenario=state["requested_scenario"],
         scenario_definitions=scenario_definitions,
@@ -71,6 +73,7 @@ def triage_node(state: SingleAgentState) -> SingleAgentState:
         "token_usage": triage.get("triage_token_usage", {}),
         "triage_mode": triage.get("triage_mode", "rule"),
         "triage_llm_fallback": triage.get("triage_llm_fallback", False),
+        "triage_llm_capped": triage.get("triage_llm_capped", False),
         "triage_provider": triage.get("triage_provider", ""),
         "triage_model": triage.get("triage_model", ""),
     }

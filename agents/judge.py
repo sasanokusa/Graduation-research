@@ -10,7 +10,11 @@ from typing import Any
 from core.agent_factory import build_chat_model_binding
 from core.agent_roles import AgentRole
 from core.escalation import planner_escalation_request_from_judge
-from core.history_compaction import compact_planner_history, compact_reviewer_history
+from core.history_compaction import (
+    compact_incident_blackboard,
+    compact_planner_history,
+    compact_reviewer_history,
+)
 from core.hypothesis import annotate_latest_hypothesis
 from core.llm_usage import extract_token_usage
 from core.state import SingleAgentState
@@ -111,7 +115,7 @@ def _judge_prompt(state: SingleAgentState) -> str:
         "reviewer_history": compact_reviewer_history(state.get("reviewer_history", [])),
         "candidate_scope": state.get("candidate_scope", {}),
         "ambiguity_level": state.get("ambiguity_level", ""),
-        "incident_blackboard": state.get("incident_blackboard", {}),
+        "incident_blackboard": compact_incident_blackboard(state.get("incident_blackboard", {})),
     }
     return (
         "Evaluate the reviewer's decision and decide whether to accept or override it.\n"

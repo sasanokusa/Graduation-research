@@ -66,3 +66,44 @@ def compact_planner_history(entries: list[dict[str, Any]]) -> list[dict[str, Any
 
 def compact_reviewer_history(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return _compact(entries, _REVIEWER_DIGEST_KEYS)
+
+
+# Heavy lists carry full evidence / scope / reasoning per entry; their old
+# entries digest to these keys. Lists absent here (turn_events,
+# failure_history, additional_observation_requests, ...) stay untouched
+# because they are already compact.
+_BLACKBOARD_DIGEST_KEYS: dict[str, tuple[str, ...]] = {
+    "observations": (
+        "turn",
+        "source",
+        "front_most_failure",
+        "healthz_status",
+        "api_items_status",
+        "topology_status",
+        "additional_observation_count",
+    ),
+    "hypotheses": (
+        "turn",
+        "detected_fault_class",
+        "detection_confidence",
+        "ambiguity_level",
+        "summary",
+    ),
+    "repair_candidates": ("turn", "summary", "planner_error_type"),
+    "execution_results": ("turn", "ok", "rollback_used"),
+    "verification_results": ("turn", "stage", "ok", "front_most_failure"),
+    "reviewer_guidance": ("turn", "decision", "feedback_for_planner"),
+    "judge_decisions": ("turn", "decision", "override"),
+}
+
+
+def compact_incident_blackboard(blackboard: dict[str, Any]) -> dict[str, Any]:
+    tail = history_tail()
+    if tail <= 0 or not blackboard:
+        return blackboard
+    compacted = dict(blackboard)
+    for key, digest_keys in _BLACKBOARD_DIGEST_KEYS.items():
+        entries = blackboard.get(key)
+        if isinstance(entries, list) and len(entries) > tail:
+            compacted[key] = _compact(entries, digest_keys)
+    return compacted

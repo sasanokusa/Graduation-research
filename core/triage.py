@@ -1,3 +1,4 @@
+import os
 import re
 from typing import Any
 
@@ -752,3 +753,36 @@ def build_triage_result_llm(
         "triage_model": llm_metadata.get("model", ""),
         "triage_token_usage": llm_metadata.get("token_usage", {}),
     }
+
+
+def triage_llm_max_calls_per_run() -> int:
+    raw = os.environ.get("TRIAGE_LLM_MAX_CALLS_PER_RUN", "0")
+    try:
+        return max(int(raw), 0)
+    except ValueError:
+        return 0
+
+
+def resolve_effective_triage_mode(state: dict[str, Any]) -> tuple[str, bool]:
+    """Resolve the triage mode for the next triage call.
+
+    LLM triage re-runs after every additional observation and turn, so a
+    multi-turn run can invoke it many times. TRIAGE_LLM_MAX_CALLS_PER_RUN
+    bounds the LLM invocations per run; once the cap is reached the run
+    falls back to rule triage. 0 (default) keeps unlimited LLM calls.
+    Returns (effective_mode, llm_call_capped).
+    """
+    mode = str(state.get("triage_mode", "rule"))
+    if mode != "llm":
+        return mode, False
+    cap = triage_llm_max_calls_per_run()
+    if cap <= 0:
+        return "llm", False
+    used = sum(
+        1
+        for snapshot in state.get("triage_iterations", [])
+        if str(snapshot.get("triage_mode", "")).startswith("llm")
+    )
+    if used >= cap:
+        return "rule", True
+    return "llm", False

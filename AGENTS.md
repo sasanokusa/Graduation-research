@@ -383,6 +383,7 @@ multi-turn run では reviewer / judge の入力に全 `planner_history` / `revi
 
 - `MULTI_AGENT_HISTORY_TAIL=0` (デフォルト): 従来どおり全履歴を埋め込む。既存実験と同条件
 - `MULTI_AGENT_HISTORY_TAIL=N` (N>=1): 直近 N ターン分の履歴 entry を全文のまま残し、それより古い entry は digest (`turn`, `summary`, `decision`, ok フラグ, `proposed_action_count` など) に畳む
+- 同じ N で `incident_blackboard` の重いリスト (`observations`, `hypotheses`, `repair_candidates`, `execution_results`, `verification_results`, `reviewer_guidance`, `judge_decisions`) も「直近 N 件全文 + 古い件は digest」に畳む。2026-06-10 の smoke 分析で、ターンごとの入力増加の主因は履歴 entry よりも blackboard (特に `hypotheses` と `observations` の evidence 重複) だと判明したため
 
 運用ルール:
 
@@ -395,6 +396,8 @@ multi-turn run では reviewer / judge の入力に全 `planner_history` / `revi
 `multi_agent.py` の triage は `--triage-mode` (default `rule`) で制御する。`observe_runs.sh` は CLI 引数を転送しないため、実験から有効化する場合は `TRIAGE_MODE=llm` を env で渡す (`TRIAGE_MODE=llm` のときだけ default が `llm` になる)。LLM triage は `TRIAGE_PROVIDER` / `TRIAGE_MODEL` を使い、呼び出し失敗時は rule triage へ fallback して `triage_llm_fallback=true` が記録される。
 
 注意: 2026-05 の Experiment 1 / 2 / 3 はすべて rule triage で実行された。`TRIAGE_PROVIDER=google` を指定していた command でも LLM triage は動いていない (triage token usage が 0 であることと整合)。LLM triage を使った run は rule triage の既存結果と区別して報告する。
+
+LLM triage は初回観測・追加観測・各ターンのたびに再実行されるため、multi-turn run では 1 run に 7 回以上呼ばれうる (2026-06-10 smoke の `r` で実測 7 回)。`TRIAGE_LLM_MAX_CALLS_PER_RUN=N` で 1 run あたりの LLM triage 呼び出しを N 回に制限でき、超過後は rule triage に切り替わり snapshot に `triage_llm_capped=true` が記録される。`0` (デフォルト) は無制限。
 
 ## Common Aggregation Commands
 
