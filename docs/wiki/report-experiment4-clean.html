@@ -296,7 +296,55 @@
     を観測修正なしの Experiment 2 baseline
     と直接比較するのは不適切で、本比較では「multi-turn
     構成の回復価値」を示す対照として扱う。</p>
-    <h3 id="4-安全指標">4. 安全指標</h3>
+    <h3
+    id="4-self-critique-の強さの解釈-効いているのは役割分散ではなく反復観測">4.
+    self-critique の強さの解釈:
+    効いているのは役割分散ではなく反復観測</h3>
+    <p>self-critique (23/24) は role-split (24/24)
+    に肉薄したが、両者の実装差を正確に押さえる必要がある。</p>
+    <ul>
+    <li>self-critique
+    は「全役割の単一エージェント化」ではなく、<strong>planner と
+    reviewer を同一モデル・同一エージェントが兼任する</strong>構成である
+    (<code>agents/self_critic.py</code>)。批判の判定ロジック
+    (<code>parse_reviewer_text</code>、retry/stop、scope 推奨) は
+    reviewer と共通で、システムプロンプトのみ「別人格の reviewer
+    を立てず自己批判せよ」と指示している。judge 層と triage の LLM
+    化は持たない。</li>
+    <li>したがって self-critique と one-shot の差 (23/24 vs 1/24)
+    が示すのは**「再観測して計画し直すループの存在」そのものの価値<strong>であり、self-critique
+    と role-split の差 (<code>u</code> の 2/3 vs 3/3 のみ)
+    が示すのが</strong>批判役を外部化・別モデル化することの追加価値**である。本ベンチでは前者が支配的で、後者は誤仮説固着が起きた局面に限定して現れる。</li>
+    <li>この結果は MAST (Cemri et al. 2025) の「multi-agent 構成の優位は
+    single-agent
+    比で自明でない」という指摘と整合する。卒論では「協調の本質は役割分散より反復観測にあり、役割分散は固着破りの保険として効く」と整理できる。</li>
+    </ul>
+    <h3
+    id="5-self-critique-唯一の失敗-u_3-自己批判は自分の仮説を覆せないことがある">5.
+    self-critique 唯一の失敗 (<code>u_3</code>):
+    自己批判は自分の仮説を覆せないことがある</h3>
+    <p><code>u_3</code> は 2 ターンとも edit を出さない empty_plan
+    で失敗した。<code>MySQL connection refused to 127.0.0.1</code> の
+    evidence から「DB host 誤設定」仮説に到達した後、turn 2
+    でも同じ仮説・同じ観測範囲に留まり、安全側停止した。成功した
+    <code>u_1</code>/<code>u_2</code> は 3 ターン使い「DB host 修正 →
+    露出した SQL typo を再観測して修正」と段階を踏んでいる。</p>
+    <p>role-split の <code>u</code> 3/3 では、Claude reviewer が「DB
+    接続は回復済み、残るは query bug」と修正 scope
+    を明示的に押し直しており、<strong>外部化された批判者が初期仮説の固着を破る</strong>動きが観測できる。<code>u</code>
+    は本実験で唯一、役割分散の追加価値が成功率に現れたシナリオであり、turn-by-turn
+    ケーススタディの第一候補である
+    (<code>m</code>/<code>o</code>/<code>r</code> =
+    観測解放の例、<code>v</code>/<code>w</code> = one-shot
+    脆性の例と並ぶ)。</p>
+    <h3 id="6-公平性の傍証">6. 公平性の傍証</h3>
+    <p>one-shot の 1/24
+    という低さは、隠れた正解情報が一切渡っていないことの傍証でもある。仮に修正内容に近い情報が
+    prompt に混入していれば、回復ターンのない one-shot
+    こそ高成功率になるはずだが、実際は観測粒度の罠 1
+    つで全滅している。blind prompt / forced scenario / restore
+    禁止の統制が機能している。</p>
+    <h3 id="7-安全指標">7. 安全指標</h3>
     <table>
     <thead>
     <tr>
@@ -450,8 +498,13 @@
     topology snippet を実ファイル連続ブロックで出す、または planner
     に単一行 replacement を促す修正。これを入れれば one-shot の v/w
     も回復し、観測増加の副作用を消せるかを別途検証する。</li>
-    <li>中間発表用に 5 条件 → 3 条件 (one-shot / reviewer+judge /
-    role-split) への畳み込み提示を検討。</li>
+    <li>中間発表の畳み込みは <strong>one-shot / self-critique /
+    role-split</strong> の 3 条件を推奨する。「単発 → 反復
+    (単一エージェント) → 反復 + 役割分散」と複雑さが 1 軸で増え、(a)
+    反復観測の価値 (1/24 → 23/24)、(b)
+    役割分散の追加価値は固着破りに限定 (<code>u</code>)、という本実験の
+    2 つの主張をそのまま提示できる。reviewer-only / reviewer+judge
+    は本文の表にのみ残す。</li>
     </ul>
     <div class="footer">
       <span>Safe Emergency Recovery Experiment — Research Wiki</span>
