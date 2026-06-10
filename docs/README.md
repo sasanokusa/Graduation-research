@@ -18,6 +18,7 @@
   - [`experiment2_3_escalation_comparison_20260527.md`](reports/experiment2_3_escalation_comparison_20260527.md) — **x 観測改善と Experiment 3 escalation smoke の結果**
   - [`related_work_survey_20260610.md`](reports/related_work_survey_20260610.md) — **関連研究サーベイ(URL 検証済み)**
   - [`token_reduction_validation_20260610.md`](reports/token_reduction_validation_20260610.md) — **トークン削減検証 + 5/22 実験汚染・r credential 交絡の発見**
+  - [`exp2_credential_audit_20260610.md`](reports/exp2_credential_audit_20260610.md) — **Experiment 2 の m/o/r 成功 7 件が全て credential 推測だったことの機械監査と補正後成功率**
   - [`controlled_gpt54_fairness_experiment_20260520.md`](reports/controlled_gpt54_fairness_experiment_20260520.md) — Experiment 1 公平化予備比較
   - [`safety_metrics_report.md`](reports/safety_metrics_report.md) — 安全性メトリクスの定義と集計
   - [`planner_escalation_cost_comparison_20260520.md`](reports/planner_escalation_cost_comparison_20260520.md) — escalation コスト予備比較
