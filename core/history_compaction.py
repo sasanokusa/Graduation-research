@@ -7,6 +7,15 @@ that growth: the newest N history entries are embedded verbatim and
 older entries are replaced with compact digests. ``0`` (default) keeps
 the current full-history behavior so controlled experiments are not
 affected unless the variable is set explicitly.
+
+``MULTI_AGENT_CONTEXT_PROFILE=lean`` (or ``--context-profile lean`` on
+``multi_agent.py``) additionally treats the tail as at least 1 and slims
+the blackboard view: constant ``agent_roles`` boilerplate is dropped,
+evidence lists are kept only on the newest observation entry (the
+reviewer receives current evidence directly), and per-action results are
+dropped from ``execution_results`` entries (the current turn's
+``action_results`` are passed to the reviewer separately). ``full``
+(default) keeps the existing behavior.
 """
 
 from __future__ import annotations
@@ -40,6 +49,18 @@ def history_tail() -> int:
         return 0
 
 
+def context_profile() -> str:
+    raw = os.environ.get("MULTI_AGENT_CONTEXT_PROFILE", "full").strip().lower()
+    return "lean" if raw == "lean" else "full"
+
+
+def effective_history_tail() -> int:
+    tail = history_tail()
+    if tail <= 0 and context_profile() == "lean":
+        return 1
+    return tail
+
+
 def _digest(entry: dict[str, Any], keys: tuple[str, ...]) -> dict[str, Any]:
     compacted: dict[str, Any] = {key: entry.get(key) for key in keys if key in entry}
     compacted["compacted"] = True
@@ -47,7 +68,7 @@ def _digest(entry: dict[str, Any], keys: tuple[str, ...]) -> dict[str, Any]:
 
 
 def _compact(entries: list[dict[str, Any]], keys: tuple[str, ...]) -> list[dict[str, Any]]:
-    tail = history_tail()
+    tail = effective_history_tail()
     if tail <= 0 or len(entries) <= tail:
         return entries
     digests = [_digest(entry, keys) for entry in entries[:-tail]]
@@ -94,11 +115,21 @@ _BLACKBOARD_DIGEST_KEYS: dict[str, tuple[str, ...]] = {
     "verification_results": ("turn", "stage", "ok", "front_most_failure"),
     "reviewer_guidance": ("turn", "decision", "feedback_for_planner"),
     "judge_decisions": ("turn", "decision", "override"),
+    "additional_observation_requests": ("turn", "source"),
 }
+
+# Lean-profile dedup: these blackboard fields repeat content the reviewer /
+# judge context already carries elsewhere (top-level evidence, current-turn
+# action_results), or are constant role boilerplate.
+_LEAN_OBSERVATION_DEDUP_KEYS = (
+    "current_state_evidence",
+    "historical_evidence",
+    "additional_observation",
+)
 
 
 def compact_incident_blackboard(blackboard: dict[str, Any]) -> dict[str, Any]:
-    tail = history_tail()
+    tail = effective_history_tail()
     if tail <= 0 or not blackboard:
         return blackboard
     compacted = dict(blackboard)
@@ -106,4 +137,19 @@ def compact_incident_blackboard(blackboard: dict[str, Any]) -> dict[str, Any]:
         entries = blackboard.get(key)
         if isinstance(entries, list) and len(entries) > tail:
             compacted[key] = _compact(entries, digest_keys)
+    if context_profile() == "lean":
+        compacted.pop("agent_roles", None)
+        observations = compacted.get("observations")
+        if isinstance(observations, list) and observations:
+            slimmed = []
+            for entry in observations[:-1]:
+                slim = {k: v for k, v in entry.items() if k not in _LEAN_OBSERVATION_DEDUP_KEYS}
+                slimmed.append(slim)
+            slimmed.append(observations[-1])
+            compacted["observations"] = slimmed
+        executions = compacted.get("execution_results")
+        if isinstance(executions, list):
+            compacted["execution_results"] = [
+                {k: v for k, v in entry.items() if k != "action_results"} for entry in executions
+            ]
     return compacted

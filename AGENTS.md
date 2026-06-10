@@ -382,9 +382,18 @@ multi-turn run では reviewer / judge の入力に全 `planner_history` / `revi
 - `MULTI_AGENT_HISTORY_TAIL=N` (N>=1): 直近 N ターン分の履歴 entry を全文のまま残し、それより古い entry は digest (`turn`, `summary`, `decision`, ok フラグ, `proposed_action_count` など) に畳む
 - 同じ N で `incident_blackboard` の重いリスト (`observations`, `hypotheses`, `repair_candidates`, `execution_results`, `verification_results`, `reviewer_guidance`, `judge_decisions`) も「直近 N 件全文 + 古い件は digest」に畳む。2026-06-10 の smoke 分析で、ターンごとの入力増加の主因は履歴 entry よりも blackboard (特に `hypotheses` と `observations` の evidence 重複) だと判明したため
 
+`MULTI_AGENT_CONTEXT_PROFILE=lean` (または `multi_agent.py --context-profile lean`) はさらに踏み込んだ削減プロファイルである。
+
+- tail を最低 1 として履歴・blackboard を畳む (`MULTI_AGENT_HISTORY_TAIL` を明示した場合はその値を優先)
+- blackboard から定型の `agent_roles` を除去する
+- `observations` の evidence list は最新 entry のみ残す (reviewer は current evidence を context 本体で別途受け取るため)
+- `execution_results` の `action_results` を除去する (当該ターンの action_results は reviewer context 本体にあるため)
+
+planner の入力と result JSON に保存される履歴・blackboard は full / lean どちらでも変わらない。変わるのは reviewer / judge に見せる view だけである。
+
 運用ルール:
 
-1. デフォルト無効。既存の controlled experiment 結果と混ぜないため、有効化した run は label に `histtail` などを含めて区別する
+1. デフォルト無効 (full)。既存の controlled experiment 結果と混ぜないため、有効化した run は label に `lean` / `histtail` などを含めて区別する
 2. 性能比較 (成功率・safety override・仮説遷移) で劣化がないことを smoke (`n r x` など) で確認してから本比較に使う
 3. 影響するのは reviewer / judge の prompt のみ。planner の入力と result JSON に保存される履歴は変わらない
 

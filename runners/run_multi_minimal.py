@@ -462,7 +462,14 @@ def main(argv: list[str] | None = None) -> int:
         default="llm" if os.environ.get("TRIAGE_MODE", "rule") == "llm" else "rule",
         help="Triage mode: rule-based or LLM-based domain ranking. Defaults to TRIAGE_MODE env var so observe_runs.sh experiments can enable it without CLI passthrough.",
     )
+    parser.add_argument(
+        "--context-profile",
+        choices=["full", "lean"],
+        default="lean" if os.environ.get("MULTI_AGENT_CONTEXT_PROFILE", "full").strip().lower() == "lean" else "full",
+        help="Reviewer/judge context profile. 'lean' bounds history tails and slims the blackboard view to cut input tokens. Defaults to MULTI_AGENT_CONTEXT_PROFILE env var.",
+    )
     args = parser.parse_args(argv)
+    os.environ["MULTI_AGENT_CONTEXT_PROFILE"] = args.context_profile
 
     prompt_spec = get_prompt_spec(args.prompt_mode)
     system_prompt_hash = hashlib.sha256(prompt_spec["system_prompt"].encode("utf-8")).hexdigest()[:16]

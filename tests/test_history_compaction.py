@@ -6,6 +6,8 @@ from core.history_compaction import (
     compact_incident_blackboard,
     compact_planner_history,
     compact_reviewer_history,
+    context_profile,
+    effective_history_tail,
     history_tail,
 )
 
@@ -175,6 +177,51 @@ def test_blackboard_compaction_leaves_short_lists_alone(monkeypatch: pytest.Monk
     compacted = compact_incident_blackboard(blackboard)
     assert compacted["observations"] == blackboard["observations"]
     assert compacted["hypotheses"] == blackboard["hypotheses"]
+
+
+def test_context_profile_defaults_to_full(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("MULTI_AGENT_CONTEXT_PROFILE", raising=False)
+    monkeypatch.delenv("MULTI_AGENT_HISTORY_TAIL", raising=False)
+    assert context_profile() == "full"
+    assert effective_history_tail() == 0
+    monkeypatch.setenv("MULTI_AGENT_CONTEXT_PROFILE", "bogus")
+    assert context_profile() == "full"
+
+
+def test_lean_profile_implies_tail_of_one(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("MULTI_AGENT_CONTEXT_PROFILE", "lean")
+    monkeypatch.delenv("MULTI_AGENT_HISTORY_TAIL", raising=False)
+    assert effective_history_tail() == 1
+    monkeypatch.setenv("MULTI_AGENT_HISTORY_TAIL", "3")
+    assert effective_history_tail() == 3
+
+
+def test_lean_profile_slims_blackboard(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("MULTI_AGENT_CONTEXT_PROFILE", "lean")
+    monkeypatch.delenv("MULTI_AGENT_HISTORY_TAIL", raising=False)
+    blackboard = _blackboard(4)
+    blackboard["execution_results"] = [
+        {"turn": turn, "ok": False, "rollback_used": False, "action_results": [{"stdout": "x" * 200}]}
+        for turn in range(1, 5)
+    ]
+    compacted = compact_incident_blackboard(blackboard)
+    assert "agent_roles" not in compacted
+    for entry in compacted["observations"][:-1]:
+        assert "current_state_evidence" not in entry
+        assert "historical_evidence" not in entry
+    assert "current_state_evidence" in compacted["observations"][-1]
+    for entry in compacted["execution_results"]:
+        assert "action_results" not in entry
+    assert compacted["hypotheses"][-1] == blackboard["hypotheses"][-1]
+    assert all(d.get("compacted") for d in compacted["hypotheses"][:-1])
+
+
+def test_full_profile_blackboard_keeps_agent_roles(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("MULTI_AGENT_CONTEXT_PROFILE", raising=False)
+    monkeypatch.setenv("MULTI_AGENT_HISTORY_TAIL", "1")
+    compacted = compact_incident_blackboard(_blackboard(4))
+    assert "agent_roles" in compacted
+    assert "current_state_evidence" in compacted["observations"][-1]
 
 
 def test_judge_prompt_respects_history_tail(monkeypatch: pytest.MonkeyPatch) -> None:
