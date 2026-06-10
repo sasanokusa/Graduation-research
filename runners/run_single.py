@@ -69,6 +69,10 @@ def triage_node(state: SingleAgentState) -> SingleAgentState:
         "ambiguity_level": triage["ambiguity_level"],
         "triage_summary": triage["triage_summary"],
         "token_usage": triage.get("triage_token_usage", {}),
+        "triage_mode": triage.get("triage_mode", "rule"),
+        "triage_llm_fallback": triage.get("triage_llm_fallback", False),
+        "triage_provider": triage.get("triage_provider", ""),
+        "triage_model": triage.get("triage_model", ""),
     }
     _section("🧭 [PHASE 2] TRIAGE")
     print(
