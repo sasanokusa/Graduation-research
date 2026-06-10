@@ -15,7 +15,9 @@
   - [`implementation_roadmap_20260316.md`](roadmap/implementation_roadmap_20260316.md) — 初版(2026-03-16、historical)
 - [`reports/`](reports/) — 実験レポート・調査・コスト・予算
   - [`experiment2_baseline_comparison_20260521.md`](reports/experiment2_baseline_comparison_20260521.md) — **Experiment 2 本比較(5 条件 × repeat 3)の結果**
-  - [`experiment2_3_escalation_comparison_20260527.md`](reports/experiment2_3_escalation_comparison_20260527.md) — **x 観測改善と Experiment 3 escalation smoke の結果**
+  - [`experiment4_clean_comparison_20260611.md`](reports/experiment4_clean_comparison_20260611.md) — **Experiment 4 クリーン本比較(credential 修正後の 5 条件、role-split 24/24)。最新の本比較**
+  - [`exp2_credential_audit_20260610.md`](reports/exp2_credential_audit_20260610.md) — **Experiment 2 の m/o/r 成功が全て credential 推測だったことの監査と補正後成功率**
+  - [`experiment2_3_escalation_comparison_20260527.md`](reports/experiment2_3_escalation_comparison_20260527.md) — x 観測改善と Experiment 3 escalation smoke(5/22 データは Anthropic 接続汚染のため再測定要)
   - [`related_work_survey_20260610.md`](reports/related_work_survey_20260610.md) — **関連研究サーベイ(URL 検証済み)**
   - [`token_reduction_validation_20260610.md`](reports/token_reduction_validation_20260610.md) — **トークン削減検証 + 5/22 実験汚染・r credential 交絡の発見**
   - [`exp2_credential_audit_20260610.md`](reports/exp2_credential_audit_20260610.md) — **Experiment 2 の m/o/r 成功 7 件が全て credential 推測だったことの機械監査と補正後成功率**

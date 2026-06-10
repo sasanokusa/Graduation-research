@@ -36,3 +36,7 @@ s|\.\./reports/related_work_survey_20260610\.md|report-related-work-survey.html|
 s|docs/reports/related_work_survey_20260610\.md|report-related-work-survey.html|g
 s|\.\./reports/token_reduction_validation_20260610\.md|report-token-reduction.html|g
 s|docs/reports/token_reduction_validation_20260610\.md|report-token-reduction.html|g
+s|\.\./reports/exp2_credential_audit_20260610\.md|report-exp2-credential-audit.html|g
+s|docs/reports/exp2_credential_audit_20260610\.md|report-exp2-credential-audit.html|g
+s|\.\./reports/experiment4_clean_comparison_20260611\.md|report-experiment4-clean.html|g
+s|docs/reports/experiment4_clean_comparison_20260611\.md|report-experiment4-clean.html|g

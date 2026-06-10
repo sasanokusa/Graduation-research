@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Experiment 4 クリーン本比較
+(2026-06-11) — Safe Emergency Recovery Wiki</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="layout">
+  <header class="topbar">
+    <div class="brand">
+      <a href="index.html">Safe Emergency Recovery</a>
+      <span class="sub">研究ドキュメント Wiki</span>
+    </div>
+    <nav class="topnav">
+      <a href="index.html">ホーム</a>
+      <a href="current-status.html">現在地</a>
+      <a href="overview.html">概要</a>
+      <a href="roadmap-revised.html">最新ロードマップ</a>
+    </nav>
+  </header>
+  <aside class="sidebar">
+    <div class="group">
+      <div class="group-title">スタート</div>
+      <ul>
+        <li><a href="index.html" data-id="index">Wiki トップ</a></li>
+        <li><a href="overview.html" data-id="overview">プロジェクト概要 (README)</a></li>
+        <li><a href="current-status.html" data-id="current-status">現在地メモ (2026-05-08)</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">ロードマップ</div>
+      <ul>
+        <li><a href="roadmap-initial.html" data-id="roadmap-initial">初版ロードマップ (2026-03-16)</a></li>
+        <li><a href="roadmap-revised.html" data-id="roadmap-revised">改訂版ロードマップ (2026-04-15)</a></li>
+        <li><a href="roadmap-next-steps.html" data-id="roadmap-next-steps">次のステップ計画 (2026-05-21)</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">調査・レポート</div>
+      <ul>
+        <li><a href="report-repository-assessment.html" data-id="report-repository-assessment">リポジトリ調査レポート</a></li>
+        <li><a href="report-analysis.html" data-id="report-analysis">設計レビュー・改善提案</a></li>
+        <li><a href="report-phase1-cost.html" data-id="report-phase1-cost">Phase 1 比較実験コスト</a></li>
+        <li><a href="report-local-experiment-cost.html" data-id="report-local-experiment-cost">局所実験コスト</a></li>
+        <li><a href="report-selfcritique-gpt54-local.html" data-id="report-selfcritique-gpt54-local">GPT-5.4 self-critique 局所実験</a></li>
+        <li><a href="report-safety-metrics.html" data-id="report-safety-metrics">安全性メトリクス・Judge介入</a></li>
+        <li><a href="report-controlled-gpt54-fairness.html" data-id="report-controlled-gpt54-fairness">GPT-5.4 公平条件比較実験</a></li>
+        <li><a href="report-planner-escalation-cost.html" data-id="report-planner-escalation-cost">Planner Escalation コスト比較</a></li>
+        <li><a href="report-experiment2-baseline.html" data-id="report-experiment2-baseline">Experiment 2 ベースライン比較</a></li>
+        <li><a href="report-experiment2-3-escalation.html" data-id="report-experiment2-3-escalation">Experiment 2/3 Escalation 比較</a></li>
+        <li><a href="report-budget-2026.html" data-id="report-budget-2026">卒研予算概算 (2026-05-29)</a></li>
+        <li><a href="report-related-work-survey.html" data-id="report-related-work-survey">関連研究サーベイ (2026-06-10)</a></li>
+        <li><a href="report-token-reduction.html" data-id="report-token-reduction">トークン削減検証 (2026-06-10)</a></li>
+        <li><a href="report-exp2-credential-audit.html" data-id="report-exp2-credential-audit">Experiment 2 credential 監査 (2026-06-10)</a></li>
+        <li><a href="report-experiment4-clean.html" data-id="report-experiment4-clean">Experiment 4 クリーン本比較 (2026-06-11)</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">評価</div>
+      <ul>
+        <li><a href="evaluation-hypothesis-transition.html" data-id="evaluation-hypothesis-transition">仮説遷移評価 (Phase 4.5)</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">Production PoC</div>
+      <ul>
+        <li><a href="poc-architecture.html" data-id="poc-architecture">アーキテクチャ</a></li>
+        <li><a href="poc-deploy.html" data-id="poc-deploy">導入手順</a></li>
+        <li><a href="poc-validation-scenarios.html" data-id="poc-validation-scenarios">実機検証シナリオ</a></li>
+        <li><a href="poc-agent-prompt-surface.html" data-id="poc-agent-prompt-surface">Agent Prompt と Scenario 制約</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">シナリオ</div>
+      <ul>
+        <li><a href="scenario-ictsc5023.html" data-id="scenario-ictsc5023">ICTSC 5023</a></li>
+      </ul>
+    </div>
+  </aside>
+  <main class="content">
+    <div class="breadcrumb"><a href="index.html">Wiki</a> / レポート / Experiment 4 クリーン本比較</div>
+    <h1 id="experiment-4-クリーン本比較レポート-2026-06-11">Experiment 4
+    クリーン本比較レポート (2026-06-11)</h1>
+    <p>作成日: 2026-06-11</p>
+    <h2 id="要約">要約</h2>
+    <p>Experiment 4 は、Experiment 2 で発見した 2
+    つのデータ品質問題を修正した上で、5 条件 (one-shot / self-critique /
+    reviewer-only / reviewer+judge / role-split) を同一条件
+    <code>m n o r u v w x × repeat 3</code>
+    で取り直したクリーン本比較である。</p>
+    <p>修正点:</p>
+    <ol type="1">
+    <li><strong>credential 観測経路の追加</strong> (2026-06-10): db
+    認証失敗時に <code>db/mysql.env</code> の client credential
+    を観測として露出 (root は除く)。Experiment 2 で <code>m/o/r</code>
+    成功が全件 credential 推測だった問題への対処。</li>
+    <li><strong>secret guess gate</strong> (2026-06-10): credential 系
+    key の <code>new_text</code> に観測根拠を要求する verifier
+    precheck。</li>
+    </ol>
+    <p>品質ゲート:</p>
+    <ul>
+    <li>reviewer invocation 失敗: <strong>0 / 134 calls</strong>
+    (ネットワーク交絡なし)</li>
+    <li>credential 推測成功: <strong>0 件</strong> (gate +
+    観測露出が機能)</li>
+    <li>secret gate 誤爆: 0 件</li>
+    </ul>
+    <h3 id="成功率-raw--corrected-推測成功なし">成功率 (raw = corrected;
+    推測成功なし)</h3>
+    <table>
+    <thead>
+    <tr>
+    <th>条件</th>
+    <th style="text-align: right;">total</th>
+    <th style="text-align: right;">m</th>
+    <th style="text-align: right;">n</th>
+    <th style="text-align: right;">o</th>
+    <th style="text-align: right;">r</th>
+    <th style="text-align: right;">u</th>
+    <th style="text-align: right;">v</th>
+    <th style="text-align: right;">w</th>
+    <th style="text-align: right;">x</th>
+    <th style="text-align: right;">実測 cost</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>4-A one-shot</td>
+    <td style="text-align: right;">1/24</td>
+    <td style="text-align: right;">0/3</td>
+    <td style="text-align: right;">0/3</td>
+    <td style="text-align: right;">0/3</td>
+    <td style="text-align: right;">0/3</td>
+    <td style="text-align: right;">0/3</td>
+    <td style="text-align: right;">1/3</td>
+    <td style="text-align: right;">0/3</td>
+    <td style="text-align: right;">0/3</td>
+    <td style="text-align: right;"><code>$0.25</code></td>
+    </tr>
+    <tr>
+    <td>4-B self-critique</td>
+    <td style="text-align: right;">23/24</td>
+    <td style="text-align: right;">3/3</td>
+    <td style="text-align: right;">3/3</td>
+    <td style="text-align: right;">3/3</td>
+    <td style="text-align: right;">3/3</td>
+    <td style="text-align: right;">2/3</td>
+    <td style="text-align: right;">3/3</td>
+    <td style="text-align: right;">3/3</td>
+    <td style="text-align: right;">3/3</td>
+    <td style="text-align: right;"><code>$0.69</code></td>
+    </tr>
+    <tr>
+    <td>4-C reviewer-only</td>
+    <td style="text-align: right;">18/24</td>
+    <td style="text-align: right;">2/3</td>
+    <td style="text-align: right;">3/3</td>
+    <td style="text-align: right;">3/3</td>
+    <td style="text-align: right;">3/3</td>
+    <td style="text-align: right;">0/3</td>
+    <td style="text-align: right;">2/3</td>
+    <td style="text-align: right;">2/3</td>
+    <td style="text-align: right;">3/3</td>
+    <td style="text-align: right;"><code>$1.32</code></td>
+    </tr>
+    <tr>
+    <td>4-D reviewer+judge</td>
+    <td style="text-align: right;">20/24</td>
+    <td style="text-align: right;">3/3</td>
+    <td style="text-align: right;">3/3</td>
+    <td style="text-align: right;">3/3</td>
+    <td style="text-align: right;">3/3</td>
+    <td style="text-align: right;">0/3</td>
+    <td style="text-align: right;">3/3</td>
+    <td style="text-align: right;">2/3</td>
+    <td style="text-align: right;">3/3</td>
+    <td style="text-align: right;"><code>$1.41</code></td>
+    </tr>
+    <tr>
+    <td>4-E role-split</td>
+    <td style="text-align: right;">24/24</td>
+    <td style="text-align: right;">3/3</td>
+    <td style="text-align: right;">3/3</td>
+    <td style="text-align: right;">3/3</td>
+    <td style="text-align: right;">3/3</td>
+    <td style="text-align: right;">3/3</td>
+    <td style="text-align: right;">3/3</td>
+    <td style="text-align: right;">3/3</td>
+    <td style="text-align: right;">3/3</td>
+    <td style="text-align: right;"><code>$2.04</code></td>
+    </tr>
+    </tbody>
+    </table>
+    <p>これらは Experiment 2 のような credential 推測補正を必要としない
+    (推測成功 0)。<code>m o r</code> の成功はすべて、新たに露出した db
+    client credential を根拠とした evidence-backed な修復である。</p>
+    <h2 id="実験条件">実験条件</h2>
+    <p>共通:
+    <code>m n o r u v w x</code>、<code>--repeat 3</code>、<code>--worker llm</code>、<code>--prompt-mode blind</code>、<code>--scenario-mode forced</code>、<code>RESTORE_FROM_BASE_MODE=forbid</code>、triage
+    は rule。multi-agent 系は
+    <code>MULTI_AGENT_MAX_TURNS=5</code>、<code>MULTI_AGENT_MAX_ADDITIONAL_OBSERVATIONS=3</code>。</p>
+    <p>モデル:
+    planner=<code>gpt-5.4</code>、reviewer=<code>claude-sonnet-4-6</code>
+    (4-E) または <code>gpt-5.4</code>
+    (4-C/4-D)、judge=<code>gpt-5.4-mini</code> (4-E) または
+    <code>gpt-5.4</code> (4-D)。</p>
+    <p>observation dirs:</p>
+    <table>
+    <thead>
+    <tr>
+    <th>条件</th>
+    <th>dir</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>4-A</td>
+    <td><code>observations/20260610T122155Z_exp4_controlled_oneshot_r3</code>
+    (+ <code>..._resume_v</code>, <code>..._resume_wx</code>)</td>
+    </tr>
+    <tr>
+    <td>4-B</td>
+    <td><code>observations/20260610T132934Z_exp4_controlled_selfcritique_r3</code></td>
+    </tr>
+    <tr>
+    <td>4-C</td>
+    <td><code>observations/20260610T142214Z_exp4_controlled_reviewer_only_r3</code></td>
+    </tr>
+    <tr>
+    <td>4-D</td>
+    <td><code>observations/20260610T151253Z_exp4_controlled_multi_r3</code></td>
+    </tr>
+    <tr>
+    <td>4-E</td>
+    <td><code>observations/20260610T160512Z_exp4_controlled_role_split_r3</code></td>
+    </tr>
+    </tbody>
+    </table>
+    <p>注: 4-A は当初チェーンが画面ロック起因で <code>v_02</code>
+    付近で中断し、<code>v/w/x</code> を resume ラベルで取り直して 24 run
+    を揃えた。同一コード状態・同一条件のため統合して扱う。</p>
+    <h2 id="主要な発見">主要な発見</h2>
+    <h3 id="1-credential-観測修正が-mor-を解放した">1. credential
+    観測修正が m/o/r を解放した</h3>
+    <p>Experiment 2 では <code>m/o/r</code> の成功はすべて credential
+    推測であり、補正後成功率は全条件 0/9 だった
+    (<code>exp2_credential_audit_20260610.md</code>)。db client
+    credential を観測として露出した結果、role-split は
+    <code>m/o/r</code> を 9/9、self-critique は 9/9、reviewer+judge は
+    9/9 すべて evidence-backed で解いた。</p>
+    <p>これはシナリオ <code>x</code> の topology 露出修正 (2026-05-22)
+    に続く 2
+    例目の「観測可能性が支配要因」の実証であり、今回は単純故障ではなく多段マスク
+    (<code>m</code>/<code>r</code>) と stale evidence (<code>o</code>)
+    を含むシナリオで効いた点が強い。</p>
+    <h3 id="2-role-split-が初めて全完投-2424">2. role-split
+    が初めて全完投 (24/24)</h3>
+    <p>クリーン条件かつ credential 解放後、role-split は 8 シナリオ × 3
+    = 24 を全成功した。Experiment 2 (補正後 12/24) からの上積みは、(a)
+    credential 露出による <code>m/o/r</code>、(b) reviewer
+    接続のクリーン化による安定動作の両方による。</p>
+    <p>特に <code>u</code> (topology fault が query bug をマスク) は
+    <strong>role-split のみ 3/3</strong> で、reviewer-only /
+    reviewer+judge は 0/3 だった。role-split の <code>u</code> 成功 run
+    はいずれも平均 3-4 turn を要し、「DB host を直す → 残った SQL typo
+    を再観測して直す」という多段の再計画を踏んでいる。Claude reviewer +
+    GPT judge の組み合わせが、強い reviewer による段階的な scope
+    誘導を実現していることを示す。</p>
+    <h3 id="3-one-shot-が-124-に激減した-観測増加の副作用">3. one-shot
+    が 1/24 に激減した (観測増加の副作用)</h3>
+    <p>one-shot は Experiment 2 の raw 6/24 から 1/24
+    に下がった。これは性能劣化ではなく、<strong>観測修正の副作用が回復能力のない構成に集中した</strong>結果である。</p>
+    <p><code>v/w</code> の失敗 (Experiment 2 では one-shot が 6/6 成功)
+    はすべて precheck の
+    <code>replace_text requires exactly one occurrence, found 0</code>
+    であり、原因は 2026-05-22 に追加した topology contract snippet
+    露出にある。論理的に関連する複数キーをまとめて見せるため、planner
+    はそれを multi-line <code>old_text</code> として
+    <code>replace_text</code> に使い、実ファイル上で連続しないため
+    exact-match しない (5/27 レポートで <code>x</code> の 3-B
+    について特定した粒度問題と同一)。</p>
+    <p>multi-turn 系 (self-critique 以上) はこの precheck
+    失敗を次ターンで観測し、単一行 replacement
+    に切り替えて回復する。one-shot
+    は回復ターンがないため即失敗する。</p>
+    <p>研究上の含意:
+    <strong>観測情報を増やすことは万能ではなく、提示粒度と action
+    contract
+    が噛み合わないと、再観測・再計画できない構成をむしろ脆くする。</strong>
+    これは「観測可能性」と「実行可能性」のギャップ (5/27 レポート)
+    を、制御構造の有無という軸で裏付ける独立の証拠である。one-shot
+    を観測修正なしの Experiment 2 baseline
+    と直接比較するのは不適切で、本比較では「multi-turn
+    構成の回復価値」を示す対照として扱う。</p>
+    <h3 id="4-安全指標">4. 安全指標</h3>
+    <table>
+    <thead>
+    <tr>
+    <th>条件</th>
+    <th style="text-align: right;">avg turns</th>
+    <th style="text-align: right;">judge_retry</th>
+    <th style="text-align: right;">judge_stop</th>
+    <th style="text-align: right;">reviewer invocation 失敗</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>4-B self-critique</td>
+    <td style="text-align: right;">2.25</td>
+    <td style="text-align: right;">-</td>
+    <td style="text-align: right;">-</td>
+    <td style="text-align: right;">0/31</td>
+    </tr>
+    <tr>
+    <td>4-C reviewer-only</td>
+    <td style="text-align: right;">2.17</td>
+    <td style="text-align: right;">-</td>
+    <td style="text-align: right;">-</td>
+    <td style="text-align: right;">0/34</td>
+    </tr>
+    <tr>
+    <td>4-D reviewer+judge</td>
+    <td style="text-align: right;">2.17</td>
+    <td style="text-align: right;">28</td>
+    <td style="text-align: right;">4</td>
+    <td style="text-align: right;">0/32</td>
+    </tr>
+    <tr>
+    <td>4-E role-split</td>
+    <td style="text-align: right;">2.54</td>
+    <td style="text-align: right;">37</td>
+    <td style="text-align: right;">0</td>
+    <td style="text-align: right;">0/37</td>
+    </tr>
+    </tbody>
+    </table>
+    <p>role-split は turn 数と judge retry
+    が最多で、難シナリオで「まだ根拠が足りない」と判定して粘る挙動を維持している。judge_stop
+    が 0 なのは、credential 解放により早期 stop
+    の必要がなくなったためと考えられる。</p>
+    <h2 id="コスト">コスト</h2>
+    <table>
+    <thead>
+    <tr>
+    <th>条件</th>
+    <th style="text-align: right;">実測 cost (24 run)</th>
+    <th style="text-align: right;">cost / success</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>4-A one-shot</td>
+    <td style="text-align: right;"><code>$0.25</code></td>
+    <td style="text-align: right;"><code>$0.25</code> (1 success)</td>
+    </tr>
+    <tr>
+    <td>4-B self-critique</td>
+    <td style="text-align: right;"><code>$0.69</code></td>
+    <td style="text-align: right;"><code>$0.030</code></td>
+    </tr>
+    <tr>
+    <td>4-C reviewer-only</td>
+    <td style="text-align: right;"><code>$1.32</code></td>
+    <td style="text-align: right;"><code>$0.073</code></td>
+    </tr>
+    <tr>
+    <td>4-D reviewer+judge</td>
+    <td style="text-align: right;"><code>$1.41</code></td>
+    <td style="text-align: right;"><code>$0.071</code></td>
+    </tr>
+    <tr>
+    <td>4-E role-split</td>
+    <td style="text-align: right;"><code>$2.04</code></td>
+    <td style="text-align: right;"><code>$0.085</code></td>
+    </tr>
+    </tbody>
+    </table>
+    <p>費用対効果では self-critique が突出している (23/24 を
+    <code>$0.69</code>)。role-split は最高成功率 (24/24) だが
+    cost/success は self-critique の約 2.8
+    倍。卒論では引き続き「最高成功率 baseline = role-split」「費用対効果
+    baseline = self-critique」の二軸で議論できる。</p>
+    <p>ただし self-critique と role-split の差は <code>u</code> の 2/3
+    vs 3/3 のみであり、n=24
+    では統計的に有意ではない。主張は成功率の順位ではなく、(a) credential
+    / topology の観測可能性が支配要因であること、(b) <code>u</code>
+    のような多段マスクで強い reviewer の段階的 scope 誘導が効くこと、(c)
+    観測増加が one-shot を脆くする実行可能性ギャップ、に置く。</p>
+    <h2 id="experiment-2-との対応">Experiment 2 との対応</h2>
+    <table>
+    <thead>
+    <tr>
+    <th></th>
+    <th>Experiment 2 (2026-05-21)</th>
+    <th>Experiment 4 (2026-06-11)</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>triage</td>
+    <td>rule (env 指定は不発)</td>
+    <td>rule</td>
+    </tr>
+    <tr>
+    <td>credential 観測</td>
+    <td>なし → m/o/r 成功は全て推測</td>
+    <td>db client credential 露出 → evidence-backed</td>
+    </tr>
+    <tr>
+    <td>secret gate</td>
+    <td>なし</td>
+    <td>あり (誤爆 0)</td>
+    </tr>
+    <tr>
+    <td>reviewer 接続</td>
+    <td>クリーン (0 失敗)</td>
+    <td>クリーン (0 失敗)</td>
+    </tr>
+    <tr>
+    <td><code>x</code> 観測</td>
+    <td>修正前 → 全条件 0/3</td>
+    <td>修正後 → ほぼ全条件 3/3</td>
+    </tr>
+    <tr>
+    <td>role-split</td>
+    <td>raw 15/24, 補正後 12/24</td>
+    <td>24/24 (推測なし)</td>
+    </tr>
+    <tr>
+    <td>one-shot</td>
+    <td>raw 6/24</td>
+    <td>1/24 (観測増加の副作用)</td>
+    </tr>
+    </tbody>
+    </table>
+    <p>Experiment 2 は「問題を発見した pilot」、Experiment 4
+    は「修正後のクリーン本比較」と位置づけられる。卒論では Experiment 2
+    → 問題発見 (推測・観測欠落) → 設計修正 (観測露出・secret gate) →
+    Experiment 4 という発見・対処・検証の流れで構成できる。</p>
+    <h2 id="残課題">残課題</h2>
+    <ul>
+    <li><strong>Experiment 3 (planner escalation) の再測定</strong>:
+    2026-05-22 のデータは Anthropic 接続汚染 (3-B reviewer 86% 失敗)
+    のため無効。クリーンな条件で取り直す。</li>
+    <li><strong>action 粒度の修正は将来実験 (Exp 5) に分離</strong>:
+    topology snippet を実ファイル連続ブロックで出す、または planner
+    に単一行 replacement を促す修正。これを入れれば one-shot の v/w
+    も回復し、観測増加の副作用を消せるかを別途検証する。</li>
+    <li>中間発表用に 5 条件 → 3 条件 (one-shot / reviewer+judge /
+    role-split) への畳み込み提示を検討。</li>
+    </ul>
+    <div class="footer">
+      <span>Safe Emergency Recovery Experiment — Research Wiki</span>
+      <span>ソース: <a href="../reports/experiment4_clean_comparison_20260611.md">../reports/experiment4_clean_comparison_20260611.md</a></span>
+    </div>
+  </main>
+</div>
+<script src="wiki.js"></script>
+</body>
+</html>

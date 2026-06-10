@@ -127,6 +127,16 @@ build "docs/reports/token_reduction_validation_20260610.md" "report-token-reduct
   '<a href="index.html">Wiki</a> / レポート / トークン削減検証' \
   "../reports/token_reduction_validation_20260610.md"
 
+build "docs/reports/exp2_credential_audit_20260610.md" "report-exp2-credential-audit.html" \
+  "Experiment 2 credential 監査 (2026-06-10)" \
+  '<a href="index.html">Wiki</a> / レポート / Experiment 2 credential 監査' \
+  "../reports/exp2_credential_audit_20260610.md"
+
+build "docs/reports/experiment4_clean_comparison_20260611.md" "report-experiment4-clean.html" \
+  "Experiment 4 クリーン本比較 (2026-06-11)" \
+  '<a href="index.html">Wiki</a> / レポート / Experiment 4 クリーン本比較' \
+  "../reports/experiment4_clean_comparison_20260611.md"
+
 build "docs/hypothesis_transition_evaluation.md" "evaluation-hypothesis-transition.html" \
   "仮説遷移評価 (Phase 4.5)" \
   '<a href="index.html">Wiki</a> / 評価 / 仮説遷移' \
