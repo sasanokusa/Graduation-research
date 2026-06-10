@@ -51,6 +51,7 @@
         <li><a href="report-experiment2-baseline.html" data-id="report-experiment2-baseline">Experiment 2 ベースライン比較</a></li>
         <li><a href="report-experiment2-3-escalation.html" data-id="report-experiment2-3-escalation">Experiment 2/3 Escalation 比較</a></li>
         <li><a href="report-budget-2026.html" data-id="report-budget-2026">卒研予算概算 (2026-05-29)</a></li>
+        <li><a href="report-related-work-survey.html" data-id="report-related-work-survey">関連研究サーベイ (2026-06-10)</a></li>
       </ul>
     </div>
     <div class="group">
@@ -88,28 +89,50 @@
     A-X シナリオ真値を保持しつつ、sensor / triage / planner 側は
     closed-set の scenario classifier ではなく、open-world
     の仮説生成器として動作する構成へ寄せている。</p>
-    <h2 id="2026-05-08-時点の研究ステータス">2026-05-08
+    <h2 id="2026-06-10-時点の研究ステータス">2026-06-10
     時点の研究ステータス</h2>
-    <p>機能開発としては、卒論に必要な核はおおむね揃っている。現在の主眼は、新しい修復機能を増やすことではなく、比較実験、仮説遷移メトリクス、図表、ケーススタディ、卒論本文への変換である。</p>
-    <p>現在地の詳細は <a
-    href="current-status.html">current-status.html</a>
-    にまとめている。古い調査レポートやロードマップは履歴資料として残しているため、最新の進捗判断ではこの現在地メモを優先する。</p>
+    <p>機能実装と本比較実験 (Experiment 2 / 3 smoke)
+    が完了し、現在の主眼は、Experiment 3
+    の再測定、仮説遷移・失敗メカニズムの分析、図表化、ケーススタディ、卒論本文への変換である。</p>
+    <p>完了済みの主な実験:</p>
+    <ul>
+    <li><strong>Experiment 2 (2026-05-21)</strong>: one-shot /
+    self-critique / reviewer-only / reviewer+judge / role-split の 5
+    条件を <code>m n o r u v w x</code> × repeat 3 で統制比較した。raw
+    success は one-shot 25% → self-critique 50% → role-split
+    62.5%。詳細は <a
+    href="report-experiment2-baseline.html">report-experiment2-baseline.html</a></li>
+    <li><strong>シナリオ x の観測改善 (2026-05-22)</strong>: Experiment
+    2 で全条件 0/15 だった <code>x</code> は、sensor の topology
+    contract 露出を直すだけで同一安全制約下 3/3
+    になった。失敗の支配要因がモデル性能ではなく観測可能性だった例である</li>
+    <li><strong>Experiment 3 smoke (2026-05-22)</strong>: planner
+    escalation (<code>gpt-4.1-mini -&gt; gpt-5.5</code> on-retry)
+    は総コストを 27% 下げたが成功数も落とし、cost per successful
+    recovery は悪化した。詳細は <a
+    href="report-experiment2-3-escalation.html">report-experiment2-3-escalation.html</a></li>
+    </ul>
     <p>現時点での主な実績:</p>
     <ul>
     <li>A-X の 24 シナリオを定義済み</li>
     <li>single-agent one-shot、single-agent iterative
-    self-critique、multi-agent orchestration を実行可能</li>
-    <li><code>results/</code> に 200 件の result
-    JSON、<code>observations/</code> に 9 本の summary.csv
-    を保存済み</li>
-    <li><code>hypothesis_metrics</code> 入り result JSON は 13 件</li>
-    <li><code>./check.sh</code> は 99 passed, 6 deselected</li>
-    <li>予備実験では、hard scenario で single-agent one-shot より
-    multi-agent が有利な傾向を確認済み</li>
+    self-critique、multi-agent orchestration (role-split 対応)
+    を実行可能</li>
+    <li><code>results/</code> に 410 件超の result
+    JSON、<code>observations/</code> に 40
+    本の観測ディレクトリを保存済み</li>
+    <li><code>./check.sh</code> は 133 passed, 6 deselected</li>
+    <li>関連研究サーベイ: <a
+    href="report-related-work-survey.html">report-related-work-survey.html</a></li>
     </ul>
-    <p>中間発表では、安全制約付き LLM 応急復旧基盤と multi-agent
-    再観測・再計画の予備効果までを出し、self-critique
-    との詳細比較、仮説遷移分析、反復実験、卒論用図表化は今後の作業として残す。</p>
+    <p>進捗判断の読み順は、この README → <a
+    href="roadmap-next-steps.html">roadmap-next-steps.html</a>
+    (現行計画) → <a href="current-status.html">current-status.html</a>
+    (前回ベースライン) の順を推奨する。実験の運用手順と公平性ルールは <a
+    href="AGENTS.md">AGENTS.md</a> にある。</p>
+    <p>統計上の注意: repeat 3 (各条件 n=24) では role-split と
+    self-critique
+    の成功率差は統計的に有意ではない。卒論の主張は成功率ランキングではなく、シナリオ別の失敗メカニズム、仮説固着、観測可能性と実行可能性のギャップに置く。</p>
     <h2 id="応急復旧の成功条件">応急復旧の成功条件</h2>
     <p>本リポジトリにおける「応急復旧成功」は、元の構成を一字一句再現することではない。以下を満たし、かつ被害拡大を起こしていない状態を成功とみなす。</p>
     <ul>
@@ -215,7 +238,12 @@
     <li>Triage agent: open-world fault-domain hypotheses と candidate
     scope を作る。前ターンの reviewer guidance
     がある場合は、残存ドメイン、推奨 scope、推奨追加観測を次ターンの
-    planner input に反映する</li>
+    planner input
+    に反映する。デフォルトはルールベース判定であり、<code>TRIAGE_MODE=llm</code>
+    で LLM 判定 (<code>TRIAGE_PROVIDER</code> /
+    <code>TRIAGE_MODEL</code>) に切り替えられる。LLM 判定は
+    <code>TRIAGE_LLM_MAX_CALLS_PER_RUN</code> で 1 run
+    あたりの呼び出し回数を制限できる</li>
     <li>Repair planner agent: triage, blackboard, 過去ターンの失敗履歴,
     reviewer feedback を見て次の action plan を返す</li>
     <li>Verification reviewer agent: proposed / validated / executed
@@ -408,27 +436,39 @@ POSTCHECK_RETRY_INTERVAL_SECONDS=2</code></pre>
     側の一時障害で落ちることがある。現行 baseline では以下の env
     を推奨する。</p>
     <ul>
-    <li><code>GOOGLE_API_KEY</code>: 単一エージェントの既定 provider
-    secret</li>
-    <li><code>OPENAI_API_KEY</code>, <code>ANTHROPIC_API_KEY</code>:
-    将来の role 分離用 secret</li>
-    <li><code>GEMINI_MODEL</code>: 既定は
-    <code>gemini-3-flash-preview</code></li>
-    <li><code>GEMINI_PLANNER_TIMEOUT_SECONDS</code>: 既定は
-    <code>75</code></li>
-    <li><code>GEMINI_THINKING_LEVEL</code>: 既定は <code>low</code></li>
+    <li><code>GOOGLE_API_KEY</code>, <code>OPENAI_API_KEY</code>,
+    <code>ANTHROPIC_API_KEY</code>: 各 provider の secret。role-split
+    構成では 3 つすべてを使う</li>
+    <li><code>GEMINI_MODEL</code>,
+    <code>GEMINI_PLANNER_TIMEOUT_SECONDS</code>,
+    <code>GEMINI_THINKING_LEVEL</code>: single-agent 後方互換用の legacy
+    設定</li>
     <li><code>SINGLE_AGENT_PROVIDER</code>,
     <code>SINGLE_AGENT_MODEL</code>: 単一エージェント worker 用の role
     設定</li>
     <li><code>PLANNER_PROVIDER</code>, <code>PLANNER_MODEL</code>,
     <code>REVIEWER_PROVIDER</code>, <code>REVIEWER_MODEL</code>,
     <code>JUDGE_PROVIDER</code>, <code>JUDGE_MODEL</code>,
-    <code>TRIAGE_PROVIDER</code>, <code>TRIAGE_MODEL</code>: 将来の
-    multi-agent 用 role 設定</li>
+    <code>TRIAGE_PROVIDER</code>, <code>TRIAGE_MODEL</code>: multi-agent
+    の role 別 provider/model 設定。Experiment 2 以降の標準 role-split
+    は planner=<code>gpt-5.4</code>,
+    reviewer=<code>claude-sonnet-4-6</code>,
+    judge=<code>gpt-5.4-mini</code>,
+    triage=<code>gemini-3-flash-preview</code></li>
     <li><code>MULTI_AGENT_MAX_TURNS</code>: multi-agent orchestration
     の最大 planner turn 数</li>
     <li><code>MULTI_AGENT_MAX_ADDITIONAL_OBSERVATIONS</code>:
     multi-agent orchestration の追加観測上限</li>
+    <li><code>MULTI_AGENT_HISTORY_TAIL</code>: reviewer / judge
+    プロンプトに埋め込む履歴・blackboard の tail 圧縮 (既定
+    <code>0</code> = 無効)。詳細は <a href="AGENTS.md">AGENTS.md</a> の
+    History Tail Mode</li>
+    <li><code>RESTORE_FROM_BASE_MODE</code>: <code>forbid</code> で
+    <code>restore_from_base</code> を禁止する。controlled experiment
+    では必須</li>
+    <li><code>TRIAGE_MODE</code>: <code>llm</code> で LLM triage
+    を有効化 (既定は rule)。<code>TRIAGE_LLM_MAX_CALLS_PER_RUN</code> で
+    1 run あたりの LLM triage 回数を制限</li>
     <li><code>COMMAND_TIMEOUT_SECONDS</code>: docker compose / shell
     command の timeout</li>
     <li><code>HTTP_TIMEOUT_SECONDS</code>: <code>/healthz</code>,
@@ -632,7 +672,10 @@ POSTCHECK_RETRY_INTERVAL_SECONDS=2</code></pre>
 <span id="cb6-18"><a href="#cb6-18" aria-hidden="true" tabindex="-1"></a><span class="ex">./break.sh</span> r</span>
 <span id="cb6-19"><a href="#cb6-19" aria-hidden="true" tabindex="-1"></a><span class="ex">./break.sh</span> s</span>
 <span id="cb6-20"><a href="#cb6-20" aria-hidden="true" tabindex="-1"></a><span class="ex">./break.sh</span> t</span>
-<span id="cb6-21"><a href="#cb6-21" aria-hidden="true" tabindex="-1"></a><span class="ex">./break.sh</span> u</span></code></pre></div>
+<span id="cb6-21"><a href="#cb6-21" aria-hidden="true" tabindex="-1"></a><span class="ex">./break.sh</span> u</span>
+<span id="cb6-22"><a href="#cb6-22" aria-hidden="true" tabindex="-1"></a><span class="ex">./break.sh</span> v</span>
+<span id="cb6-23"><a href="#cb6-23" aria-hidden="true" tabindex="-1"></a><span class="ex">./break.sh</span> w</span>
+<span id="cb6-24"><a href="#cb6-24" aria-hidden="true" tabindex="-1"></a><span class="ex">./break.sh</span> x</span></code></pre></div>
     <p>内容:</p>
     <ul>
     <li>A: <code>nginx/nginx.conf</code> の upstream ポート誤設定</li>
@@ -1076,24 +1119,29 @@ POSTCHECK_RETRY_INTERVAL_SECONDS=2</code></pre>
     <li>auto mode の triage は open-world
     前提で候補集合を広めに返すため、candidate scope は
     benchmark-specific optimum より広いことがある</li>
-    <li>additional observation は 1
-    回までであり、それでも証拠が足りない場合は planner が empty plan
+    <li>additional observation は single-agent では 1 回、multi-agent
+    では <code>MULTI_AGENT_MAX_ADDITIONAL_OBSERVATIONS</code> (既定 3
+    回) までであり、それでも証拠が足りない場合は planner が empty plan
     を返すことがある</li>
     </ul>
-    <h2 id="今後の拡張候補">今後の拡張候補</h2>
-    <p>卒論に向けた優先度は、機能追加よりも実験・図表・本文化の方が高い。拡張を行う場合は、比較実験の安定性や説明力に直結するものに絞る。</p>
+    <h2 id="今後の作業">今後の作業</h2>
+    <p>卒論に向けた優先度は、機能追加よりも実験・分析・本文化の方が高い。現行計画は
+    <a href="roadmap-next-steps.html">roadmap-next-steps.html</a>
+    を参照する。</p>
     <ul>
-    <li><code>results/</code> の JSON と
-    <code>observations/*/summary.csv</code>
-    から、条件別の比較表を安定して生成する</li>
-    <li><code>hypothesis_metrics</code> を one-shot / self-critique /
-    multi-agent の各条件で揃える</li>
-    <li>hard scenario の turn-by-turn case study
-    を図表化しやすい形式で出力する</li>
-    <li>planner の scope 遵守や empty plan
-    の原因分類を、実験集計に反映する</li>
-    <li>余力があれば dual-planner / planner diversity
-    を追加比較として扱う</li>
+    <li>Experiment 3 の再測定: topology snippet の action 粒度修正と
+    escalation trigger の絞り込みを入れたうえで <code>x</code> 単独 →
+    <code>n o r x</code> を取り直す</li>
+    <li>token 削減 (<code>MULTI_AGENT_HISTORY_TAIL</code>) と LLM triage
+    の効果検証 smoke</li>
+    <li>仮説固着・失敗メカニズムの分析と図表化
+    (成功率ランキングではなくこちらを主軸にする)</li>
+    <li>代表シナリオ (<code>m</code> = 固着が破れない例,
+    <code>r</code>/<code>u</code> = role-split で破れた例,
+    <code>x</code> = 観測欠落だった例) の turn-by-turn case study</li>
+    <li>中間発表 (2026 夏) 資料への変換</li>
+    <li>必要に応じて Y1 (OOM) / Z1 (restart loop) シナリオを外的妥当性
+    case study として追加</li>
     </ul>
     <div class="footer">
       <span>Safe Emergency Recovery Experiment — Research Wiki</span>

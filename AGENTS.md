@@ -57,22 +57,19 @@ grep -E '^(PLANNER|REVIEWER|JUDGE|TRIAGE)_(PROVIDER|MODEL)=' .env || true
 
 Docker が止まっている場合は、実験を開始せずユーザーに知らせる。起動後に再開する。
 
-## Experiment State As Of 2026-05-20
+## Experiment State As Of 2026-06-10
 
-Experiment 1 は、公平化した条件で one-shot / self-critique / reviewer-only / reviewer+judge を比較する実験である。対象シナリオは `m n o r u v w x`。
+完了済み実験の時系列:
 
-共通条件:
+1. **Experiment 1 (2026-05-19/20, repeat 1)**: one-shot / self-critique / reviewer-only / reviewer+judge の公平化予備比較。`repeat 1` のため pilot 扱い。
+2. **Experiment 2 (2026-05-21, repeat 3)**: 5 条件本比較。raw success は 2-A one-shot 6/24, 2-B self-critique 12/24, 2-C reviewer-only 9/24, 2-D reviewer+judge 11/24, 2-E role-split 15/24。レポート: `docs/reports/experiment2_baseline_comparison_20260521.md`
+3. **x feasibility (2026-05-22)**: sensor の topology contract 露出修正後、role-split で `x` が 3/3。Experiment 2 の `x=0/15` は観測欠落が支配要因だった。
+4. **Experiment 3 smoke (2026-05-22, `n o r x` repeat 3)**: 3-A standard 7/12、3-B on-retry escalation 4/12。escalation は総コスト -27% だが cost per success は悪化。レポート: `docs/reports/experiment2_3_escalation_comparison_20260527.md`
+5. **LLM triage + History Tail smoke (2026-06-10, `n r x` repeat 1)**: `TRIAGE_MODE=llm` と `MULTI_AGENT_HISTORY_TAIL=2` の初検証。LLM triage は 1 run に最大 7 回発火し、tail=2 の履歴圧縮だけでは入力増加を抑えられないことが判明。blackboard 圧縮と `TRIAGE_LLM_MAX_CALLS_PER_RUN` はこの結果を受けて実装した。
 
-- `PLANNER_MODEL=gpt-5.4`
-- `--worker llm`
-- `--prompt-mode blind`
-- `--scenario-mode forced`
-- `--repeat 1`
-- `MULTI_AGENT_MAX_TURNS=5`
-- `MULTI_AGENT_MAX_ADDITIONAL_OBSERVATIONS=3`
-- コード修正時は観測済み snippet に根拠を持つ文脈付き置換だけを許可
+注意: Experiment 1 / 2 / 3 の triage はすべて rule ベースで動いていた (`--triage-mode` の default が `rule` で、env 指定は転送されていなかった)。詳細は後述の Triage Mode 節。
 
-完了済み:
+Experiment 1 の observation ディレクトリ:
 
 - Experiment 1-A one-shot: `observations/20260519T044659Z_controlled_oneshot_gpt54_once/summary.csv`
 - Experiment 1-B self-critique: `observations/20260519T051414Z_controlled_selfcritique_gpt54_once/summary.csv`
@@ -116,9 +113,9 @@ env \
   --label controlled_multi_gpt54_once
 ```
 
-## Experiment 2 Draft
+## Experiment 2 Commands (2026-05-21 実行済み)
 
-Experiment 2 は、Experiment 1 の 4 条件と role-split 条件を、同一条件で `repeat 3` に揃えて反復する本比較である。
+Experiment 2 は、Experiment 1 の 4 条件と role-split 条件を、同一条件で `repeat 3` に揃えて反復した本比較である。以下の command は再現用の正本として残す。結果は `docs/reports/experiment2_baseline_comparison_20260521.md` を参照。
 
 扱い:
 
