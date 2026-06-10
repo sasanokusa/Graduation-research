@@ -459,8 +459,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--triage-mode",
         choices=["rule", "llm"],
-        default="rule",
-        help="Triage mode: rule-based or LLM-based domain ranking.",
+        default="llm" if os.environ.get("TRIAGE_MODE", "rule") == "llm" else "rule",
+        help="Triage mode: rule-based or LLM-based domain ranking. Defaults to TRIAGE_MODE env var so observe_runs.sh experiments can enable it without CLI passthrough.",
     )
     args = parser.parse_args(argv)
 

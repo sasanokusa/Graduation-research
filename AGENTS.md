@@ -390,6 +390,12 @@ multi-turn run では reviewer / judge の入力に全 `planner_history` / `revi
 2. 性能比較 (成功率・safety override・仮説遷移) で劣化がないことを smoke (`n r x` など) で確認してから本比較に使う
 3. 影響するのは reviewer / judge の prompt のみ。planner の入力と result JSON に保存される履歴は変わらない
 
+## Triage Mode
+
+`multi_agent.py` の triage は `--triage-mode` (default `rule`) で制御する。`observe_runs.sh` は CLI 引数を転送しないため、実験から有効化する場合は `TRIAGE_MODE=llm` を env で渡す (`TRIAGE_MODE=llm` のときだけ default が `llm` になる)。LLM triage は `TRIAGE_PROVIDER` / `TRIAGE_MODEL` を使い、呼び出し失敗時は rule triage へ fallback して `triage_llm_fallback=true` が記録される。
+
+注意: 2026-05 の Experiment 1 / 2 / 3 はすべて rule triage で実行された。`TRIAGE_PROVIDER=google` を指定していた command でも LLM triage は動いていない (triage token usage が 0 であることと整合)。LLM triage を使った run は rule triage の既存結果と区別して報告する。
+
 ## Common Aggregation Commands
 
 単一 run の概要を見る。
