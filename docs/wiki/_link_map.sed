@@ -34,3 +34,5 @@ s|docs/roadmap/next_steps_20260521\.md|roadmap-next-steps.html|g
 s|next_steps_20260521\.md|roadmap-next-steps.html|g
 s|\.\./reports/related_work_survey_20260610\.md|report-related-work-survey.html|g
 s|docs/reports/related_work_survey_20260610\.md|report-related-work-survey.html|g
+s|\.\./reports/token_reduction_validation_20260610\.md|report-token-reduction.html|g
+s|docs/reports/token_reduction_validation_20260610\.md|report-token-reduction.html|g

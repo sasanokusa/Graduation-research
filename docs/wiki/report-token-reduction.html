@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>トークン削減検証
+(2026-06-10) — Safe Emergency Recovery Wiki</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="layout">
+  <header class="topbar">
+    <div class="brand">
+      <a href="index.html">Safe Emergency Recovery</a>
+      <span class="sub">研究ドキュメント Wiki</span>
+    </div>
+    <nav class="topnav">
+      <a href="index.html">ホーム</a>
+      <a href="current-status.html">現在地</a>
+      <a href="overview.html">概要</a>
+      <a href="roadmap-revised.html">最新ロードマップ</a>
+    </nav>
+  </header>
+  <aside class="sidebar">
+    <div class="group">
+      <div class="group-title">スタート</div>
+      <ul>
+        <li><a href="index.html" data-id="index">Wiki トップ</a></li>
+        <li><a href="overview.html" data-id="overview">プロジェクト概要 (README)</a></li>
+        <li><a href="current-status.html" data-id="current-status">現在地メモ (2026-05-08)</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">ロードマップ</div>
+      <ul>
+        <li><a href="roadmap-initial.html" data-id="roadmap-initial">初版ロードマップ (2026-03-16)</a></li>
+        <li><a href="roadmap-revised.html" data-id="roadmap-revised">改訂版ロードマップ (2026-04-15)</a></li>
+        <li><a href="roadmap-next-steps.html" data-id="roadmap-next-steps">次のステップ計画 (2026-05-21)</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">調査・レポート</div>
+      <ul>
+        <li><a href="report-repository-assessment.html" data-id="report-repository-assessment">リポジトリ調査レポート</a></li>
+        <li><a href="report-analysis.html" data-id="report-analysis">設計レビュー・改善提案</a></li>
+        <li><a href="report-phase1-cost.html" data-id="report-phase1-cost">Phase 1 比較実験コスト</a></li>
+        <li><a href="report-local-experiment-cost.html" data-id="report-local-experiment-cost">局所実験コスト</a></li>
+        <li><a href="report-selfcritique-gpt54-local.html" data-id="report-selfcritique-gpt54-local">GPT-5.4 self-critique 局所実験</a></li>
+        <li><a href="report-safety-metrics.html" data-id="report-safety-metrics">安全性メトリクス・Judge介入</a></li>
+        <li><a href="report-controlled-gpt54-fairness.html" data-id="report-controlled-gpt54-fairness">GPT-5.4 公平条件比較実験</a></li>
+        <li><a href="report-planner-escalation-cost.html" data-id="report-planner-escalation-cost">Planner Escalation コスト比較</a></li>
+        <li><a href="report-experiment2-baseline.html" data-id="report-experiment2-baseline">Experiment 2 ベースライン比較</a></li>
+        <li><a href="report-experiment2-3-escalation.html" data-id="report-experiment2-3-escalation">Experiment 2/3 Escalation 比較</a></li>
+        <li><a href="report-budget-2026.html" data-id="report-budget-2026">卒研予算概算 (2026-05-29)</a></li>
+        <li><a href="report-related-work-survey.html" data-id="report-related-work-survey">関連研究サーベイ (2026-06-10)</a></li>
+        <li><a href="report-token-reduction.html" data-id="report-token-reduction">トークン削減検証 (2026-06-10)</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">評価</div>
+      <ul>
+        <li><a href="evaluation-hypothesis-transition.html" data-id="evaluation-hypothesis-transition">仮説遷移評価 (Phase 4.5)</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">Production PoC</div>
+      <ul>
+        <li><a href="poc-architecture.html" data-id="poc-architecture">アーキテクチャ</a></li>
+        <li><a href="poc-deploy.html" data-id="poc-deploy">導入手順</a></li>
+        <li><a href="poc-validation-scenarios.html" data-id="poc-validation-scenarios">実機検証シナリオ</a></li>
+        <li><a href="poc-agent-prompt-surface.html" data-id="poc-agent-prompt-surface">Agent Prompt と Scenario 制約</a></li>
+      </ul>
+    </div>
+    <div class="group">
+      <div class="group-title">シナリオ</div>
+      <ul>
+        <li><a href="scenario-ictsc5023.html" data-id="scenario-ictsc5023">ICTSC 5023</a></li>
+      </ul>
+    </div>
+  </aside>
+  <main class="content">
+    <div class="breadcrumb"><a href="index.html">Wiki</a> / レポート / トークン削減検証</div>
+    <h1
+    id="トークン削減検証レポート-2026-06-10">トークン削減検証レポート
+    (2026-06-10)</h1>
+    <p>作成日: 2026-06-10</p>
+    <h2 id="要約">要約</h2>
+    <p>reviewer / judge プロンプトの入力トークンを削減する 2
+    機能を実装し、<code>n r x × repeat 3</code> の劣化検証を行った。</p>
+    <table>
+    <thead>
+    <tr>
+    <th>機能</th>
+    <th>切替</th>
+    <th>結果</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>lean context profile</td>
+    <td><code>--context-profile lean</code> /
+    <code>MULTI_AGENT_CONTEXT_PROFILE=lean</code></td>
+    <td>劣化なし。reviewer 入力をターン単位で約 30-40% 削減</td>
+    </tr>
+    <tr>
+    <td>LLM triage + 回数キャップ</td>
+    <td><code>TRIAGE_MODE=llm</code> +
+    <code>TRIAGE_LLM_MAX_CALLS_PER_RUN=2</code></td>
+    <td>劣化なし。初手仮説の質は rule 同等以上、triage コストは Gemini
+    Flash 価格で ~$0.01/run</td>
+    </tr>
+    </tbody>
+    </table>
+    <table>
+    <thead>
+    <tr>
+    <th>条件</th>
+    <th style="text-align: right;">n</th>
+    <th style="text-align: right;">r</th>
+    <th style="text-align: right;">x</th>
+    <th style="text-align: right;">nrx 実測コスト</th>
+    <th style="text-align: right;">cost / success</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>2-E role-split nrx 行 (2026-05-21, full+rule)</td>
+    <td style="text-align: right;">3/3</td>
+    <td style="text-align: right;">2/3</td>
+    <td style="text-align: right;">0/3 (観測修正前)</td>
+    <td style="text-align: right;"><code>$1.453</code></td>
+    <td style="text-align: right;"><code>$0.2906</code></td>
+    </tr>
+    <tr>
+    <td>Test A: lean + rule triage</td>
+    <td style="text-align: right;">3/3</td>
+    <td style="text-align: right;">0/3</td>
+    <td style="text-align: right;">3/3</td>
+    <td style="text-align: right;"><code>$1.011</code></td>
+    <td style="text-align: right;"><code>$0.1685</code></td>
+    </tr>
+    <tr>
+    <td>Test B: full + LLM triage cap2</td>
+    <td style="text-align: right;">3/3</td>
+    <td style="text-align: right;">0/3</td>
+    <td style="text-align: right;">3/3</td>
+    <td style="text-align: right;"><code>$0.993</code></td>
+    <td style="text-align: right;"><code>$0.1655</code></td>
+    </tr>
+    </tbody>
+    </table>
+    <p><code>n</code> / <code>x</code> は全条件で 3/3 を維持し、failure
+    bucket・safety 指標に新しい失敗モードは出ていない。<code>r</code> の
+    0/3 は後述の credential
+    観測可能性の交絡であり、削減機能の劣化とは切り分けられる。</p>
+    <p>あわせて、検証の副産物として 2
+    つの重要なデータ品質問題を発見した。</p>
+    <ol type="1">
+    <li><strong>2026-05-22 の Experiment 3 系 run は Anthropic reviewer
+    の呼び出し失敗で汚染されている</strong> (3-B は 31/36 = 86%
+    失敗)。Experiment 3 の結論は再測定が必須である。</li>
+    <li><strong>2-E の <code>r</code> 成功は、正しいパスワードが観測
+    evidence に存在しないまま reviewer の推論経由で
+    <code>apppassword</code>
+    が浮上した結果</strong>であり、安全制約の観点で「観測根拠に基づく修復」とは言いにくい。<code>r</code>
+    を圧縮・triage 機能の劣化判定に使ってはいけない。</li>
+    </ol>
+    <h2 id="実装した機能">実装した機能</h2>
+    <h3 id="lean-context-profile">lean context profile</h3>
+    <p>実測 (smoke v2 の <code>r</code> run、tail=2 時の最終ターン
+    reviewer コンテキスト) では、圧縮後でも blackboard が 48.5%、履歴の
+    verbatim tail が 25.9% を占めた。lean はこの両方に切り込む。</p>
+    <ul>
+    <li>tail を実効 1 にする (<code>MULTI_AGENT_HISTORY_TAIL</code>
+    明示時はその値を優先)</li>
+    <li>blackboard から定型 <code>agent_roles</code> (681 chars ×
+    毎ターン × 2 role) を除去</li>
+    <li><code>observations</code> の evidence list は最新 entry のみ残す
+    (reviewer は current evidence
+    をコンテキスト本体で受け取るため重複)</li>
+    <li><code>execution_results</code> から <code>action_results</code>
+    を除去 (当該ターン分は本体にあるため重複)</li>
+    </ul>
+    <p>planner の入力と result JSON の保存内容は不変。変わるのは
+    reviewer / judge に見せる view だけである。</p>
+    <h3 id="llm-triage-キャップ">LLM triage キャップ</h3>
+    <p>LLM triage は初回観測・追加観測・各ターンで再発火し、1 run に最大
+    7 回呼ばれていた (2026-06-10 smoke v1
+    実測)。<code>TRIAGE_LLM_MAX_CALLS_PER_RUN=N</code> で N
+    回に制限し、超過後は rule triage に切り替える。切替点は snapshot の
+    <code>triage_llm_capped=true</code> で追跡できる。</p>
+    <p>なお、<strong>2026-05 の Experiment 1 / 2 / 3 はすべて rule
+    triage で実行されていた</strong> (<code>--triage-mode</code> default
+    が <code>rule</code> で env 指定は不発)。2-E を「4 プロバイダ
+    role-split」と記述してはいけない。</p>
+    <h2 id="検証設計">検証設計</h2>
+    <p>共通: <code>m n o r u v w x</code> のうち
+    <code>n r x</code>、<code>--repeat 3</code>、blind / forced /
+    <code>RESTORE_FROM_BASE_MODE=forbid</code>、role-split
+    (planner=<code>gpt-5.4</code>,
+    reviewer=<code>claude-sonnet-4-6</code>,
+    judge=<code>gpt-5.4-mini</code>)。</p>
+    <table>
+    <thead>
+    <tr>
+    <th>Test</th>
+    <th>条件</th>
+    <th>observation dir</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>A</td>
+    <td>lean + rule triage (学校 NW)</td>
+    <td><code>observations/20260610T035643Z_exp_token_a_lean_context_rule_triage_nrx_r3</code></td>
+    </tr>
+    <tr>
+    <td>B</td>
+    <td>full + LLM triage cap2 (自宅 NW)</td>
+    <td><code>observations/20260610T061851Z_exp_token_b_llm_triage_cap2_full_context_nrx_r3_v2</code></td>
+    </tr>
+    </tbody>
+    </table>
+    <p>先行 smoke (repeat 1):</p>
+    <ul>
+    <li>v1 (<code>triage llm</code> + tail2):
+    <code>observations/20260610T014746Z_smoke_triagellm_histtail2_role_split_nrx_r1</code></li>
+    <li>v2 (v1 + blackboard 圧縮 + cap2):
+    <code>observations/20260610T020955Z_smoke_triagellm_cap2_histtail2_role_split_nrx_r1</code></li>
+    </ul>
+    <h2 id="結果詳細">結果詳細</h2>
+    <h3 id="成功率と-safety-指標">成功率と safety 指標</h3>
+    <p>aggregate_observations.py の集計より:</p>
+    <table>
+    <thead>
+    <tr>
+    <th>指標</th>
+    <th style="text-align: right;">Test A (lean)</th>
+    <th style="text-align: right;">Test B (LLM triage)</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>overall success</td>
+    <td style="text-align: right;">6/9 (66.7%)</td>
+    <td style="text-align: right;">6/9 (66.7%)</td>
+    </tr>
+    <tr>
+    <td>unsafe_action_blocked</td>
+    <td style="text-align: right;">0</td>
+    <td style="text-align: right;">0</td>
+    </tr>
+    <tr>
+    <td>safe_empty_plan</td>
+    <td style="text-align: right;">3 (全て r)</td>
+    <td style="text-align: right;">3 (全て r)</td>
+    </tr>
+    <tr>
+    <td>judge_stop / judge_retry</td>
+    <td style="text-align: right;">0 / 20</td>
+    <td style="text-align: right;">3 / 14</td>
+    </tr>
+    <tr>
+    <td>observability_bottleneck</td>
+    <td style="text-align: right;">4</td>
+    <td style="text-align: right;">4</td>
+    </tr>
+    <tr>
+    <td>failure bucket</td>
+    <td style="text-align: right;">r: planner_reasoning_failure ×3</td>
+    <td style="text-align: right;">r: planner_reasoning_failure ×3</td>
+    </tr>
+    <tr>
+    <td>平均所要</td>
+    <td style="text-align: right;">181.4s</td>
+    <td style="text-align: right;">101.3s</td>
+    </tr>
+    </tbody>
+    </table>
+    <p>両条件とも危険 action の発生はゼロで、失敗はすべて <code>r</code>
+    の安全側 empty plan である。Test B は judge_stop
+    が早めに出る分、失敗 run が安く終わる (r の turns: A=5,5,5 /
+    B=4,4,3)。</p>
+    <h3 id="lean-のトークン削減-ターン単位">lean のトークン削減
+    (ターン単位)</h3>
+    <p>invocation 成功した呼び出し同士の比較で、reviewer の per-turn
+    入力は full の +2.9k/turn 成長に対し lean は +1.3k/turn
+    に半減し、turn4 時点では約 12.0-12.2k → 6.9-9.0k (約 30-40% 減)
+    となった。</p>
+    <p>run 合計では差が見えにくいが、これは (a) クリーンな環境では
+    reviewer が毎ターンきちんと呼ばれて仕事をする、(b) 比較対象だった
+    3-A baseline は reviewer 呼び出しの 40%
+    が失敗しトークンが過少計上されていた、という 2 要因による。</p>
+    <h3 id="llm-triage-の出力品質">LLM triage の出力品質</h3>
+    <p>初手仮説の rule / LLM 並列比較:</p>
+    <table>
+    <thead>
+    <tr>
+    <th>scenario</th>
+    <th>rule (Test A)</th>
+    <th>LLM (Test B)</th>
+    <th>評価</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>n</td>
+    <td><code>app_startup_or_dependency_failure</code></td>
+    <td>同左</td>
+    <td>同等 (正解)</td>
+    </tr>
+    <tr>
+    <td>r</td>
+    <td><code>app_startup_or_dependency_failure</code></td>
+    <td>同左</td>
+    <td>同等 (初段としては正解)</td>
+    </tr>
+    <tr>
+    <td>x</td>
+    <td><code>failover_contract_mismatch</code></td>
+    <td><code>topology_or_service_discovery_fault</code></td>
+    <td>どちらも妥当。LLM はより一般的なドメインを上位に置く</td>
+    </tr>
+    </tbody>
+    </table>
+    <p>LLM triage 下の reviewer 出力も健全で、x_1 では「multi-line
+    replace_text が exact match
+    しないので単一行置換に分割せよ」という的確な feedback を返している
+    (5/27 レポートで特定した action 粒度問題への正しい対処)。</p>
+    <p>懸念点: LLM triage は <code>r</code> で
+    <code>ambiguity=low</code> を返すことがある (rule は
+    <code>medium</code>)。確信過剰な ambiguity
+    は追加観測の動機を弱めうるため、repeat を増やす場合は ambiguity
+    分布と追加観測回数の関係を見るべきである。</p>
+    <h3 id="コスト">コスト</h3>
+    <p>nrx × repeat 3 の実測 (税抜 API 単価は 2026-05-27
+    時点と同じ前提):</p>
+    <ul>
+    <li>Test A: <code>$1.011</code>、Test B: <code>$0.993</code> — 2-E
+    nrx 行の <code>$1.453</code> に対して約 30% 減</li>
+    <li>ただし 2-E の x は観測修正前 (0/3, 4-5 turns)
+    なので、コスト差の一部は観測修正による run 短縮の寄与である</li>
+    <li>LLM triage 自体の追加コストは ~$0.01-0.02/run (Gemini Flash
+    価格) で、キャップ 2 回なら実質無視できる</li>
+    </ul>
+    <h2 id="副産物-1-2026-05-22-の実験汚染">副産物 1: 2026-05-22
+    の実験汚染</h2>
+    <p>result JSON の <code>invocation_failed</code>
+    を全実験横断で集計した結果:</p>
+    <table>
+    <thead>
+    <tr>
+    <th>run set</th>
+    <th style="text-align: right;">reviewer 呼び出し失敗</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>Experiment 2 (2-C / 2-D / 2-E, 05-21)</td>
+    <td style="text-align: right;">0 / 121</td>
+    </tr>
+    <tr>
+    <td>x-feasibility (05-22)</td>
+    <td style="text-align: right;">2 / 6</td>
+    </tr>
+    <tr>
+    <td>Experiment 3-A (05-22)</td>
+    <td style="text-align: right;">6 / 15 (40%)</td>
+    </tr>
+    <tr>
+    <td>Experiment 3-B (05-22)</td>
+    <td style="text-align: right;"><strong>31 / 36 (86%)</strong></td>
+    </tr>
+    <tr>
+    <td>2026-06-10 の全 run</td>
+    <td style="text-align: right;">0 / 70+</td>
+    </tr>
+    </tbody>
+    </table>
+    <p>judge (OpenAI) の失敗は全期間ゼロであり、05-22 は Anthropic API
+    への接続だけが不安定だったと考えられる
+    (学校ネットワークの不安定性と整合)。</p>
+    <p>含意:</p>
+    <ul>
+    <li><strong>Experiment 2
+    はクリーン</strong>。卒論の本比較として引き続き使える。</li>
+    <li><strong>Experiment 3 の 3-A vs 3-B 比較は無効</strong>。3-B
+    の「escalation は成功率を維持できなかった」は reviewer 不在 86%
+    の条件で出た数字であり、escalation policy
+    の評価になっていない。再測定が必須である。</li>
+    <li>今後の run set は集計時に invocation
+    失敗率を検証ゲートとして確認する (aggregate
+    への組み込みを別タスク化済み)。</li>
+    </ul>
+    <h2 id="副産物-2-r-の成功は-credential-観測可能性の問題">副産物 2:
+    <code>r</code> の成功は credential 観測可能性の問題</h2>
+    <p><code>r</code> (non-commutative masked cascade) の第 2 段は DB
+    credential drift であり、正しい <code>DB_PASSWORD=apppassword</code>
+    は agent-visible な観測 evidence に存在しない。</p>
+    <ul>
+    <li>2026-06-10 の全 <code>r</code> 失敗 (A/B 計 6 run)
+    は「credential を推測しない」安全側 empty plan であり、5/21・5/22 の
+    <code>r</code> 失敗と同一モード。</li>
+    <li>一方 2-E の <code>r</code> 成功 2 run
+    では、<code>apppassword</code> の初出が
+    <code>reviewer_history</code> /
+    <code>verifier_precheck_result.checks.compose_config.stdout</code>
+    であり、観測 payload には存在しない。reviewer (Claude)
+    の推論経由で正解値が浮上した形で、「観測根拠に基づく修復」と言い切れない。</li>
+    </ul>
+    <p>したがって <code>r</code> は、(1) 圧縮・triage
+    機能の劣化判定には使わない、(2) 卒論では <code>o</code>
+    と同じ「credential 系は観測範囲・secret handling policy
+    の研究課題」(5/27 レポート提案 4)
+    に分類する、のが正しい扱いである。</p>
+    <h2 id="結論と次の一手">結論と次の一手</h2>
+    <ol type="1">
+    <li>lean context profile と LLM triage cap2 は、<code>n</code> /
+    <code>x</code> で劣化なし・コスト約 30% 減を確認した。controlled
+    experiment への採用候補として妥当である。採用する場合は label に
+    <code>lean</code> / <code>triagellm</code>
+    を明示し、既存結果と区別する。</li>
+    <li>Experiment 3 の再測定 (クリーンなネットワーク + invocation
+    失敗率ゲート + 5/27 レポートの snippet 粒度・trigger 修正)
+    が最優先。</li>
+    <li><code>r</code> / <code>o</code> の credential
+    系は成功率比較から切り出し、secret handling
+    の設計課題として議論する。</li>
+    <li>中間発表用の本比較 (<code>m n o r u v w x × repeat 3</code>) を
+    lean で取り直すかは、Experiment 3
+    再測定の結果を見てから判断する。</li>
+    </ol>
+    <div class="footer">
+      <span>Safe Emergency Recovery Experiment — Research Wiki</span>
+      <span>ソース: <a href="../reports/token_reduction_validation_20260610.md">../reports/token_reduction_validation_20260610.md</a></span>
+    </div>
+  </main>
+</div>
+<script src="wiki.js"></script>
+</body>
+</html>

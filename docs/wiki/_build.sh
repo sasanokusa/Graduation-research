@@ -122,6 +122,11 @@ build "docs/reports/related_work_survey_20260610.md" "report-related-work-survey
   '<a href="index.html">Wiki</a> / レポート / 関連研究サーベイ' \
   "../reports/related_work_survey_20260610.md"
 
+build "docs/reports/token_reduction_validation_20260610.md" "report-token-reduction.html" \
+  "トークン削減検証 (2026-06-10)" \
+  '<a href="index.html">Wiki</a> / レポート / トークン削減検証' \
+  "../reports/token_reduction_validation_20260610.md"
+
 build "docs/hypothesis_transition_evaluation.md" "evaluation-hypothesis-transition.html" \
   "仮説遷移評価 (Phase 4.5)" \
   '<a href="index.html">Wiki</a> / 評価 / 仮説遷移' \
