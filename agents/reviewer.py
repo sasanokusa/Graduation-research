@@ -13,6 +13,7 @@ from core.hypothesis import (
     reviewer_changed_hypothesis,
 )
 from core.escalation import planner_escalation_request_from_review
+from core.history_compaction import compact_planner_history, compact_reviewer_history
 from core.llm_usage import extract_token_usage
 from core.state import SingleAgentState
 
@@ -190,8 +191,8 @@ def _reviewer_prompt(state: SingleAgentState) -> str:
         },
         "rollback_used": state.get("rollback_used", False),
         "rollback_result": state.get("rollback_result", {}),
-        "previous_planner_history": state.get("planner_history", []),
-        "previous_reviewer_history": state.get("reviewer_history", []),
+        "previous_planner_history": compact_planner_history(state.get("planner_history", [])),
+        "previous_reviewer_history": compact_reviewer_history(state.get("reviewer_history", [])),
         "incident_blackboard": state.get("incident_blackboard", {}),
     }
     return f"Review this recovery attempt and decide whether another planning turn is justified.\n{context}"

@@ -377,6 +377,19 @@ env \
   --label multi_escalation_gpt55_smoke_ox_once
 ```
 
+## History Tail Mode (Context 圧縮)
+
+multi-turn run では reviewer / judge の入力に全 `planner_history` / `reviewer_history` が毎ターン再埋め込みされ、入力トークンがターンごとに約 4-5k ずつ増える (Experiment 2 role-split 実測で入力全体の約 40% が履歴累積分)。`MULTI_AGENT_HISTORY_TAIL` はこの増加を抑える opt-in 機能である。
+
+- `MULTI_AGENT_HISTORY_TAIL=0` (デフォルト): 従来どおり全履歴を埋め込む。既存実験と同条件
+- `MULTI_AGENT_HISTORY_TAIL=N` (N>=1): 直近 N ターン分の履歴 entry を全文のまま残し、それより古い entry は digest (`turn`, `summary`, `decision`, ok フラグ, `proposed_action_count` など) に畳む
+
+運用ルール:
+
+1. デフォルト無効。既存の controlled experiment 結果と混ぜないため、有効化した run は label に `histtail` などを含めて区別する
+2. 性能比較 (成功率・safety override・仮説遷移) で劣化がないことを smoke (`n r x` など) で確認してから本比較に使う
+3. 影響するのは reviewer / judge の prompt のみ。planner の入力と result JSON に保存される履歴は変わらない
+
 ## Common Aggregation Commands
 
 単一 run の概要を見る。
