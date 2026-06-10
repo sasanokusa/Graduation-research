@@ -147,6 +147,39 @@ def _extract_app_env_topology_contract_snippet() -> str:
     return "\n".join(lines)
 
 
+# Client-facing keys only: the db root credential stays unobservable on
+# purpose (least privilege), mirroring what an operator would read from the
+# db service's declared configuration during an auth incident.
+DB_CREDENTIAL_ENV_KEYS = ["MYSQL_DATABASE", "MYSQL_USER", "MYSQL_PASSWORD"]
+
+_DB_AUTH_FAILURE_MARKERS = ["Access denied", "1045", "using password: YES"]
+
+
+def _has_db_auth_failure_markers(
+    service_logs: dict[str, str],
+    healthz: dict[str, Any],
+    api_items: dict[str, Any],
+) -> bool:
+    haystacks = [
+        service_logs.get("app", ""),
+        str(healthz.get("body", "")),
+        str(api_items.get("body", "")),
+    ]
+    return any(marker in haystack for haystack in haystacks for marker in _DB_AUTH_FAILURE_MARKERS)
+
+
+def _extract_db_declared_credentials() -> dict[str, str]:
+    declared: dict[str, str] = {}
+    file_text = resolve_repo_path("db/mysql.env").read_text()
+    for line in file_text.splitlines():
+        if "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        if key in DB_CREDENTIAL_ENV_KEYS:
+            declared[key] = value.strip()
+    return declared
+
+
 def _extract_braced_block(lines: list[str], start_index: int) -> str:
     block: list[str] = []
     depth = 0
@@ -332,8 +365,21 @@ def _collect_suspicious_patterns(
     }
 
 
-def _collect_static_observations(service_logs: dict[str, str], file_snippets: dict[str, str]) -> dict[str, Any]:
+def _collect_static_observations(
+    service_logs: dict[str, str],
+    file_snippets: dict[str, str],
+    healthz: dict[str, Any] | None = None,
+    api_items: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     observations: dict[str, Any] = {}
+    if _has_db_auth_failure_markers(service_logs, healthz or {}, api_items or {}):
+        declared = _extract_db_declared_credentials()
+        if declared:
+            observations["db_declared_client_credentials"] = declared
+            observations["db_credential_note"] = (
+                "db service declares these client credentials in db/mysql.env; "
+                "app-side DB settings must match them"
+            )
     app_log = service_logs.get("app", "")
     marker = "Uvicorn running on http://0.0.0.0:"
     if marker in app_log:
@@ -676,6 +722,14 @@ def _build_observation(
         file_snippets,
         relevant_log_excerpts,
     )
+    if _has_db_auth_failure_markers(service_logs, healthz, api_items):
+        declared = _extract_db_declared_credentials()
+        if declared:
+            credential_line = "db service declared client credentials (db/mysql.env): " + ", ".join(
+                f"{key}={value}" for key, value in declared.items()
+            )
+            if credential_line not in current_state_evidence:
+                current_state_evidence.append(credential_line)
     return {
         "compose_ps": compose_ps,
         "service_logs": service_logs,
@@ -688,7 +742,7 @@ def _build_observation(
         "relevant_log_excerpts": relevant_log_excerpts,
         "http_error_evidence": _http_error_evidence(healthz, api_items),
         "suspicious_patterns": _collect_suspicious_patterns(service_logs, healthz, api_items),
-        "static_observations": _collect_static_observations(service_logs, file_snippets),
+        "static_observations": _collect_static_observations(service_logs, file_snippets, healthz, api_items),
         "current_state_evidence": current_state_evidence,
         "historical_evidence": historical_evidence,
         "front_most_failure": classify_front_most_failure(

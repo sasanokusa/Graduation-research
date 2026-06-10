@@ -1,5 +1,7 @@
 import difflib
+import json
 import os
+import re
 import time
 from typing import Any
 
@@ -85,6 +87,46 @@ def _is_contextual_code_old_text(old_text: str) -> bool:
     return any(char in stripped for char in [" ", "(", ")", "[", "]", "{", "}", "=", ".", ":", "\"", "'"])
 
 
+_CREDENTIAL_KEY_PATTERN = re.compile(r"(PASSWORD|PASSWD|SECRET|TOKEN|API_KEY)", re.IGNORECASE)
+
+_CREDENTIAL_EVIDENCE_KEYS = (
+    "file_snippets",
+    "static_observations",
+    "current_state_evidence",
+    "historical_evidence",
+    "relevant_log_excerpts",
+    "http_error_evidence",
+    "service_logs",
+    "additional_observation",
+)
+
+
+def _introduced_credential_values(action: dict[str, Any]) -> list[tuple[str, str]]:
+    """Credential (key, value) pairs that new_text introduces over old_text."""
+    old_values: dict[str, str] = {}
+    for line in str(action.get("old_text", "")).splitlines():
+        if "=" in line:
+            key, _, value = line.partition("=")
+            old_values[key.strip()] = value.strip()
+    introduced: list[tuple[str, str]] = []
+    for line in str(action.get("new_text", "")).splitlines():
+        if "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key, value = key.strip(), value.strip()
+        if value and _CREDENTIAL_KEY_PATTERN.search(key) and old_values.get(key) != value:
+            introduced.append((key, value))
+    return introduced
+
+
+def _credential_evidence_corpus(observation: dict[str, Any]) -> str:
+    return json.dumps(
+        {key: observation.get(key) for key in _CREDENTIAL_EVIDENCE_KEYS},
+        ensure_ascii=False,
+        default=str,
+    )
+
+
 def _validate_replace_text_evidence(action: dict[str, Any], observation: dict[str, Any] | None) -> list[str]:
     if action.get("operation") != "replace_text":
         return []
@@ -101,6 +143,13 @@ def _validate_replace_text_evidence(action: dict[str, Any], observation: dict[st
             errors.append(
                 f"replace_text old_text for {path} is not present in the current observed file snippet"
             )
+        corpus = ""
+        for key, value in _introduced_credential_values(action):
+            corpus = corpus or _credential_evidence_corpus(observation)
+            if value not in corpus:
+                errors.append(
+                    f"replace_text for {path} introduces credential {key} whose value is not present in any observed evidence; do not guess secrets"
+                )
     return errors
 
 

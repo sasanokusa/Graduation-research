@@ -405,6 +405,23 @@ planner の入力と result JSON に保存される履歴・blackboard は full 
 
 LLM triage は初回観測・追加観測・各ターンのたびに再実行されるため、multi-turn run では 1 run に 7 回以上呼ばれうる (2026-06-10 smoke の `r` で実測 7 回)。`TRIAGE_LLM_MAX_CALLS_PER_RUN=N` で 1 run あたりの LLM triage 呼び出しを N 回に制限でき、超過後は rule triage に切り替わり snapshot に `triage_llm_capped=true` が記録される。`0` (デフォルト) は無制限。
 
+## Credential Observability And Secret Gate (2026-06-10)
+
+`docs/reports/exp2_credential_audit_20260610.md` の監査で、Experiment 2 の `m/o/r` 成功 7 件がすべて「観測根拠のない credential 推測」だったことが判明した。これを受けて 2 つの変更を入れた。以降の run は Experiment 2 と同一コード状態ではないため、結果は Experiment 4 系として区別する。
+
+1. **credential の正規観測経路** (`agents/sensor.py`): db 認証失敗 marker (`Access denied` / `1045` / `using password: YES`) が観測された場合のみ、`db/mysql.env` の client credential (`MYSQL_DATABASE` / `MYSQL_USER` / `MYSQL_PASSWORD`) を `static_observations.db_declared_client_credentials` と current_state_evidence に露出する。`MYSQL_ROOT_PASSWORD` は意図的に露出しない (least privilege)。これにより `m/o/r` は「evidence-backed で解けるクラス」へ移る。シナリオ `x` の topology 露出修正 (2026-05-22) と同型の、観測可能性に関する一般化された修正である。
+2. **secret guess gate** (`core/verifier.py`): `replace_text` の `new_text` が credential 系 key (`PASSWORD` / `SECRET` / `TOKEN` / `API_KEY`) に新しい値を導入する場合、その値が観測 evidence (file_snippets / static_observations / evidence / log excerpts / additional observation) に存在しなければ precheck で拒否する。デフォルト有効。`old_text` の根拠要求と対になる `new_text` 側の安全制約である。
+
+## Experiment 4 Queue (実行待ち、ユーザー指示で開始)
+
+上記 2 変更後の本比較。実行順:
+
+1. **feasibility smoke**: credential 露出後の `m o r × repeat 3` を role-split で実行し、evidence-backed 成功が出ること・gate が誤爆しないことを確認する。label 例 `exp4_feasibility_credential_mor_r3`
+2. **Experiment 4 本比較**: Experiment 2 Commands の 5 条件 command を label のみ `exp4_controlled_*_r3` に変えて再利用する (`m n o r u v w x × repeat 3`)。完了後は必ず `tools/audit_credential_evidence.py` と invocation 失敗率を確認する
+3. **Experiment 3 再測定**: 2026-05-22 の汚染データ (3-B reviewer 86% 失敗) を置き換える。escalation trigger 絞り込みの要否は Experiment 4 の結果を見て判断する
+
+コスト目安: smoke ~$1、本比較 ~$8-10、Exp3 再測定 ~$2.5。
+
 ## Common Aggregation Commands
 
 単一 run の概要を見る。
